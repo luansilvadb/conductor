@@ -7,38 +7,42 @@ export function createInitCommand() {
     const cmd = new Command('init')
         .description('Initialize command template directory for detected AI tool')
         .action(async () => {
-        const workingDir = cwd();
-        if (!detectedResult.isValid) {
-            const tool = await selectToolInteractively();
-            if (tool === AIToolType.Unknown) {
-                uiRenderer.renderError('No tool selected');
-                return;
-            }
-            // Reassign detectedResult
-            Object.assign(detectedResult, {
-                toolType: tool,
-                configPath: det.getConfigDirPath(tool, workingDir),
-                isValid: true,
-                message: `tool manually selected: ${tool}`,
-            });
-        }
-        const configPath = detectedResult.configPath;
-        if (!configPath) {
-            uiRenderer.renderError('Could not determine config directory');
-            return;
-        }
-        if (existsSync(configPath)) {
-            uiRenderer.renderWarning(`Directory already exists: ${configPath}`);
-            const confirmed = await uiRenderer.confirm('Do you want to continue anyway?');
-            if (!confirmed) {
-                uiRenderer.renderWarning('Initialization cancelled');
-                return;
-            }
-        }
-        mkdirSync(configPath, { recursive: true });
-        uiRenderer.renderSuccess(`Initialized ${detectedResult.toolType} command directory at: ${configPath}`);
+        await runInit();
     });
     return cmd;
+}
+/** Resolve a ferramenta (detecta ou pergunta) e cria o diretório de configuração. */
+export async function runInit() {
+    const workingDir = cwd();
+    if (!detectedResult.isValid) {
+        const tool = await selectToolInteractively();
+        if (tool === AIToolType.Unknown) {
+            uiRenderer.renderError('No tool selected');
+            return false;
+        }
+        Object.assign(detectedResult, {
+            toolType: tool,
+            configPath: det.getConfigDirPath(tool, workingDir),
+            isValid: true,
+            message: `tool manually selected: ${tool}`,
+        });
+    }
+    const configPath = detectedResult.configPath;
+    if (!configPath) {
+        uiRenderer.renderError('Could not determine config directory');
+        return false;
+    }
+    if (existsSync(configPath)) {
+        uiRenderer.renderWarning(`Directory already exists: ${configPath}`);
+        const confirmed = await uiRenderer.confirm('Do you want to continue anyway?');
+        if (!confirmed) {
+            uiRenderer.renderWarning('Initialization cancelled');
+            return false;
+        }
+    }
+    mkdirSync(configPath, { recursive: true });
+    uiRenderer.renderSuccess(`Initialized ${detectedResult.toolType} command directory at: ${configPath}`);
+    return true;
 }
 export async function selectToolInteractively() {
     const { select, isCancel } = await import('@clack/prompts');

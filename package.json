@@ -15,7 +15,7 @@
     "node": ">=20.11"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.json && cpy \"src/internal/templates/data/**/*\" dist/internal/templates/data",
     "prepublishOnly": "npm run build",
     "start": "node dist/index.js"
   },
@@ -26,6 +26,7 @@
   },
   "devDependencies": {
     "@types/node": "^20.11.0",
+    "cpy-cli": "^7.0.0",
     "typescript": "^5.4.0"
   },
   "keywords": [

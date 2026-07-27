@@ -15,34 +15,38 @@ export function createGenerateCommand() {
         .option('-a, --all', 'Generate all available templates')
         .option('-o, --output <path>', 'Custom output directory (overrides detection)')
         .action(async (templateName, options) => {
-        forceFlag = options.force ?? false;
-        outputFlag = options.output ?? '';
-        if (!outputFlag && !toolFlag) {
-            const tool = await selectToolInteractively();
-            if (tool === AIToolType.Unknown) {
-                uiRenderer.renderError('No tool selected. Use --output or --tool flag.');
-                return;
-            }
-            const workingDir = cwd();
-            Object.assign(detectedResult, {
-                toolType: tool,
-                configPath: det.getConfigDirPath(tool, workingDir),
-                isValid: true,
-                message: `tool manually selected: ${tool}`,
-            });
-        }
-        const targetDir = determineTargetDir();
-        if (!targetDir) {
-            uiRenderer.renderError('Could not determine target directory. Use --output or --tool flag.');
-            return;
-        }
-        if (templateName) {
-            await generateSingleTemplate(templateName);
-            return;
-        }
-        await generateAllTemplates(targetDir);
+        await runGenerate({ templateName, force: options.force, output: options.output });
     });
     return cmd;
+}
+/** Resolve ferramenta, diretório-alvo e gera templates. */
+export async function runGenerate(opts = {}) {
+    forceFlag = opts.force ?? false;
+    outputFlag = opts.output ?? '';
+    if (!outputFlag && !toolFlag) {
+        const tool = await selectToolInteractively();
+        if (tool === AIToolType.Unknown) {
+            uiRenderer.renderError('No tool selected. Use --output or --tool flag.');
+            return;
+        }
+        const workingDir = cwd();
+        Object.assign(detectedResult, {
+            toolType: tool,
+            configPath: det.getConfigDirPath(tool, workingDir),
+            isValid: true,
+            message: `tool manually selected: ${tool}`,
+        });
+    }
+    const targetDir = determineTargetDir();
+    if (!targetDir) {
+        uiRenderer.renderError('Could not determine target directory. Use --output or --tool flag.');
+        return;
+    }
+    if (opts.templateName) {
+        await generateSingleTemplate(opts.templateName);
+        return;
+    }
+    await generateAllTemplates(targetDir);
 }
 function determineTargetDir() {
     if (outputFlag)

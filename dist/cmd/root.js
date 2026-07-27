@@ -4,6 +4,8 @@ import { AIToolType, parseToolFlag } from '../internal/detector/types.js';
 import { DefaultDetector } from '../internal/detector/detector.js';
 import { EmbeddedTemplateManager } from '../internal/templates/manager.js';
 import { CharmUIRenderer } from '../internal/ui/renderer.js';
+import { runInit } from './init.js';
+import { runGenerate } from './generate.js';
 // Global state shared across commands
 export let det;
 export let uiRenderer;
@@ -35,6 +37,13 @@ export function createProgram() {
         else {
             detectedResult = det.detect(workingDir);
         }
+    })
+        .action(async () => {
+        // Fluxo padrão (sem subcomando): inicializa + gera tudo
+        const ok = await runInit();
+        if (!ok)
+            return;
+        await runGenerate();
     });
     program.option('-t, --tool <tool>', 'Manually specify tool type (cursor, claude-code, antigravity)');
     return program;

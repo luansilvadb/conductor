@@ -122,15 +122,23 @@ O Conductor detecta automaticamente a ferramenta de IA que você já usa no proj
 A forma mais simples: baixe e execute o Conductor em um único comando, sem clonar o repositório.
 
 ```bash
-# instala e executa o binário `conductor` a partir do GitHub
+# sem subcomando: inicializa + gera tudo automaticamente
+npx github:luansilvadb/conductor
+
+# equivalente explícito
 npx github:luansilvadb/conductor generate
 ```
 
 Repositório: https://github.com/luansilvadb/conductor
 
-O `npx` baixa o tarball do repositório, instala as dependências declaradas em [package.json](package.json) e executa o binário registrado no campo `bin` ([dist/index.js](dist/index.js)). O `dist/` é versionado exatamente por isso — o `npx` **não** executa `postinstall`/build, então o JS precisa estar pronto.
+O `npx` baixa o tarball do repositório, instala as dependências declaradas em [package.json](package.json) e executa o binário registrado no campo `bin` ([dist/index.js](dist/index.js)). O `dist/` é versionado exatamente por isso — o `npx` **não** executa `postinstall`/build, então o JS (e os templates) precisam estar prontos.
 
-> Dica: para evitar a digitação longa, você pode criar um alias no seu shell:
+> **Problema com `EALLOWSCRIPTS`?** Se o seu `~/.npmrc` tem `allow-scripts` em modo estrito, o `npx github:...` pode falhar na preparação do git dep. Alternativa: instale o tarball da [última release](https://github.com/luansilvadb/conductor/releases) diretamente:
+> ```bash
+> npx https://github.com/luansilvadb/conductor/releases/latest/download/conductor.tgz
+> ```
+
+> Dica: para evitar a digitação longa, crie um alias no seu shell:
 > `alias conductor="npx github:luansilvadb/conductor"`.
 
 ## Instalação a partir do código-fonte
@@ -146,6 +154,8 @@ npm link           # disponibiliza `conductor` globalmente
 ```bash
 conductor [comando] [opções]
 ```
+
+**Sem subcomando** (fluxo padrão): executa `init` + `generate` automaticamente — inicializa o diretório de configuração e gera todos os templates em um passo.
 
 | Comando                  | Alias    | Descrição                                                              |
 |--------------------------|----------|------------------------------------------------------------------------|
@@ -180,6 +190,12 @@ conductor [comando] [opções]
 ### Exemplos
 
 ```bash
+# fluxo padrão (sem subcomando): init + generate
+conductor
+
+# com ferramenta forçada
+conductor --tool cursor
+
 # detecta automaticamente e gera tudo
 conductor generate
 
@@ -236,9 +252,12 @@ Cada template usa YAML frontmatter (`name`, `id`, `category`, `description`) par
 ## Desenvolvimento
 
 ```bash
-npm run build     # compila src/ -> dist/ (ES2022, NodeNext)
-node dist/index.js <comando>
+npm install        # instala deps (inclui cpy-cli para cópia de templates)
+npm run build      # tsc (compila TS) + cpy (copia .md para dist/)
+node dist/index.js # testa localmente
 ```
+
+> **Importante:** o build copia os templates `.md` de `src/internal/templates/data/` para `dist/` (o `tsc` não copia assets). Sempre rode `npm run build` antes de commitar mudanças em `src/`.
 
 ## Licença
 

@@ -1,0 +1,41 @@
+{
+  "name": "@gszhangwei/conductor",
+  "version": "0.1.0",
+  "description": "Conductor - Spec Driven Development CLI",
+  "type": "module",
+  "bin": {
+    "conductor": "dist/index.js"
+  },
+  "main": "dist/index.js",
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=20.11"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "prepublishOnly": "npm run build",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "@clack/prompts": "^0.7.0",
+    "chalk": "^5.3.0",
+    "commander": "^12.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "typescript": "^5.4.0"
+  },
+  "keywords": [
+    "cli",
+    "spec-driven",
+    "sdd",
+    "cursor",
+    "claude-code",
+    "antigravity",
+    "trae"
+  ],
+  "license": "MIT"
+}

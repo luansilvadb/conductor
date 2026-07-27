@@ -21,15 +21,37 @@ configuração correto de cada uma.
 
 ## Requisitos
 
-- Node.js 20+ (uso de `import.meta.dirname`).
+- Node.js 20.11+ (uso de `import.meta.dirname`).
 
-## Instalação
+## Uso sem clonar (npx)
+
+A forma mais simples: baixe e execute o Conductor em um único comando,
+sem clonar o repositório.
 
 ```bash
-# a partir do código-fonte
+# instala e executa o binário `conductor` a partir do GitHub
+npx github:luansilvadb/conductor <comando>
+
+# exemplo
+npx github:luansilvadb/conductor generate --tool cursor
+```
+
+Repositório: https://github.com/luansilvadb/conductor
+
+O `npx` baixa o tarball do repositório, instala as dependências declaradas
+em [package.json](package.json) e executa o binário registrado no campo `bin`
+([dist/index.js](dist/index.js)). O `dist/` é versionado exatamente por isso —
+o `npx` **não** executa `postinstall`/build, então o JS precisa estar pronto.
+
+> Dica: para evitar a digitação longa, você pode criar um alias no seu shell:
+> `alias conductor="npx github:luansilvadb/conductor"`.
+
+## Instalação a partir do código-fonte
+
+```bash
 npm install
-npm run build
-npm link
+npm run build      # gera dist/
+npm link           # disponibiliza `conductor` globalmente
 ```
 
 ## Uso

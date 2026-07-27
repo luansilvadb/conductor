@@ -1,5 +1,5 @@
 {
-  "name": "@gszhangwei/conductor",
+  "name": "@luansilvadb/conductor",
   "version": "0.1.0",
   "description": "Conductor - Spec Driven Development CLI",
   "type": "module",

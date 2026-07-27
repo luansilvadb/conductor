@@ -3,7 +3,7 @@ import { execSync } from 'node:child_process';
 import { existsSync, unlinkSync, readdirSync, rmdirSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { uiRenderer } from './root.js';
-const HOMEBREW_FORMULA_NAME = 'gszhangwei/tools/conductor';
+const HOMEBREW_FORMULA_NAME = 'luansilvadb/tools/conductor';
 export function createUninstallCommand() {
     const cmd = new Command('uninstall')
         .description('Uninstall conductor CLI')

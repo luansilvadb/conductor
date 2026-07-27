@@ -4,7 +4,7 @@ import { existsSync, unlinkSync, readdirSync, rmdirSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { uiRenderer } from './root.js';
 
-const HOMEBREW_FORMULA_NAME = 'gszhangwei/tools/conductor';
+const HOMEBREW_FORMULA_NAME = 'luansilvadb/tools/conductor';
 
 type InstallMethod = 'homebrew' | 'go-install' | 'npm' | 'unknown';
 

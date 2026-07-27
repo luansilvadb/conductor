@@ -1,13 +1,108 @@
 # Conductor
 
-> Spec-Driven Development (SDD) direto do terminal.
+> Spec-Driven Development (SDD) com IA: especifique, planeje, implemente, revise e reverta — com rastreabilidade total no Git.
 
-O **Conductor** é uma CLI em TypeScript/Node.js que detecta automaticamente a
-ferramenta de codificação com IA que você já usa no projeto e gera os
-templates de **comandos**, **regras**, **agentes** e **skills** no diretório de
-configuração correto de cada uma.
+O **Conductor** é um framework de Spec-Driven Development (SDD) que transforma a forma como você trabalha com ferramentas de IA para codificação. Em vez de começar a escrever código imediatamente, o Conductor força um fluxo disciplinado onde **a especificação e o plano são a fonte da verdade**, e cada tarefa é rastreada desde a concepção até o commit — com auditoria completa via Git notes.
+
+## Por que SDD?
+
+Sem um framework, o desenvolvimento com IA tende a:
+
+- Scope creep (a IA "melhora" coisas fora do escopo).
+- Código sem cobertura de testes adequada.
+- Histórico Git opaco (commits gigantes, sem contexto).
+- Difícil reversão quando algo dá errado.
+- Drift entre o que foi decidido e o que foi implementado.
+
+O Conductor resolve isso com **documentos vivos** e **checkpoints auditáveis**.
+
+## Filosofia / Princípios
+
+Os princípios abaixo (definidos em [workflow.md](src/internal/templates/data/skills/conductor-setup/assets/workflow.md)) regem todo o trabalho dentro do framework:
+
+1. **O Plano é a Fonte da Verdade** — todo trabalho é rastreado em `plan.md`.
+2. **O Tech Stack é Deliberado** — mudanças na stack devem ser documentadas *antes* da implementação.
+3. **Test-Driven Development** — escreva testes antes da funcionalidade (Red → Green → Refactor).
+4. **Cobertura Alta** — meta de >80% para novos módulos.
+5. **UX em Primeiro Lugar** — toda decisão prioriza a experiência do usuário.
+6. **CI-Aware** — comandos não-interativos, `CI=true` em ferramentas de watch.
+
+## O Ciclo SDD
+
+O Conductor implementa o SDD como um **ciclo de vida de tracks** (unidades lógicas de trabalho: features, bugs, chores). Cada skill é uma fase do ciclo:
+
+```
+   ┌──────────────┐
+   │   setup      │  Inicializa o projeto (uma vez)
+   └──────┬───────┘
+          ▼
+   ┌──────────────┐
+   │  new-track   │  ←─┐
+   └──────┬───────┘    │
+          ▼            │  próximo track
+   ┌──────────────┐    │
+   │  implement   │    │
+   └──────┬───────┘    │
+          ▼            │
+   ┌──────────────┐    │
+   │   review     │    │
+   └──────┬───────┘    │
+          ▼            │
+   ┌──────────────┐    │
+   │   status     │────┘
+   │  / revert    │
+   └──────────────┘
+```
+
+| Skill                 | Papel                          | O que faz                                                                                              |
+|-----------------------|--------------------------------|--------------------------------------------------------------------------------------------------------|
+| `conductor-setup`     | **Architect**                  | Inicializa o projeto, define visão, tech stack, style guides e workflow.                               |
+| `conductor-new-track` | **Planner**                    | Especifica (`spec.md`) e planeja (`plan.md`) uma nova track.                                            |
+| `conductor-implement` | **Implementer**                | Executa o plano seguindo TDD, registra progresso e commits.                                            |
+| `conductor-review`    | **Principal SWE**              | Revisa contra guidelines e plano, aplica fixes, arquiva ou deleta a track.                              |
+| `conductor-status`    | **Reporter**                   | Mostra progresso do projeto (phases, tasks, %, blockers).                                              |
+| `conductor-revert`    | **Git-aware**                  | Reverte tracks/phases/tasks localizando e revertendo commits associados.                               |
+
+### Estados de uma tarefa
+
+Toda tarefa em um `plan.md` segue este ciclo de vida:
+
+| Marcador | Estado        | Significado                                                       |
+|----------|---------------|-------------------------------------------------------------------|
+| `[ ]`    | Pending       | Ainda não iniciada.                                               |
+| `[~]`    | In Progress   | Sendo trabalhada agora.                                           |
+| `[x]`    | Complete      | Finalizada, com commit SHA registrado ao lado.                    |
+
+Cada tarefa completa recebe um **commit SHA** anexo no plano, e cada fase completa recebe um **checkpoint SHA** com relatório de verificação em `git notes`. Isso significa que qualquer trabalho pode ser auditado ou revertido com precisão.
+
+## Estrutura de artefatos
+
+O Conductor cria uma pasta `conductor/` na raiz do projeto — a **fonte da verdade** do SDD:
+
+```
+projeto/
+├── conductor/
+│   ├── index.md              ← "Handshake": mapa de todos os artefatos
+│   ├── product.md            ← Visão e escopo do produto
+│   ├── product-guidelines.md ← Branding, voz, tom, UX
+│   ├── tech-stack.md         ← Stack deliberada e documentada
+│   ├── workflow.md           ← Regras operacionais (TDD, cobertura, gates)
+│   ├── code_styleguides/     ← Guias de estilo por linguagem
+│   ├── tracks.md             ← Registry: todas as tracks e status
+│   ├── tracks/
+│   │   └── <track_id>/
+│   │       ├── index.md      ← Handshake local da track
+│   │       ├── spec.md       ← Especificação (o "O Quê")
+│   │       ├── plan.md       ← Plano de implementação (o "Como")
+│   │       └── metadata.json ← ID, tipo, status, timestamps
+│   └── archive/              ← Tracks revisadas e arquivadas
+└── .agents/                  ← Skills recomendadas e instaladas
+    └── skills/
+```
 
 ## Ferramentas suportadas
+
+O Conductor detecta automaticamente a ferramenta de IA que você já usa no projeto e gera os templates no diretório correto:
 
 | Ferramenta    | Diretório de configuração | Assinaturas detectadas            |
 |---------------|---------------------------|-----------------------------------|
@@ -16,8 +111,7 @@ configuração correto de cada uma.
 | Antigravity   | `.agents`                 | `.antigravity`                    |
 | Trae          | `.trae/commands`          | `.trae`                           |
 
-> Para o Antigravity, a categoria `commands` é escrita em `workflows/`
-> (convenão da IDE).
+> Para o Antigravity, a categoria `commands` é escrita em `workflows/` (convenção da IDE).
 
 ## Requisitos
 
@@ -25,23 +119,16 @@ configuração correto de cada uma.
 
 ## Uso sem clonar (npx)
 
-A forma mais simples: baixe e execute o Conductor em um único comando,
-sem clonar o repositório.
+A forma mais simples: baixe e execute o Conductor em um único comando, sem clonar o repositório.
 
 ```bash
 # instala e executa o binário `conductor` a partir do GitHub
-npx github:luansilvadb/conductor <comando>
-
-# exemplo
-npx github:luansilvadb/conductor generate --tool cursor
+npx github:luansilvadb/conductor generate
 ```
 
 Repositório: https://github.com/luansilvadb/conductor
 
-O `npx` baixa o tarball do repositório, instala as dependências declaradas
-em [package.json](package.json) e executa o binário registrado no campo `bin`
-([dist/index.js](dist/index.js)). O `dist/` é versionado exatamente por isso —
-o `npx` **não** executa `postinstall`/build, então o JS precisa estar pronto.
+O `npx` baixa o tarball do repositório, instala as dependências declaradas em [package.json](package.json) e executa o binário registrado no campo `bin` ([dist/index.js](dist/index.js)). O `dist/` é versionado exatamente por isso — o `npx` **não** executa `postinstall`/build, então o JS precisa estar pronto.
 
 > Dica: para evitar a digitação longa, você pode criar um alias no seu shell:
 > `alias conductor="npx github:luansilvadb/conductor"`.
@@ -54,13 +141,11 @@ npm run build      # gera dist/
 npm link           # disponibiliza `conductor` globalmente
 ```
 
-## Uso
+## Comandos da CLI
 
 ```bash
 conductor [comando] [opções]
 ```
-
-### Comandos
 
 | Comando                  | Alias    | Descrição                                                              |
 |--------------------------|----------|------------------------------------------------------------------------|
@@ -108,8 +193,7 @@ conductor list --category skills
 conductor generate conductor-setup
 ```
 
-Caso nenhuma ferramenta seja detectada e a flag `--tool` não seja informada,
-um prompt interativo (`@clack/prompts`) permite escolher a ferramenta.
+Caso nenhuma ferramenta seja detectada e a flag `--tool` não seja informada, um prompt interativo (`@clack/prompts`) permite escolher a ferramenta.
 
 ## Estrutura do projeto
 
@@ -125,7 +209,15 @@ src/
 ├── internal/
 │   ├── detector/        # Detecção de ferramenta por assinaturas
 │   ├── templates/       # Manager, estratégias e templates embarcados
-│   │   └── data/        # commands, rules, agents, skills
+│   │   └── data/
+│   │       ├── rules/        # constitution.md (padrões de UX das skills)
+│   │       └── skills/       # As 6 skills do ciclo SDD
+│   │           ├── conductor-setup/         # Architect
+│   │           ├── conductor-new-track/     # Planner
+│   │           ├── conductor-implement/     # Implementer
+│   │           ├── conductor-review/        # Principal SWE
+│   │           ├── conductor-status/        # Reporter
+│   │           └── conductor-revert/        # Git-aware
 │   ├── ui/              # Renderer (terminal estilizado)
 │   └── errors.ts
 └── index.ts             # Entry point
@@ -135,16 +227,11 @@ src/
 
 Localizados em [src/internal/templates/data](src/internal/templates/data):
 
-- **rules** — `constitution.md` (padrões visuais e UX das skills).
-- **skills** — fluxos de SDD: `conductor-setup`, `conductor-implement`,
-  `conductor-new-track`, `conductor-revert`, `conductor-review`,
-  `conductor-status`.
-- **assets** — catálogos de skills de terceiros e guias de estilo de código
-  (`cpp`, `csharp`, `dart`, `go`, `html-css`, `javascript`, `python`,
-  `typescript`, etc.).
+- **rules/constitution.md** — padrões visuais e UX para o agente renderizar prompts interativos (modal `ask_question` com fallback texto).
+- **skills/** — as 6 skills que implementam o ciclo SDD.
+- **skills/conductor-setup/assets/** — `workflow.md` (regras operacionais), `catalog.md` (skills de terceiros instaláveis), `code_styleguides/` (guias para `cpp`, `csharp`, `dart`, `go`, `html-css`, `javascript`, `python`, `typescript`, etc.).
 
-Cada template usa YAML frontmatter (`name`, `id`, `category`, `description`)
-para metadados.
+Cada template usa YAML frontmatter (`name`, `id`, `category`, `description`) para metadados.
 
 ## Desenvolvimento
 
@@ -155,4 +242,4 @@ node dist/index.js <comando>
 
 ## Licença
 
-Ver repositório de origem.
+MIT.

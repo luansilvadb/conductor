@@ -1,5 +1,4 @@
 # Conductor
-
 > Spec-Driven Development (SDD) com IA: especifique, planeje, implemente, revise e reverta — com rastreabilidade total no Git.
 
 O **Conductor** é um framework de Spec-Driven Development (SDD) que transforma a forma como você trabalha com ferramentas de IA para codificação. Em vez de começar a escrever código imediatamente, o Conductor força um fluxo disciplinado onde **a especificação e o plano são a fonte da verdade**, e cada tarefa é rastreada desde a concepção até o commit — com auditoria completa via Git notes.
@@ -137,9 +136,46 @@ O `npx` baixa o tarball do repositório, instala as dependências declaradas em 
 > ```bash
 > npx https://github.com/luansilvadb/conductor/releases/latest/download/conductor.tgz
 > ```
-
+>
+> **Nota:** esta URL exige que exista uma release publicada com o asset `conductor.tgz` anexado. Enquanto não houver releases, use a [instalação a partir do código-fonte](#instalação-a-partir-do-código-fonte) ou o [workaround para Windows](#windows--ide-file-watcher-eperm).
+>
 > Dica: para evitar a digitação longa, crie um alias no seu shell:
 > `alias conductor="npx github:luansilvadb/conductor"`.
+
+## Solução de problemas
+
+### Windows + IDE file watcher (EPERM)
+
+No Windows, quando uma IDE com file watcher ativo (ex.: **Trae IDE**, **VS Code** com watcher agressivo, **WebStorm**) está aberta sobre o workspace, o `npx github:luansilvadb/conductor` pode falhar antes de executar o binário com `exit code 1` e mensagens do tipo:
+
+```
+npm warn cleanup Failed to remove some directories [
+npm warn cleanup   [ Error: EPERM: operation not permitted, rmdir
+npm warn cleanup     '...\AppData\Local\npm-cache\_npx\<hash>\node_modules\@clack\prompts' ] ]
+```
+
+**Causa:** o file watcher da IDE abre handles sobre os arquivos de `node_modules` assim que o npm os cria dentro do cache temporário `_npx\<hash>\`. Na fase de cleanup, o `rmdir` do npm falha com `EPERM` porque os handles ainda estão sendo usados. O npm trata a falha de cleanup como fatal e aborta antes de invocar o binário — o diretório alvo fica vazio.
+
+Este é um problema conhecido de interação `npm` × Windows × file watchers, não um bug do Conductor em si. **Não ocorre** em Windows headless ou com o watcher desativado.
+
+**Workaround recomendado** (clone + `npm ci` + execução direta do binário):
+
+```powershell
+git clone --depth 1 https://github.com/luansilvadb/conductor.git D:\conductor-src
+cd D:\conductor-src
+npm ci --omit=dev --no-audit --no-fund
+
+# a partir do diretório do projeto alvo
+node D:\conductor-src\dist\index.js generate --tool trae
+```
+
+A instalação acontece em um diretório de projeto estável (não no cache `_npx`), então não há handles externos e o `npm ci` conclui em ~550ms sem EPERM.
+
+**Alternativas:**
+
+- Fechar a IDE (ou desabilitar o file watcher) antes de rodar o `npx`.
+- Limpar o cache `_npx` antes de tentar de novo: `Remove-Item -Recurse -Force "$env:LOCALAPPDATA\npm-cache\_npx"` (o npm recria sob demanda).
+- Para uso recorrente, fazer `npm link` a partir do clone (ver abaixo) e usar o binário `conductor` diretamente.
 
 ## Instalação a partir do código-fonte
 

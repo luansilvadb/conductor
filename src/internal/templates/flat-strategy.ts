@@ -37,24 +37,24 @@ export class FlatMarkdownStrategy implements GenerationStrategy {
     private manager: EmbeddedTemplateManager,
   ) {}
 
-  generateAll(workingDir: string, force: boolean): GenerateResult[] {
+  generateAll(workingDir: string, force: boolean, outputDir?: string): GenerateResult[] {
     const tmpls = this.manager.listAvailable(this.toolKey as AIToolType);
     const results: GenerateResult[] = [];
     for (const t of tmpls) {
-      results.push(...this.generateOne(workingDir, t, force));
+      results.push(...this.generateOne(workingDir, t, force, outputDir));
     }
     return results;
   }
 
-  generateOne(workingDir: string, tmpl: TemplateMeta, force: boolean): GenerateResult[] {
+  generateOne(workingDir: string, tmpl: TemplateMeta, force: boolean, outputDir?: string): GenerateResult[] {
     const toolType = this.toolKey as AIToolType;
     const configDir = getConfigDir(toolType);
     const sub = outputSubdir(tmpl.sourceDir, toolType);
 
-    const base = getBaseDir(configDir, workingDir);
+    const base = outputDir ?? getBaseDir(configDir, workingDir);
     const targetDir = sub ? join(base, sub, tmpl.subpath) : join(base, tmpl.subpath);
 
-    const targetPath = join(targetDir, `${tmpl.id}.md`);
+    const targetPath = join(targetDir, `${tmpl.id}${tmpl.ext}`);
 
     return [
       this.manager.generate({

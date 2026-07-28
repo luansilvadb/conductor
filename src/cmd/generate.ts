@@ -73,7 +73,9 @@ async function generateAllTemplates(_targetDir: string): Promise<void> {
   const mgr = templateManager as EmbeddedTemplateManager;
 
   const strategy = new FlatMarkdownStrategy(detectedResult.toolType, mgr);
-  const results = strategy.generateAll(workingDir, forceFlag);
+  // So passa outputDir quando --output foi explicitamente usado;
+  // caso contrario, a estrategia resolve o base via getBaseDir.
+  const results = strategy.generateAll(workingDir, forceFlag, outputFlag || undefined);
 
   if (results.length === 0) {
     uiRenderer.renderWarning('No templates available');
@@ -111,7 +113,7 @@ async function generateOneViaStrategy(tmpl: ReturnType<typeof templateManager.ge
   const mgr = templateManager as EmbeddedTemplateManager;
 
   const strategy = new FlatMarkdownStrategy(detectedResult.toolType, mgr);
-  const results = strategy.generateOne(workingDir, tmpl, forceFlag);
+  const results = strategy.generateOne(workingDir, tmpl, forceFlag, outputFlag || undefined);
 
   for (const r of results) {
     if (r.success) {

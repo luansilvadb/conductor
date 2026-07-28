@@ -1,14 +1,16 @@
-// Gera src/internal/templates/embedded.ts com todos os templates .md
-// embutidos como strings. Replica a lógica de listagem do manager.ts:
-//   - <cat>/file.md                          -> sourceDir=<cat>, subpath=''
-//   - <cat>/<subdir>/file.md                 -> sourceDir=<cat>, subpath=<subdir>
-// Categorias recursivas (com subdir): agents, skills.
-// Categorias planas (sem subdir): commands, rules.
+// Gera src/internal/templates/embedded.ts com todos os templates
+// embutidos como strings. Para cada categoria em src/internal/templates/data,
+// faz iteracao RECURSIVA completa, preservando a hierarquia de subpastas:
+//   - <cat>/file.ext                          -> sourceDir=<cat>, subpath='', ext='<ext>'
+//   - <cat>/<subdir>/file.ext                 -> sourceDir=<cat>, subpath=<subdir>, ext='<ext>'
+//   - <cat>/<subdir>/.../file.ext             -> sourceDir=<cat>, subpath=<subdir>/..., ext='<ext>'
+// Captura QUALQUER tipo de arquivo (.md, .py, .json, etc.) — a extensao original
+// e preservada para que a geracao mantenha o nome correto no destino.
 //
 // Este script deve rodar ANTES do tsc no build.
 
 import { readdirSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
-import { join, dirname } from 'node:path';
+import { join, dirname, relative, extname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -17,45 +19,52 @@ const DATA_DIR = join(ROOT, 'src/internal/templates/data');
 const OUT_FILE = join(ROOT, 'src/internal/templates/embedded.ts');
 
 /**
- * @typedef {{ abs: string, category: string, subpath: string }} Entry
+ * @typedef {{ abs: string, category: string, subpath: string, ext: string }} Entry
  */
 
 /**
- * Lista os .md de uma categoria, opcionalmente descendo um nível.
- * Replica loadTemplatesFromDir (plano) e loadTemplatesFromDirRecursive (um nível).
+ * Caminha RECURSIVAMENTE por `dir`, coletando TODO arquivo encontrado
+ * (qualquer extensao). O `subpath` fica como o caminho relativo de `dir` ate
+ * o arquivo (sem o nome do arquivo), usando separador `/`.
+ * O `ext` e a extensao do arquivo (incluindo o ponto, ex.: ".md", ".py").
+ * Diretorios vazios sao ignorados. Retorna ordem deterministica por caminho.
  *
  * @param {string} dir
  * @param {string} category
- * @param {boolean} recursive
  * @returns {Entry[]}
  */
-function listForCategory(dir, category, recursive) {
+function listForCategoryRecursive(dir, category) {
   const result = [];
-  let topEntries;
-  try {
-    topEntries = readdirSync(dir, { withFileTypes: true });
-  } catch {
-    return result;
-  }
+  const stack = [{ current: dir, subpath: '' }];
 
-  for (const entry of topEntries) {
-    if (entry.isFile() && entry.name.endsWith('.md')) {
-      result.push({ abs: join(dir, entry.name), category, subpath: '' });
-    } else if (recursive && entry.isDirectory()) {
-      const subdir = join(dir, entry.name);
-      let subEntries;
-      try {
-        subEntries = readdirSync(subdir, { withFileTypes: true });
-      } catch {
+  while (stack.length > 0) {
+    const { current, subpath } = stack.pop();
+    let entries;
+    try {
+      entries = readdirSync(current, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+
+    for (const entry of entries) {
+      const full = join(current, entry.name);
+      if (entry.isFile()) {
+        result.push({ abs: full, category, subpath, ext: extname(entry.name) });
         continue;
       }
-      for (const se of subEntries) {
-        if (se.isFile() && se.name.endsWith('.md')) {
-          result.push({ abs: join(subdir, se.name), category, subpath: entry.name });
-        }
+      if (entry.isDirectory()) {
+        const childSubpath = subpath === '' ? entry.name : `${subpath}/${entry.name}`;
+        stack.push({ current: full, subpath: childSubpath });
       }
     }
   }
+
+  // Ordem deterministica por caminho relativo ao diretorio da categoria.
+  result.sort((a, b) => {
+    const ra = relative(dir, a.abs).split(/[\\/]/).join('/');
+    const rb = relative(dir, b.abs).split(/[\\/]/).join('/');
+    return ra < rb ? -1 : ra > rb ? 1 : 0;
+  });
   return result;
 }
 
@@ -68,12 +77,24 @@ function escapeForTemplateLiteral(content) {
 }
 
 function generate() {
-  const entries = [
-    ...listForCategory(join(DATA_DIR, 'commands'), 'commands', false),
-    ...listForCategory(join(DATA_DIR, 'rules'), 'rules', false),
-    ...listForCategory(join(DATA_DIR, 'agents'), 'agents', true),
-    ...listForCategory(join(DATA_DIR, 'skills'), 'skills', true),
-  ];
+  // Descobre categorias dinamicamente: cada subdiretorio de DATA_DIR e uma categoria.
+  let topEntries;
+  try {
+    topEntries = readdirSync(DATA_DIR, { withFileTypes: true });
+  } catch {
+    console.error('[embed-templates] Nao foi possivel ler', DATA_DIR);
+    process.exit(1);
+  }
+  const categories = topEntries
+    .filter((e) => e.isDirectory())
+    .map((e) => e.name);
+
+  const entries = [];
+  for (const catName of categories) {
+    const catDir = join(DATA_DIR, catName);
+    const catEntries = listForCategoryRecursive(catDir, catName);
+    entries.push(...catEntries);
+  }
 
   if (entries.length === 0) {
     console.error('[embed-templates] Nenhum template encontrado em', DATA_DIR);
@@ -82,16 +103,22 @@ function generate() {
 
   const lines = [
     '// ARQUIVO GERADO AUTOMATICAMENTE por scripts/embed-templates.mjs',
-    '// NÃO EDITAR — altere os .md em src/internal/templates/data/ e rode `npm run build`.',
+    '// NAO EDITAR - altere os arquivos em src/internal/templates/data/ e rode `npm run build`.',
+    '// Iteracao recursiva completa: qualquer tipo de arquivo e capturado.',
     '',
     'export interface EmbeddedTemplate {',
-    "  /** Caminho absoluto do arquivo .md no source (apenas para diagnóstico). */",
+    "  /** Caminho absoluto do arquivo no source (apenas para diagnostico). */",
     '  sourcePath: string;',
     "  /** Categoria (commands, rules, agents, skills). */",
     '  category: string;',
-    "  /** Subpath dentro da categoria (ex.: \"conductor-setup\" para skills/conductor-setup/SKILL.md). */",
+    "  /** Subpath dentro da categoria: caminho relativo ate o arquivo (sem o nome do arquivo).",
+    '   *  Ex.: "conductor-setup" para skills/conductor-setup/SKILL.md,',
+    '   *       "conductor-setup/assets/code_styleguides" para skills/conductor-setup/assets/code_styleguides/cpp.md.',
+    '   */',
     '  subpath: string;',
-    "  /** Conteúdo bruto do .md, incluindo frontmatter YAML. */",
+    "  /** Extensao original do arquivo, incluindo o ponto (ex.: \".md\", \".py\"). */",
+    '  ext: string;',
+    "  /** Conteudo bruto do arquivo. Para .md, inclui frontmatter YAML. */",
     '  content: string;',
     '}',
     '',
@@ -105,6 +132,7 @@ function generate() {
     lines.push(`    sourcePath: ${JSON.stringify(relPath)},`);
     lines.push(`    category: ${JSON.stringify(e.category)},`);
     lines.push(`    subpath: ${JSON.stringify(e.subpath)},`);
+    lines.push(`    ext: ${JSON.stringify(e.ext)},`);
     lines.push(`    content: \`${escapeForTemplateLiteral(content)}\`,`);
     lines.push('  },');
   }

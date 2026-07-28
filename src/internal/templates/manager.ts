@@ -60,9 +60,10 @@ function toMeta(t: (typeof TEMPLATES)[number]): TemplateMeta {
   const meta = parseFrontmatter(t.content);
   meta.sourceDir = t.category;
   meta.subpath = t.subpath;
+  meta.ext = t.ext;
   if (!meta.id) {
     const fileName = t.sourcePath.split(/[\\/]/).pop() || '';
-    meta.id = fileName.replace(/\.md$/, '');
+    meta.id = parse(fileName).name;
     meta.name = meta.name || meta.id;
   }
   return meta;

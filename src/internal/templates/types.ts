@@ -10,6 +10,8 @@ export interface TemplateMeta {
   sourceDir: string;
   /** Relative subpath within the category (e.g. "teste" for skills/teste/SKILL.md) */
   subpath: string;
+  /** Original file extension including the dot (e.g. ".md", ".py") */
+  ext: string;
 }
 
 /** Parameters for template generation requests */
@@ -29,8 +31,16 @@ export interface GenerateResult {
 
 /** Strategy for rendering template content per tool */
 export interface GenerationStrategy {
-  generateAll(workingDir: string, force: boolean): GenerateResult[];
-  generateOne(workingDir: string, tmpl: TemplateMeta, force: boolean): GenerateResult[];
+  /**
+   * @param outputDir When provided, overrides the tool's default base dir
+   *                  (used by `generate --output`).
+   */
+  generateAll(workingDir: string, force: boolean, outputDir?: string): GenerateResult[];
+  /**
+   * @param outputDir When provided, overrides the tool's default base dir
+   *                  (used by `generate --output`).
+   */
+  generateOne(workingDir: string, tmpl: TemplateMeta, force: boolean, outputDir?: string): GenerateResult[];
 }
 
 /** Mapping of frontmatter keys to TemplateMeta setters */
@@ -68,6 +78,7 @@ function createEmptyMeta(content: string): TemplateMeta {
     tags: [],
     sourceDir: '',
     subpath: '',
+    ext: '',
   };
 }
 

@@ -1,10 +1,6 @@
 import { Command } from 'commander';
 import { detectedResult, uiRenderer, templateManager } from './root.js';
 
-let categoryFlag = '';
-let quietFlag = false;
-let listAllFlag = false;
-
 export function createListCommand(): Command {
   const cmd = new Command('list')
     .aliases(['ls'])
@@ -13,26 +9,26 @@ export function createListCommand(): Command {
     .option('-q, --quiet', 'Output only template names (for piping)')
     .option('--all', 'List all templates across all categories')
     .action((options: { category?: string; quiet?: boolean; all?: boolean }) => {
-      categoryFlag = options.category ?? '';
-      quietFlag = options.quiet ?? false;
-      listAllFlag = options.all ?? false;
+      const category = options.category ?? '';
+      const quiet = options.quiet ?? false;
+      const listAll = options.all ?? false;
 
-      let tmpls = listAllFlag
+      let tmpls = listAll
         ? templateManager.listAll()
         : templateManager.listAvailable(detectedResult.toolType);
 
-      if (categoryFlag) {
-        tmpls = tmpls.filter((t) => t.category === categoryFlag);
+      if (category) {
+        tmpls = tmpls.filter((t) => t.category === category);
       }
 
       if (tmpls.length === 0) {
         uiRenderer.renderWarning(
-          categoryFlag ? `No templates found in category: ${categoryFlag}` : 'No templates available',
+          category ? `No templates found in category: ${category}` : 'No templates available',
         );
         return;
       }
 
-      if (quietFlag) {
+      if (quiet) {
         for (const t of tmpls) console.log(t.id);
         return;
       }

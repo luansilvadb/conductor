@@ -5420,6 +5420,9 @@ Conductor Subagent Protocol Engine
 ## Background:
 This protocol defines the formal contract for all subagent delegation within the Conductor framework. All dispatch decisions are resolved **dynamically** from the centralized configuration (\`config.json\`) \u2014 there are **zero hardcoded** file paths, subagent type names, thresholds, schema fields, or tool names in this protocol. The orchestrator (main agent) MUST NOT read project context files directly \u2014 it delegates everything and only receives condensed schemas. Intermediate subagent history is **auto-discarded** by the Context Isolation Layer (CIL) after schema extraction.
 
+## Notes:
+- The dispatch tool in the Antigravity environment is \`invoke_subagent\`. It is the first entry in \`config.dispatch_tool_aliases[]\` and MUST be used when available.
+
 ## Profile:
 - version: \${config.framework.version}
 - language: English
@@ -5461,6 +5464,8 @@ Every dispatch decision follows this matrix. The orchestrator MUST consult it BE
 | Task writes any file listed in \`config.files.control_files[]\` | **ORCHESTRATOR** executes inline (subagents NEVER write control files) |
 | Task is trivial: 1-step operation with no file reading | **ORCHESTRATOR** executes inline |
 | No dispatch tool from \`config.dispatch_tool_aliases[]\` is available in the environment | **ORCHESTRATOR** executes inline with \`\${config.protocol.degraded_mode}\` warning |
+
+> **Tool name resolution:** \`config.dispatch_tool_aliases[]\` is checked in order. For Antigravity, \`invoke_subagent\` (index 0) matches first. For Cursor/Claude Code environments that expose a \`Task\` tool, \`Task\` (index 1) is used. Never assume a tool name \u2014 always check the toolset at runtime.
 
 ### Task Classification Algorithm (Dynamic)
 
@@ -5726,44 +5731,6 @@ For phase completion, follow the Phase Completion Verification Protocol step by 
 `
       },
       {
-        sourcePath: "D:/conductor/src/internal/templates/data/skills/conductor-setup/scripts/__pycache__/resume.cpython-312.pyc",
-        category: "skills",
-        subpath: "conductor-setup/scripts/__pycache__",
-        ext: ".pyc",
-        content: `\uFFFD
-
-\0\0\0\0\uFFFD\uFFFDhj\uFFFD\b\0\0\uFFFD\0\0\0\0\0\0\0\0\0\0\0\0	\0\0\0\0\0\0\0\uFFFDJ\0\0\uFFFD\0d\0Z\0ddlZddlZddlZd\uFFFD\0Zd\uFFFD\0Zd\uFFFD\0Ze\x07dk(\0\0rA	\0\0e\uFFFD\0\0\0\0\0\0\0Z\b\0e	\0ej\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0e\bd\x07\uFFFD\b\uFFFD\0\0\0\0\0\0\uFFFD\0\0\0\0\0\0\0\0ej\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0e\bd	\0\0\0\uFFFD\x07d\uFFFD\0\0\0\0\0\0\0yd
-\uFFFD\0\0\0\0\0\0\0yy#\0e\f$\0r>Z
-\0e	\0ej\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0d\v\0ee
-\uFFFD\0\0\0\0\0\0id\x07\uFFFD\b\uFFFD\0\0\0\0\0\0\uFFFD\0\0\0\0\0\0\0\0ej\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0d\x07\uFFFD\0\0\0\0\0\0\0Y\0dZ
-[
-ydZ
-[
-ww\0xY\0w)\fu\uFFFD\0\0\0Determines the next unblocked setup step in the Conductor workflow.
-
-Reads centralized configuration from config.json \u2014 no hardcoded file lists or paths.
-\uFFFD\0\0\0\0Nc\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\uFFFD>\0\0\uFFFD\0t\0\0\0\0\0\0\0\0j\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\uFFFD\0\0\0\0\0\0\0}\0	\0t\0\0\0\0\0\0\0\0\0j\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0j\x07\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0|\0d\uFFFD\0\0\0\0\0\0}t\0\0\0\0\0\0\0\0\0j\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0j	\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0|\uFFFD\0\0\0\0\0\0r|S\0t\0\0\0\0\0\0\0\0\0j\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0j\v\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0|\0\uFFFD\0\0\0\0\0\0}||\0k(\0\0rn|}\0\uFFFDit
-\0\0\0\0\0\0\0\0dt\0\0\0\0\0\0\0\0j\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\uFFFD\0\0\0\0\0\0\0z\0\0\0\uFFFD\0\0\0\0\0\0\uFFFD)z&Walks up from cwd to find config.json.z\vconfig.jsonz5Cannot find config.json in any parent directory from )\x07\uFFFDos\uFFFDgetcwd\uFFFDpath\uFFFDjoin\uFFFDexists\uFFFD\x07dirname\uFFFDFileNotFoundError)\uFFFD\x07current\uFFFD	candidate\uFFFDparents\0\0\0   \uFFFDQd:\\conductor\\src\\internal\\templates\\data\\skills\\conductor-setup\\scripts\\resume.py\uFFFD\vfind_configr\0\0\0\v\0\0\0s~\0\0\0\uFFFD\0\uFFFD\uFFFDi\uFFFDi\uFFFDk\uFFFDG\uFFFD
-\uFFFD\uFFFDG\uFFFDG\uFFFDL\uFFFDL\uFFFD\uFFFD-\uFFFD8\uFFFD	\uFFFD\v
-\uFFFD7\uFFFD7\uFFFD>\uFFFD>\uFFFD)\uFFFD\v$\uFFFD\uFFFD\f\uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\uFFFD)\uFFFD\uFFFD\v\uFFFDW\uFFFD\v\uFFFD\f\uFFFD\uFFFD\x07\uFFFD\0\v\uFFFD\0\v\uFFFD\b?\uFFFD"\uFFFD)\uFFFD)\uFFFD+\uFFFD\bM\uFFFD\v\uFFFD\0\uFFFD\0\0\0\0c\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\uFFFD\0\0\0\uFFFD\0t\0\0\0\0\0\0\0\0\uFFFD\0\0\0\0\0\0\0}\0t\0\0\0\0\0\0\0\0|\0dd\uFFFD\uFFFD\0\0\0\0\0\x005\0}t\0\0\0\0\0\0\0\0j\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0|\uFFFD\0\0\0\0\0\0cddd\uFFFD\0\0\0\0\0\0\0S\0#\x001\0sw\0Y\0\0\0yxY\0w)z.Loads the centralized Conductor configuration.\uFFFDrzutf-8)\uFFFD\bencodingN)r\0\0\0\uFFFDopen\uFFFDjson\uFFFDload)\uFFFD\vconfig_path\uFFFDfs\0\0\0  r\0\0\0\uFFFD\vload_configr\0\0\0\x1B\0\0\0s.\0\0\0\uFFFD\0\uFFFD\uFFFD-\uFFFDK\uFFFD	
-\uFFFDk\uFFFD3\uFFFD\uFFFD	1\uFFFDQ\uFFFD\uFFFDy\uFFFDy\uFFFD\uFFFD|\uFFFD\0
-2\uFFFD	1\uFFFD	1\uFFFDs	\0\0\0\uFFFD8\uFFFDA\x07c\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\uFFFD\0\0\uFFFD\0t\0\0\0\0\0\0\0\0\uFFFD\0\0\0\0\0\0\0}\0|\0d\0\0\0d\0\0\0}|\0d\0\0\0d\0\0\0}|\0d\0\0\0d\0\0\0}i\0}|D\0]I\0\0}|d\0\0\0}t\0\0\0\0\0\0\0\0j\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0j\x07\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0||\uFFFD\0\0\0\0\0\0}\x07t\0\0\0\0\0\0\0\0j\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0j	\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0|\x07\uFFFD\0\0\0\0\0\0||<\0\0\0\uFFFDK\0t\0\0\0\0\0\0\0\0j\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0j	\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0t\0\0\0\0\0\0\0\0j\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0j\x07\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0||\uFFFD\0\0\0\0\0\0\uFFFD\0\0\0\0\0\0}\bd\x07}	|D\0]\0\0}|d\0\0\0}||\0\0\0r\uFFFD|d\b\0\0\0|d	\uFFFD}	\0n\0|\b||	d
-\uFFFDS\0)\vzDChecks existing setup artifacts and returns the next unblocked step.\uFFFD\vdirectories\uFFFDconductor_root\uFFFDfiles\uFFFD\vsetup_chain\uFFFD\fsetup_marker\uFFFDfileN\uFFFDstep)r!\0\0\0r \0\0\0)\uFFFDsetup_complete\uFFFD	checklist\uFFFD	next_step)r\0\0\0r\0\0\0r\0\0\0r\x07\0\0\0r\b\0\0\0)
-\uFFFDconfig\uFFFD
-conductor_dirr\0\0\0r\0\0\0r#\0\0\0\uFFFDitem\uFFFD\bfilenamer\0\0\0r"\0\0\0r$\0\0\0s
-\0\0\0          r\0\0\0\uFFFDdetermine_resumptionr)\0\0\0"\0\0\0s\uFFFD\0\0\0\uFFFD\0\uFFFD
-\uFFFD]\uFFFDF\uFFFD\uFFFD=\uFFFD)\uFFFD*:\uFFFD;\uFFFDM\uFFFD\uFFFD\uFFFD/\uFFFD-\uFFFD0\uFFFDK\uFFFD\uFFFD'\uFFFD?\uFFFD>\uFFFD2\uFFFDL\uFFFD\0\uFFFDI\uFFFD\x1B\uFFFD\uFFFD\uFFFD\uFFFD<\uFFFD\b\uFFFD\uFFFDw\uFFFDw\uFFFD|\uFFFD|\uFFFDM\uFFFD8\uFFFD4\uFFFD\uFFFD \uFFFDg\uFFFDg\uFFFDn\uFFFDn\uFFFDT\uFFFD2\uFFFD	\uFFFD(\uFFFD\b\x1B\uFFFD\x07\0\uFFFD
-\0\uFFFDW\uFFFDW\uFFFD^\uFFFD^\uFFFDB\uFFFDG\uFFFDG\uFFFDL\uFFFDL\uFFFD\uFFFD\f\uFFFD$M\uFFFDN\uFFFDN\uFFFD\0\uFFFDI\uFFFD\x1B\uFFFD\uFFFD\uFFFD\uFFFD<\uFFFD\b\uFFFD\uFFFD\uFFFD"\uFFFD\uFFFDV\uFFFD\f\uFFFD \uFFFD\uFFFDI\uFFFD\b\0
-\uFFFD\0\uFFFD\0\x1B)\uFFFD\uFFFD\uFFFD\x07\f\uFFFD\0r\0\0\0\uFFFD\b__main__\uFFFD\0\0\0)\uFFFDindentr$\0\0\0\uFFFD\0\0\0\uFFFDerror)\uFFFD\x07__doc__r\0\0\0r\0\0\0\uFFFDsysr\0\0\0r\0\0\0r)\0\0\0\uFFFD\b__name__\uFFFDresult\uFFFDprint\uFFFDdumps\uFFFDexitr
-\0\0\0\uFFFDe\uFFFDstr\uFFFD\0r\0\0\0r\0\0\0\uFFFD\b<module>r9\0\0\0\0\0\0s\uFFFD\0\0\0\uFFFD\uFFFD\uFFFD
-\0\f\uFFFD\0	\uFFFD\0
-\uFFFD
-\uFFFD \uFFFD \uFFFDF\0\f\uFFFDz\uFFFD\uFFFD\uFFFD%\uFFFD'\uFFFD\uFFFD\b
-\uFFFDj\uFFFDd\uFFFDj\uFFFDj\uFFFD\uFFFD\uFFFD*\uFFFD\b+\uFFFD\b\uFFFD\uFFFD\b\uFFFD\b\uFFFDf\uFFFD[\uFFFD)\uFFFD1\uFFFD\uFFFD\b9\uFFFDq\uFFFD\b9\uFFFD	\0\uFFFD\uFFFD
-\0\f\uFFFD\0\uFFFD\b
-\uFFFDj\uFFFDd\uFFFDj\uFFFDj\uFFFD'\uFFFD3\uFFFDq\uFFFD6\uFFFD*\uFFFD1\uFFFD5\uFFFD\b6\uFFFD\b\uFFFD\uFFFD\b\uFFFD\b\uFFFD\uFFFD\v\uFFFD\v\uFFFD\uFFFD\uFFFDs\0\0\0\uFFFD8A\0\uFFFDA\0\uFFFDB"\uFFFD$4B\uFFFDB"`
-      },
-      {
         sourcePath: "D:/conductor/src/internal/templates/data/skills/conductor-setup/scripts/resume.py",
         category: "skills",
         subpath: "conductor-setup/scripts",
@@ -5909,6 +5876,313 @@ As the Conductor Status Agent, with skills in file verification, markdown parsin
   }
 });
 
+// src/internal/templates/data/config.json
+var config_default;
+var init_config = __esm({
+  "src/internal/templates/data/config.json"() {
+    config_default = {
+      $schema: "https://json-schema.org/draft/2020-12/schema",
+      title: "Conductor Central Configuration",
+      description: "Single source of truth for all configurable values in the Conductor framework. Every file in the framework MUST resolve values from this config instead of hardcoding them.",
+      version: "1.0",
+      framework: {
+        version: "1.1"
+      },
+      directories: {
+        conductor_root: "conductor",
+        source_code: "src",
+        tracks_dir: "conductor/tracks",
+        styleguides_dir: "conductor/code_styleguides",
+        skills_dir: "conductor/skills"
+      },
+      files: {
+        artifacts: {
+          product: "product.md",
+          product_guidelines: "product-guidelines.md",
+          tech_stack: "tech-stack.md",
+          workflow: "workflow.md",
+          plan: "plan.md",
+          spec: "spec.md",
+          index: "index.md",
+          tracks_registry: "tracks.md",
+          track_metadata: "metadata.json"
+        },
+        context_files: [
+          "product.md",
+          "product-guidelines.md",
+          "tech-stack.md",
+          "workflow.md",
+          "plan.md",
+          "spec.md",
+          "tracks.md"
+        ],
+        control_files: [
+          "tracks.md",
+          "plan.md",
+          "index.md",
+          "metadata.json"
+        ],
+        setup_chain: [
+          { file: "product.md", step: "Product Definition" },
+          { file: "product-guidelines.md", step: "Product Guidelines" },
+          { file: "tech-stack.md", step: "Technology Stack" },
+          { file: "code_styleguides", step: "Code Style Guides", is_directory: true },
+          { file: "workflow.md", step: "Workflow Configuration" }
+        ],
+        setup_marker: "index.md"
+      },
+      skills: {
+        names: {
+          setup: "conductor-setup",
+          implement: "conductor-implement",
+          review: "conductor-review",
+          revert: "conductor-revert",
+          new_track: "conductor-new-track",
+          status: "conductor-status"
+        }
+      },
+      protocols: {
+        subagent_dispatch: {
+          path: "conductor-setup/assets/subagent-protocol.md"
+        }
+      },
+      i18n: {
+        default_language: "pt-BR",
+        template_dir: "i18n",
+        resolve_order: ["config", "system_locale", "default"]
+      },
+      thresholds: {
+        delegate_lines: 50,
+        coverage_min_percent: 80,
+        max_fix_attempts: 2,
+        max_parallel_subagents: 5,
+        subagent_timeout_seconds: 120,
+        token_warning_threshold: 5e3
+      },
+      protocol: {
+        name: "sdp",
+        version: "v1",
+        version_string: "sdp-v1",
+        degraded_mode: "degraded",
+        full_mode: "full",
+        data_envelope: "data",
+        protocol_field: "protocol",
+        status_field: "status",
+        summary_field: "summary",
+        warnings_field: "warnings",
+        token_estimate_field: "token_estimate"
+      },
+      subagent_types: {
+        search: {
+          id: "search",
+          capabilities: ["read_files", "search_codebase", "glob", "grep"],
+          description: "Read-only retrieval subagent for exploring codebases and reading files",
+          write_forbidden: true
+        },
+        general_purpose_task: {
+          id: "general_purpose_task",
+          capabilities: ["read_files", "write_files", "run_commands", "analysis"],
+          description: "Multi-purpose subagent for analysis, code generation, and verification",
+          write_forbidden: false
+        }
+      },
+      dispatch_tool_aliases: ["invoke_subagent", "Task", "dispatch", "spawn", "delegate"],
+      user_interaction_tools: ["ask_question", "AskUserQuestion", "NotifyUser"],
+      enums: {
+        track_types: ["MVP", "Feature", "Bug", "Chore", "Spike", "Epic", "Hotfix"],
+        finding_categories: ["plan_compliance", "style", "security", "correctness", "coverage", "performance", "accessibility", "i18n"],
+        finding_severities: ["high", "medium", "low"],
+        trust_levels: ["1p", "3p", "1p-verified", "community-audited"],
+        task_statuses: {
+          pending: "[ ]",
+          in_progress: "[~]",
+          done: "[x]",
+          checkpoint: "[checkpoint: <sha>]"
+        }
+      },
+      catalogs: {
+        core: "conductor-setup/assets/catalog.md",
+        community: "conductor-new-track/assets/catalog.md"
+      },
+      commit_conventions: {
+        new_track_prefix: "conductor(track):",
+        plan_update_prefix: "conductor(plan):",
+        setup_prefix: "chore(conductor):",
+        docs_prefix: "docs(conductor):"
+      },
+      schemas: {
+        document_parse: {
+          type: "object",
+          fields: {
+            document: "string",
+            key_points: "string[]",
+            constraints: "string[]",
+            conventions: "string[]",
+            raw_length_lines: "number"
+          }
+        },
+        diff_analysis: {
+          type: "object",
+          fields: {
+            commit_range: "string",
+            files_changed: "string[]",
+            findings: "Finding[]"
+          }
+        },
+        test_execution: {
+          type: "object",
+          fields: {
+            total: "number",
+            passed: "number",
+            failed: "number",
+            coverage_percent: "number",
+            failed_tests: "string[]",
+            fix_attempts: "number"
+          }
+        },
+        tracks_registry_parse: {
+          type: "object",
+          fields: {
+            phases: "number",
+            tasks: { total: "number", done: "number", in_progress: "number", pending: "number" },
+            current: { phase: "string", task: "string" },
+            next: "string",
+            blockers: "string[]"
+          }
+        },
+        question_seeds: {
+          type: "object",
+          fields: {
+            track_type: "string",
+            seeds: [{ question: "string", options: "string[]", recommended: "string", reason: "string" }]
+          }
+        },
+        spec_plan_draft: {
+          type: "object",
+          fields: {
+            draft: "string",
+            task_count: "number",
+            estimated_hours: "number"
+          }
+        },
+        skill_catalog_match: {
+          type: "object",
+          fields: {
+            matches: [{ name: "string", party: "string", url: "string", relevance: "string", reason: "string" }]
+          }
+        },
+        manual_verification: {
+          type: "object",
+          fields: {
+            phase: "string",
+            steps: [{ step: "number", description: "string", expected: "string", automated: "boolean" }],
+            coverage_gaps: "string[]",
+            risk_areas: "string[]"
+          }
+        },
+        git_commit_list: {
+          type: "object",
+          fields: {
+            commits: [{ sha: "string", message: "string" }],
+            ghost_commits: "string[]"
+          }
+        },
+        status_report: {
+          type: "object",
+          fields: {
+            phases: "number",
+            tasks: { total: "number", done: "number", in_progress: "number", pending: "number" },
+            current: { phase: "string", task: "string" },
+            next: "string",
+            blockers: "string[]"
+          }
+        }
+      }
+    };
+  }
+});
+
+// src/internal/i18n/resolver.ts
+function resolvePath(root, path) {
+  const parts = path.replace(/\[(\d+)\]/g, ".$1").split(".");
+  let current = root;
+  for (const part of parts) {
+    if (current === null || current === void 0) return void 0;
+    if (Array.isArray(current)) {
+      const idx = parseInt(part, 10);
+      if (Number.isNaN(idx)) return void 0;
+      current = current[idx];
+    } else if (typeof current === "object") {
+      current = current[part];
+    } else {
+      return void 0;
+    }
+  }
+  if (typeof current === "string") return current;
+  if (typeof current === "number" || typeof current === "boolean") return String(current);
+  return void 0;
+}
+function buildI18nMap(locale) {
+  const cached = i18nMapCache.get(locale);
+  if (cached) return cached;
+  const map = /* @__PURE__ */ new Map();
+  for (const t of TEMPLATES) {
+    if (t.category !== "i18n" || t.ext !== ".json") continue;
+    if (!t.subpath.startsWith(locale)) continue;
+    const fileName = t.sourcePath.split(/[\\/]/).pop() ?? "";
+    const fileId = fileName.endsWith(".json") ? fileName.slice(0, -5) : fileName;
+    let data;
+    try {
+      data = JSON.parse(t.content);
+    } catch {
+      continue;
+    }
+    const relDir = t.subpath.slice(locale.length).replace(/^\//, "");
+    const namespace = relDir ? relDir.replace(/\//g, ".") + "." + fileId : fileId;
+    map.set(namespace, data);
+  }
+  i18nMapCache.set(locale, map);
+  return map;
+}
+function resolveI18nKey(key, i18nMap) {
+  const parts = key.split(".");
+  for (let nsLen = parts.length - 1; nsLen >= 1; nsLen--) {
+    const ns = parts.slice(0, nsLen).join(".");
+    const data = i18nMap.get(ns);
+    if (!data) continue;
+    const keyPath = parts.slice(nsLen).join(".");
+    const value = resolvePath(data, keyPath);
+    if (value !== void 0) return value;
+  }
+  return `\${i18n.t("${key}")}`;
+}
+function resolveConfigPath(path) {
+  const value = resolvePath(config_default, path);
+  return value !== void 0 ? value : `\${config.${path}}`;
+}
+function resolveContent(content, locale) {
+  const i18nMap = buildI18nMap(locale);
+  const afterI18n = content.replace(
+    /\$\{i18n\.t\("([^"]+)"\)\}/g,
+    (_3, key) => resolveI18nKey(key, i18nMap)
+  );
+  const afterConfig = afterI18n.replace(
+    /\$\{config\.([^}]+)\}/g,
+    (_3, path) => resolveConfigPath(path)
+  );
+  return afterConfig;
+}
+var DEFAULT_LOCALE, i18nMapCache;
+var init_resolver = __esm({
+  "src/internal/i18n/resolver.ts"() {
+    "use strict";
+    init_embedded();
+    init_config();
+    DEFAULT_LOCALE = config_default.i18n?.default_language ?? "pt-BR";
+    i18nMapCache = /* @__PURE__ */ new Map();
+  }
+});
+
 // src/internal/templates/manager.ts
 function toMeta(t) {
   const meta = parseFrontmatter(t.content);
@@ -5931,6 +6205,7 @@ var init_manager = __esm({
     init_types2();
     init_errors();
     init_embedded();
+    init_resolver();
     EmbeddedTemplateManager = class {
       listAvailable(_tool) {
         return this.listAll();
@@ -5953,14 +6228,16 @@ var init_manager = __esm({
             error: new FileExistsError()
           };
         }
-        const tmpl = this.getByName(req.templateName);
-        if (!tmpl) {
+        const rawContent = req.content ?? this.getByName(req.templateName)?.content;
+        if (!rawContent) {
           return {
             success: false,
             message: `Template not found: ${req.templateName}`
           };
         }
-        (0, import_node_fs2.writeFileSync)(req.targetPath, tmpl.content, "utf-8");
+        const locale = req.locale ?? DEFAULT_LOCALE;
+        const content = resolveContent(rawContent, locale);
+        (0, import_node_fs2.writeFileSync)(req.targetPath, content, "utf-8");
         return {
           success: true,
           filePath: req.targetPath,
@@ -7650,7 +7927,8 @@ var init_flat_strategy = __esm({
           this.manager.generate({
             templateName: tmpl.name,
             targetPath,
-            force
+            force,
+            content: tmpl.content
           })
         ];
       }
@@ -7671,9 +7949,9 @@ function createGenerateCommand() {
   return cmd;
 }
 async function runGenerate(opts = {}) {
-  forceFlag = opts.force ?? false;
-  outputFlag = opts.output ?? "";
-  if (!outputFlag && !toolFlag) {
+  const force = opts.force ?? false;
+  const output = opts.output ?? "";
+  if (!output && !toolFlag) {
     const tool = await selectToolInteractively();
     if (tool === "unknown" /* Unknown */) {
       uiRenderer.renderError("No tool selected. Use --output or --tool flag.");
@@ -7687,27 +7965,27 @@ async function runGenerate(opts = {}) {
       message: `tool manually selected: ${tool}`
     });
   }
-  const targetDir = determineTargetDir();
+  const targetDir = determineTargetDir(output);
   if (!targetDir) {
     uiRenderer.renderError("Could not determine target directory. Use --output or --tool flag.");
     return;
   }
   if (opts.templateName) {
-    await generateSingleTemplate(opts.templateName);
+    await generateSingleTemplate(opts.templateName, force, output);
     return;
   }
-  await generateAllTemplates(targetDir);
+  await generateAllTemplates(targetDir, force, output);
 }
-function determineTargetDir() {
-  if (outputFlag) return outputFlag;
+function determineTargetDir(output) {
+  if (output) return output;
   if (detectedResult2.isValid && detectedResult2.configPath) return detectedResult2.configPath;
   return "";
 }
-async function generateAllTemplates(_targetDir) {
+async function generateAllTemplates(_targetDir, force, output) {
   const workingDir = (0, import_node_process6.cwd)();
   const mgr = templateManager;
   const strategy = new FlatMarkdownStrategy(detectedResult2.toolType, mgr);
-  const results = strategy.generateAll(workingDir, forceFlag, outputFlag || void 0);
+  const results = strategy.generateAll(workingDir, force, output || void 0);
   if (results.length === 0) {
     uiRenderer.renderWarning("No templates available");
     return;
@@ -7725,20 +8003,20 @@ async function generateAllTemplates(_targetDir) {
   }
   uiRenderer.renderSuccess(`Generation complete: ${formatCount(successCount, "succeeded")}, ${formatCount(failCount, "failed")}`);
 }
-async function generateSingleTemplate(name) {
+async function generateSingleTemplate(name, force, output) {
   const tmpl = templateManager.getByName(name);
   if (!tmpl) {
     uiRenderer.renderError(`Template not found: ${name}`);
     return;
   }
-  await generateOneViaStrategy(tmpl);
+  await generateOneViaStrategy(tmpl, force, output);
 }
-async function generateOneViaStrategy(tmpl) {
+async function generateOneViaStrategy(tmpl, force, output) {
   if (!tmpl) return;
   const workingDir = (0, import_node_process6.cwd)();
   const mgr = templateManager;
   const strategy = new FlatMarkdownStrategy(detectedResult2.toolType, mgr);
-  const results = strategy.generateOne(workingDir, tmpl, forceFlag, outputFlag || void 0);
+  const results = strategy.generateOne(workingDir, tmpl, force, output || void 0);
   for (const r2 of results) {
     if (r2.success) {
       uiRenderer.renderSuccess(`Generated: ${r2.filePath}`);
@@ -7751,7 +8029,7 @@ function formatCount(count, label) {
   if (count === 1) return `1 ${label.slice(0, -1)}`;
   return `${count} ${label}`;
 }
-var import_node_process6, forceFlag, outputFlag;
+var import_node_process6;
 var init_generate = __esm({
   "src/cmd/generate.ts"() {
     "use strict";
@@ -7761,8 +8039,58 @@ var init_generate = __esm({
     init_root();
     init_init();
     init_types();
-    forceFlag = false;
-    outputFlag = "";
+  }
+});
+
+// package.json
+var package_default;
+var init_package = __esm({
+  "package.json"() {
+    package_default = {
+      name: "@luansilvadb/conductor",
+      version: "1.3.9",
+      description: "Conductor - Spec Driven Development",
+      type: "module",
+      bin: {
+        conductor: "dist/index.cjs"
+      },
+      main: "dist/index.cjs",
+      files: [
+        "dist",
+        "README.md"
+      ],
+      engines: {
+        node: ">=20.11"
+      },
+      scripts: {
+        embed: "node scripts/embed-templates.mjs",
+        clean: "node scripts/clean-dist.mjs",
+        typecheck: "tsc -p tsconfig.json",
+        build: "npm run clean && npm run embed && npm run typecheck && npm run bundle",
+        bundle: "esbuild src/index.ts --bundle --platform=node --format=cjs --outfile=dist/index.cjs --sourcemap --allow-overwrite",
+        prepublishOnly: "npm run build",
+        start: "node dist/index.cjs"
+      },
+      dependencies: {},
+      devDependencies: {
+        "@clack/prompts": "^0.7.0",
+        "@types/node": "^20.11.0",
+        chalk: "^5.3.0",
+        commander: "^12.1.0",
+        esbuild: "^0.28.1",
+        typescript: "^5.4.0"
+      },
+      keywords: [
+        "cli",
+        "spec-driven",
+        "sdd",
+        "cursor",
+        "claude-code",
+        "antigravity",
+        "trae"
+      ],
+      license: "MIT"
+    };
   }
 });
 
@@ -7777,9 +8105,10 @@ __export(root_exports, {
   uiRenderer: () => uiRenderer
 });
 function createProgram() {
+  const program2 = new Command();
   program2.name("Conductor").description(
     "Conductor Spec Driven Development"
-  ).version("0.1.0", "-v, --version", "Print conductor version and exit").hook("preAction", (thisCommand) => {
+  ).version(package_default.version, "-v, --version", "Print conductor version and exit").hook("preAction", (thisCommand) => {
     det = new DefaultDetector();
     uiRenderer = new CharmUIRenderer();
     templateManager = new EmbeddedTemplateManager();
@@ -7805,7 +8134,7 @@ function createProgram() {
   program2.option("-t, --tool <tool>", "Manually specify tool type (cursor, claude-code, antigravity)");
   return program2;
 }
-var import_node_process7, det, uiRenderer, templateManager, detectedResult2, toolFlag, program2;
+var import_node_process7, det, uiRenderer, templateManager, detectedResult2, toolFlag;
 var init_root = __esm({
   "src/cmd/root.ts"() {
     "use strict";
@@ -7817,8 +8146,8 @@ var init_root = __esm({
     init_renderer();
     init_init();
     init_generate();
+    init_package();
     toolFlag = "";
-    program2 = new Command();
   }
 });
 
@@ -7829,20 +8158,20 @@ __export(list_exports, {
 });
 function createListCommand() {
   const cmd = new Command("list").aliases(["ls"]).description("List available command templates").option("-c, --category <category>", "Filter by category").option("-q, --quiet", "Output only template names (for piping)").option("--all", "List all templates across all categories").action((options) => {
-    categoryFlag = options.category ?? "";
-    quietFlag = options.quiet ?? false;
-    listAllFlag = options.all ?? false;
-    let tmpls = listAllFlag ? templateManager.listAll() : templateManager.listAvailable(detectedResult2.toolType);
-    if (categoryFlag) {
-      tmpls = tmpls.filter((t) => t.category === categoryFlag);
+    const category = options.category ?? "";
+    const quiet = options.quiet ?? false;
+    const listAll = options.all ?? false;
+    let tmpls = listAll ? templateManager.listAll() : templateManager.listAvailable(detectedResult2.toolType);
+    if (category) {
+      tmpls = tmpls.filter((t) => t.category === category);
     }
     if (tmpls.length === 0) {
       uiRenderer.renderWarning(
-        categoryFlag ? `No templates found in category: ${categoryFlag}` : "No templates available"
+        category ? `No templates found in category: ${category}` : "No templates available"
       );
       return;
     }
-    if (quietFlag) {
+    if (quiet) {
       for (const t of tmpls) console.log(t.id);
       return;
     }
@@ -7851,15 +8180,11 @@ function createListCommand() {
   });
   return cmd;
 }
-var categoryFlag, quietFlag, listAllFlag;
 var init_list = __esm({
   "src/cmd/list.ts"() {
     "use strict";
     init_esm();
     init_root();
-    categoryFlag = "";
-    quietFlag = false;
-    listAllFlag = false;
   }
 });
 
@@ -7960,7 +8285,7 @@ function buildUninstallPlan(ctx) {
 }
 function removeConfigDir() {
   try {
-    const cfgDir = process.env.APPDATA ? (0, import_node_path4.join)(process.env.APPDATA, "conductor") : (0, import_node_path4.join)(require("node:os").homedir(), ".config", "conductor");
+    const cfgDir = process.env.APPDATA ? (0, import_node_path4.join)(process.env.APPDATA, "conductor") : (0, import_node_path4.join)((0, import_node_os2.homedir)(), ".config", "conductor");
     if ((0, import_node_fs4.existsSync)(cfgDir)) removeDirRecursive(cfgDir);
     return true;
   } catch {
@@ -8006,7 +8331,7 @@ function removeBinaryPair(binaryPath) {
     return false;
   }
 }
-var import_node_child_process, import_node_fs4, import_node_path4, HOMEBREW_FORMULA_NAME, STEP_BUILDERS;
+var import_node_child_process, import_node_fs4, import_node_path4, import_node_os2, HOMEBREW_FORMULA_NAME, STEP_BUILDERS;
 var init_uninstall = __esm({
   "src/cmd/uninstall.ts"() {
     "use strict";
@@ -8014,6 +8339,7 @@ var init_uninstall = __esm({
     import_node_child_process = require("node:child_process");
     import_node_fs4 = require("node:fs");
     import_node_path4 = require("node:path");
+    import_node_os2 = require("node:os");
     init_root();
     HOMEBREW_FORMULA_NAME = "luansilvadb/tools/conductor";
     STEP_BUILDERS = {
@@ -8065,8 +8391,9 @@ function maybePrintPathHint() {
   }
 }
 function isOnPath() {
+  const cmd = process.platform === "win32" ? `where ${PROGRAM_NAME}` : `which ${PROGRAM_NAME}`;
   try {
-    (0, import_node_child_process2.execSync)(`where ${PROGRAM_NAME}`, { stdio: "ignore" });
+    (0, import_node_child_process2.execSync)(cmd, { stdio: "ignore" });
     return true;
   } catch {
     return false;
@@ -8082,7 +8409,7 @@ function guessInstallDir() {
   }
 }
 function pathHintMarkerPath() {
-  const cfgDir = process.env.APPDATA || (process.platform === "darwin" ? (0, import_node_path5.join)((0, import_node_os2.homedir)(), "Library", "Preferences") : (0, import_node_path5.join)((0, import_node_os2.homedir)(), ".config"));
+  const cfgDir = process.env.APPDATA || (process.platform === "darwin" ? (0, import_node_path5.join)((0, import_node_os3.homedir)(), "Library", "Preferences") : (0, import_node_path5.join)((0, import_node_os3.homedir)(), ".config"));
   if (!cfgDir) return "";
   return (0, import_node_path5.join)(cfgDir, "conductor", PATH_HINT_MARKER_NAME);
 }
@@ -8140,12 +8467,12 @@ function writeUnixInstructions(w3, binDir) {
    source ${rcFile}
 `);
 }
-var import_node_path5, import_node_os2, import_node_child_process2, import_node_fs5, PROGRAM_NAME, PATH_HINT_MARKER_NAME, SHELL_RC_FILES;
+var import_node_path5, import_node_os3, import_node_child_process2, import_node_fs5, PROGRAM_NAME, PATH_HINT_MARKER_NAME, SHELL_RC_FILES;
 var init_pathcheck = __esm({
   "src/cmd/pathcheck.ts"() {
     "use strict";
     import_node_path5 = require("node:path");
-    import_node_os2 = require("node:os");
+    import_node_os3 = require("node:os");
     import_node_child_process2 = require("node:child_process");
     import_node_fs5 = require("node:fs");
     PROGRAM_NAME = "conductor";
@@ -8167,12 +8494,12 @@ async function main() {
   const { createUninstallCommand: createUninstallCommand2 } = await Promise.resolve().then(() => (init_uninstall(), uninstall_exports));
   const { maybePrintPathHint: maybePrintPathHint2 } = await Promise.resolve().then(() => (init_pathcheck(), pathcheck_exports));
   maybePrintPathHint2();
-  const program3 = createProgram2();
-  program3.addCommand(createInitCommand2());
-  program3.addCommand(createGenerateCommand2());
-  program3.addCommand(createListCommand2());
-  program3.addCommand(createUninstallCommand2());
-  await program3.parseAsync(process.argv);
+  const program2 = createProgram2();
+  program2.addCommand(createInitCommand2());
+  program2.addCommand(createGenerateCommand2());
+  program2.addCommand(createListCommand2());
+  program2.addCommand(createUninstallCommand2());
+  await program2.parseAsync(process.argv);
 }
 main().catch((err) => {
   console.error("Fatal error:", err);

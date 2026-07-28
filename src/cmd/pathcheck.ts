@@ -24,8 +24,11 @@ export function maybePrintPathHint(): void {
 }
 
 function isOnPath(): boolean {
+  const cmd = process.platform === 'win32'
+    ? `where ${PROGRAM_NAME}`
+    : `which ${PROGRAM_NAME}`;
   try {
-    execSync(`where ${PROGRAM_NAME}`, { stdio: 'ignore' });
+    execSync(cmd, { stdio: 'ignore' });
     return true;
   } catch {
     return false;

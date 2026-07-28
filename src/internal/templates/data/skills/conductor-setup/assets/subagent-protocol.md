@@ -6,6 +6,9 @@ Conductor Subagent Protocol Engine
 ## Background:
 This protocol defines the formal contract for all subagent delegation within the Conductor framework. All dispatch decisions are resolved **dynamically** from the centralized configuration (`config.json`) — there are **zero hardcoded** file paths, subagent type names, thresholds, schema fields, or tool names in this protocol. The orchestrator (main agent) MUST NOT read project context files directly — it delegates everything and only receives condensed schemas. Intermediate subagent history is **auto-discarded** by the Context Isolation Layer (CIL) after schema extraction.
 
+## Notes:
+- The dispatch tool in the Antigravity environment is `invoke_subagent`. It is the first entry in `config.dispatch_tool_aliases[]` and MUST be used when available.
+
 ## Profile:
 - version: ${config.framework.version}
 - language: English
@@ -47,6 +50,8 @@ Every dispatch decision follows this matrix. The orchestrator MUST consult it BE
 | Task writes any file listed in `config.files.control_files[]` | **ORCHESTRATOR** executes inline (subagents NEVER write control files) |
 | Task is trivial: 1-step operation with no file reading | **ORCHESTRATOR** executes inline |
 | No dispatch tool from `config.dispatch_tool_aliases[]` is available in the environment | **ORCHESTRATOR** executes inline with `${config.protocol.degraded_mode}` warning |
+
+> **Tool name resolution:** `config.dispatch_tool_aliases[]` is checked in order. For Antigravity, `invoke_subagent` (index 0) matches first. For Cursor/Claude Code environments that expose a `Task` tool, `Task` (index 1) is used. Never assume a tool name — always check the toolset at runtime.
 
 ### Task Classification Algorithm (Dynamic)
 

@@ -6,9 +6,6 @@ import { detectedResult, det, uiRenderer, templateManager, toolFlag } from './ro
 import { selectToolInteractively } from './init.js';
 import { AIToolType } from '../internal/detector/types.js';
 
-let forceFlag = false;
-let outputFlag = '';
-
 export function createGenerateCommand(): Command {
   const cmd = new Command('generate')
     .aliases(['gen', 'g'])
@@ -30,10 +27,10 @@ export async function runGenerate(opts: {
   force?: boolean;
   output?: string;
 } = {}): Promise<void> {
-  forceFlag = opts.force ?? false;
-  outputFlag = opts.output ?? '';
+  const force = opts.force ?? false;
+  const output = opts.output ?? '';
 
-  if (!outputFlag && !toolFlag) {
+  if (!output && !toolFlag) {
     const tool = await selectToolInteractively();
     if (tool === AIToolType.Unknown) {
       uiRenderer.renderError('No tool selected. Use --output or --tool flag.');
@@ -48,34 +45,34 @@ export async function runGenerate(opts: {
     });
   }
 
-  const targetDir = determineTargetDir();
+  const targetDir = determineTargetDir(output);
   if (!targetDir) {
     uiRenderer.renderError('Could not determine target directory. Use --output or --tool flag.');
     return;
   }
 
   if (opts.templateName) {
-    await generateSingleTemplate(opts.templateName);
+    await generateSingleTemplate(opts.templateName, force, output);
     return;
   }
 
-  await generateAllTemplates(targetDir);
+  await generateAllTemplates(targetDir, force, output);
 }
 
-function determineTargetDir(): string {
-  if (outputFlag) return outputFlag;
+function determineTargetDir(output: string): string {
+  if (output) return output;
   if (detectedResult.isValid && detectedResult.configPath) return detectedResult.configPath;
   return '';
 }
 
-async function generateAllTemplates(_targetDir: string): Promise<void> {
+async function generateAllTemplates(_targetDir: string, force: boolean, output: string): Promise<void> {
   const workingDir = cwd();
   const mgr = templateManager as EmbeddedTemplateManager;
 
   const strategy = new FlatMarkdownStrategy(detectedResult.toolType, mgr);
   // So passa outputDir quando --output foi explicitamente usado;
   // caso contrario, a estrategia resolve o base via getBaseDir.
-  const results = strategy.generateAll(workingDir, forceFlag, outputFlag || undefined);
+  const results = strategy.generateAll(workingDir, force, output || undefined);
 
   if (results.length === 0) {
     uiRenderer.renderWarning('No templates available');
@@ -98,22 +95,22 @@ async function generateAllTemplates(_targetDir: string): Promise<void> {
   uiRenderer.renderSuccess(`Generation complete: ${formatCount(successCount, 'succeeded')}, ${formatCount(failCount, 'failed')}`);
 }
 
-async function generateSingleTemplate(name: string): Promise<void> {
+async function generateSingleTemplate(name: string, force: boolean, output: string): Promise<void> {
   const tmpl = templateManager.getByName(name);
   if (!tmpl) {
     uiRenderer.renderError(`Template not found: ${name}`);
     return;
   }
-  await generateOneViaStrategy(tmpl);
+  await generateOneViaStrategy(tmpl, force, output);
 }
 
-async function generateOneViaStrategy(tmpl: ReturnType<typeof templateManager.getByName>): Promise<void> {
+async function generateOneViaStrategy(tmpl: ReturnType<typeof templateManager.getByName>, force: boolean, output: string): Promise<void> {
   if (!tmpl) return;
   const workingDir = cwd();
   const mgr = templateManager as EmbeddedTemplateManager;
 
   const strategy = new FlatMarkdownStrategy(detectedResult.toolType, mgr);
-  const results = strategy.generateOne(workingDir, tmpl, forceFlag, outputFlag || undefined);
+  const results = strategy.generateOne(workingDir, tmpl, force, output || undefined);
 
   for (const r of results) {
     if (r.success) {

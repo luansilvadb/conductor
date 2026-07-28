@@ -2,6 +2,7 @@ import { Command } from 'commander';
 import { execSync } from 'node:child_process';
 import { existsSync, unlinkSync, readdirSync, rmdirSync } from 'node:fs';
 import { join, resolve } from 'node:path';
+import { homedir } from 'node:os';
 import { uiRenderer } from './root.js';
 
 const HOMEBREW_FORMULA_NAME = 'luansilvadb/tools/conductor';
@@ -173,7 +174,7 @@ function removeConfigDir(): boolean {
   try {
     const cfgDir = process.env.APPDATA
       ? join(process.env.APPDATA, 'conductor')
-      : join(require('node:os').homedir(), '.config', 'conductor');
+      : join(homedir(), '.config', 'conductor');
     if (existsSync(cfgDir)) removeDirRecursive(cfgDir);
     return true;
   } catch {

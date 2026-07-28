@@ -61,6 +61,7 @@ export class FlatMarkdownStrategy implements GenerationStrategy {
         templateName: tmpl.name,
         targetPath,
         force,
+        content: tmpl.content,
       }),
     ];
   }

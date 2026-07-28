@@ -6,6 +6,7 @@ import { EmbeddedTemplateManager } from '../internal/templates/manager.js';
 import { CharmUIRenderer } from '../internal/ui/renderer.js';
 import { runInit } from './init.js';
 import { runGenerate } from './generate.js';
+import pkg from '../../package.json' with { type: 'json' };
 
 // Global state shared across commands
 export let det: DefaultDetector;
@@ -14,15 +15,14 @@ export let templateManager: EmbeddedTemplateManager;
 export let detectedResult: DetectResult;
 export let toolFlag = '';
 
-const program = new Command();
-
 export function createProgram(): Command {
+  const program = new Command();
   program
     .name('Conductor')
     .description(
       'Conductor Spec Driven Development',
     )
-    .version('0.1.0', '-v, --version', 'Print conductor version and exit')
+    .version(pkg.version, '-v, --version', 'Print conductor version and exit')
     .hook('preAction', (thisCommand: Command) => {
       det = new DefaultDetector();
       uiRenderer = new CharmUIRenderer();

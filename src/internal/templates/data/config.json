@@ -114,9 +114,9 @@
     }
   },
 
-  "dispatch_tool_aliases": ["Task", "dispatch", "spawn", "delegate"],
+  "dispatch_tool_aliases": ["invoke_subagent", "Task", "dispatch", "spawn", "delegate"],
 
-  "user_interaction_tools": ["AskUserQuestion", "NotifyUser", "ask_question"],
+  "user_interaction_tools": ["ask_question", "AskUserQuestion", "NotifyUser"],
 
   "enums": {
     "track_types": ["MVP", "Feature", "Bug", "Chore", "Spike", "Epic", "Hotfix"],

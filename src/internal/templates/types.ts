@@ -19,6 +19,11 @@ export interface GenerateRequest {
   templateName: string;
   targetPath: string;
   force: boolean;
+  /** Raw template content. When provided, bypasses the ambiguous name-based lookup
+   *  (templates from different categories may share the same `name`). */
+  content: string;
+  /** BCP-47 locale override. Defaults to config.i18n.default_language (pt-BR). */
+  locale?: string;
 }
 
 /** Result of a template generation operation */

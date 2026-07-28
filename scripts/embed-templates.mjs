@@ -33,6 +33,9 @@ const OUT_FILE = join(ROOT, 'src/internal/templates/embedded.ts');
  * @param {string} category
  * @returns {Entry[]}
  */
+// Extensions that must not be embedded as text strings.
+const BINARY_EXTS = new Set(['.pyc', '.pyo', '.so', '.dll', '.exe', '.bin', '.wasm']);
+
 function listForCategoryRecursive(dir, category) {
   const result = [];
   const stack = [{ current: dir, subpath: '' }];
@@ -49,10 +52,15 @@ function listForCategoryRecursive(dir, category) {
     for (const entry of entries) {
       const full = join(current, entry.name);
       if (entry.isFile()) {
-        result.push({ abs: full, category, subpath, ext: extname(entry.name) });
+        const ext = extname(entry.name);
+        if (!BINARY_EXTS.has(ext)) {
+          result.push({ abs: full, category, subpath, ext });
+        }
         continue;
       }
       if (entry.isDirectory()) {
+        // Skip Python cache dirs (__pycache__, __pypackages__) and hidden dirs (.git, etc.)
+        if (entry.name.startsWith('__') || entry.name.startsWith('.')) continue;
         const childSubpath = subpath === '' ? entry.name : `${subpath}/${entry.name}`;
         stack.push({ current: full, subpath: childSubpath });
       }

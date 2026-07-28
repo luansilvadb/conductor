@@ -4,6 +4,7 @@ import { AIToolType } from '../detector/types.js';
 import { type TemplateMeta, type GenerateRequest, type GenerateResult, parseFrontmatter } from './types.js';
 import { FileExistsError } from '../errors.js';
 import { TEMPLATES } from './embedded.js';
+import { resolveContent, DEFAULT_LOCALE } from '../i18n/resolver.js';
 
 export interface TemplateManager {
   listAvailable(tool: AIToolType): TemplateMeta[];
@@ -39,15 +40,21 @@ export class EmbeddedTemplateManager implements TemplateManager {
       };
     }
 
-    const tmpl = this.getByName(req.templateName);
-    if (!tmpl) {
+    // Use content from the request when available to avoid ambiguous
+    // name-based lookups (templates across different categories may
+    // share the same `name`, e.g. a skill and its i18n translation).
+    const rawContent = req.content ?? this.getByName(req.templateName)?.content;
+    if (!rawContent) {
       return {
         success: false,
         message: `Template not found: ${req.templateName}`,
       };
     }
 
-    writeFileSync(req.targetPath, tmpl.content, 'utf-8');
+    const locale = req.locale ?? DEFAULT_LOCALE;
+    const content = resolveContent(rawContent, locale);
+
+    writeFileSync(req.targetPath, content, 'utf-8');
     return {
       success: true,
       filePath: req.targetPath,

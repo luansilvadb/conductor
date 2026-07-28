@@ -1,0 +1,201 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Conductor Central Configuration",
+  "description": "Single source of truth for all configurable values in the Conductor framework. Every file in the framework MUST resolve values from this config instead of hardcoding them.",
+  "version": "1.0",
+
+  "directories": {
+    "conductor_root": "conductor",
+    "source_code": "src",
+    "tracks_dir": "conductor/tracks",
+    "styleguides_dir": "conductor/code_styleguides",
+    "skills_dir": "conductor/skills"
+  },
+
+  "files": {
+    "artifacts": {
+      "product": "product.md",
+      "product_guidelines": "product-guidelines.md",
+      "tech_stack": "tech-stack.md",
+      "workflow": "workflow.md",
+      "plan": "plan.md",
+      "spec": "spec.md",
+      "index": "index.md",
+      "tracks_registry": "tracks.md",
+      "track_metadata": "metadata.json"
+    },
+    "context_files": [
+      "product.md",
+      "product-guidelines.md",
+      "tech-stack.md",
+      "workflow.md",
+      "plan.md",
+      "spec.md",
+      "tracks.md"
+    ],
+    "control_files": [
+      "tracks.md",
+      "plan.md",
+      "index.md",
+      "metadata.json"
+    ],
+    "setup_chain": [
+      { "file": "product.md", "step": "Product Definition" },
+      { "file": "product-guidelines.md", "step": "Product Guidelines" },
+      { "file": "tech-stack.md", "step": "Technology Stack" },
+      { "file": "code_styleguides", "step": "Code Style Guides", "is_directory": true },
+      { "file": "workflow.md", "step": "Workflow Configuration" }
+    ],
+    "setup_marker": "index.md"
+  },
+
+  "thresholds": {
+    "delegate_lines": 50,
+    "coverage_min_percent": 80,
+    "max_fix_attempts": 2,
+    "max_parallel_subagents": 5,
+    "subagent_timeout_seconds": 120,
+    "token_warning_threshold": 5000
+  },
+
+  "protocol": {
+    "name": "sdp",
+    "version": "v1",
+    "version_string": "sdp-v1",
+    "degraded_mode": "degraded",
+    "full_mode": "full",
+    "data_envelope": "data",
+    "protocol_field": "protocol",
+    "status_field": "status",
+    "summary_field": "summary",
+    "warnings_field": "warnings",
+    "token_estimate_field": "token_estimate"
+  },
+
+  "subagent_types": {
+    "search": {
+      "id": "search",
+      "capabilities": ["read_files", "search_codebase", "glob", "grep"],
+      "description": "Read-only retrieval subagent for exploring codebases and reading files",
+      "write_forbidden": true
+    },
+    "general_purpose_task": {
+      "id": "general_purpose_task",
+      "capabilities": ["read_files", "write_files", "run_commands", "analysis"],
+      "description": "Multi-purpose subagent for analysis, code generation, and verification",
+      "write_forbidden": false
+    }
+  },
+
+  "dispatch_tool_aliases": ["Task", "dispatch", "spawn", "delegate"],
+
+  "user_interaction_tools": ["AskUserQuestion", "NotifyUser", "ask_question"],
+
+  "enums": {
+    "track_types": ["MVP", "Feature", "Bug", "Chore", "Spike", "Epic", "Hotfix"],
+    "finding_categories": ["plan_compliance", "style", "security", "correctness", "coverage", "performance", "accessibility", "i18n"],
+    "finding_severities": ["high", "medium", "low"],
+    "trust_levels": ["1p", "3p", "1p-verified", "community-audited"],
+    "task_statuses": {
+      "pending": "[ ]",
+      "in_progress": "[~]",
+      "done": "[x]",
+      "checkpoint": "[checkpoint: <sha>]"
+    }
+  },
+
+  "commit_conventions": {
+    "plan_update_prefix": "conductor(plan):",
+    "setup_prefix": "chore(conductor):",
+    "docs_prefix": "docs(conductor):"
+  },
+
+  "schemas": {
+    "document_parse": {
+      "type": "object",
+      "fields": {
+        "document": "string",
+        "key_points": "string[]",
+        "constraints": "string[]",
+        "conventions": "string[]",
+        "raw_length_lines": "number"
+      }
+    },
+    "diff_analysis": {
+      "type": "object",
+      "fields": {
+        "commit_range": "string",
+        "files_changed": "string[]",
+        "findings": "Finding[]"
+      }
+    },
+    "test_execution": {
+      "type": "object",
+      "fields": {
+        "total": "number",
+        "passed": "number",
+        "failed": "number",
+        "coverage_percent": "number",
+        "failed_tests": "string[]",
+        "fix_attempts": "number"
+      }
+    },
+    "tracks_registry_parse": {
+      "type": "object",
+      "fields": {
+        "phases": "number",
+        "tasks": { "total": "number", "done": "number", "in_progress": "number", "pending": "number" },
+        "current": { "phase": "string", "task": "string" },
+        "next": "string",
+        "blockers": "string[]"
+      }
+    },
+    "question_seeds": {
+      "type": "object",
+      "fields": {
+        "track_type": "string",
+        "seeds": [{ "question": "string", "options": "string[]", "recommended": "string", "reason": "string" }]
+      }
+    },
+    "spec_plan_draft": {
+      "type": "object",
+      "fields": {
+        "draft": "string",
+        "task_count": "number",
+        "estimated_hours": "number"
+      }
+    },
+    "skill_catalog_match": {
+      "type": "object",
+      "fields": {
+        "matches": [{ "name": "string", "party": "string", "url": "string", "relevance": "string", "reason": "string" }]
+      }
+    },
+    "manual_verification": {
+      "type": "object",
+      "fields": {
+        "phase": "string",
+        "steps": [{ "step": "number", "description": "string", "expected": "string", "automated": "boolean" }],
+        "coverage_gaps": "string[]",
+        "risk_areas": "string[]"
+      }
+    },
+    "git_commit_list": {
+      "type": "object",
+      "fields": {
+        "commits": [{ "sha": "string", "message": "string" }],
+        "ghost_commits": "string[]"
+      }
+    },
+    "status_report": {
+      "type": "object",
+      "fields": {
+        "phases": "number",
+        "tasks": { "total": "number", "done": "number", "in_progress": "number", "pending": "number" },
+        "current": { "phase": "string", "task": "string" },
+        "next": "string",
+        "blockers": "string[]"
+      }
+    }
+  }
+}

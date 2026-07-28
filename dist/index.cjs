@@ -3256,8 +3256,7 @@ These operational standards govern the user interface and conversational experie
     use it to render all types of questions (including binary Yes/No decisions
     and multi-option menus) as a native interactive GUI dialog modal, instead of
     outputting raw text-based prompts in the chat stream.
--   **Text Fallback:** If \`ask_question\` is NOT present in the allowed tools (e.g., in pure text-only console environments), the agent MUST fall back to standard formatted text-based choices, following sequential execution barriers (asking questions one at a time).
-`
+-   **Text Fallback:** If \`ask_question\` is NOT present in the allowed tools (e.g., in pure text-only console environments), the agent MUST fall back to standard formatted text-based choices, following sequential execution barriers (asking questions one at a time).`
       },
       {
         sourcePath: "D:/conductor/src/internal/templates/data/skills/conductor-implement/SKILL.md",
@@ -3346,8 +3345,8 @@ Adhere to this sequence to execute the selected track.
     -   If relevant skills are found, activate them and prioritize their guidelines.
 
 4.  **Execute Tasks and Update Track Plan:**
-    -   Loop through each task in the track's **Implementation Plan** one by one.
-    -   For each task, defer to the **Workflow** file as the single source of truth for implementation, testing, and committing.
+    -   **Subagent Delegation (dispatch point):** Before looping, scan the remaining tasks in the **Implementation Plan** for independence (no shared files, no sequential/logical dependency between them). If 2+ independent tasks are found, this qualifies as a parallel-safe dispatch point \u2014 follow the Constitution's Native Subagent Dispatch protocol. Each dispatched subagent implements exactly one task (steps in this section 3.4, scoped to that task, using the loaded Workflow file), and returns its result (files touched, tests written, pass/fail) without committing. If no native subagent tool is available, or tasks are interdependent, skip this and proceed sequentially.
+    -   Loop through each task in the track's **Implementation Plan** one by one (dispatching or executing directly per the above). For each task, defer to the **Workflow** file as the single source of truth for implementation, testing, and committing \u2014 the orchestrator performs the actual commit for each task in plan order, even when the underlying work was done in parallel by subagents.
     -   Ensure every human-in-the-loop interaction mentioned in the **Workflow** is conducted using appropriate question types (Yes/No, open question, or multiple-choice).
 
 5.  **Finalize Track:**
@@ -3402,8 +3401,7 @@ Once the track is marked as complete and project documentation is synchronized, 
 2.  **Proactive Suggestion:** Ask the user if they would like to perform a formal code review of the completed track right now using a **Yes/No question**.
 3.  **Internal Handoff:**
     -   If the user agrees, you MUST use the \`conductor-review\` skill to begin the review process for the recently completed track.
-    -   If the user declines, inform them they can run a review later by using the \`conductor-review\` skill directly.
-`
+    -   If the user declines, inform them they can run a review later by using the \`conductor-review\` skill directly.`
       },
       {
         sourcePath: "D:/conductor/src/internal/templates/data/skills/conductor-new-track/SKILL.md",
@@ -3962,11 +3960,11 @@ Before starting the review process, you MUST locate and read the project's found
         -   **Large Changes (> 300 lines):**
             -   **Confirm:** Ask the user for confirmation using a **Yes/No question** to proceed with a large review (explaining that it involves >300 lines of changes and will use 'Iterative Review Mode' which may take longer).
             -   **List Files:** Run \`git diff --name-only <revision_range> -- . ':!conductor'\`.
-            -   **Iterate:** For each source file (ignore locks/assets):
+            -   **Iterate (Subagent Delegation, dispatch point):** This is a parallel-safe dispatch point \u2014 per-file diffs are independent of one another. Follow the Constitution's Native Subagent Dispatch protocol: for each source file (ignore locks/assets), dispatch one subagent to run \`git diff <revision_range> -- <file_path>\` and perform the "Analyze and Verify" checks (2.3) on that file only, returning its findings in the Section 2.4 finding format without writing any files. If no native subagent tool is available, fall back to iterating the files yourself, one at a time:
                 1.  Run \`git diff <revision_range> -- <file_path>\`.
                 2.  Perform the "Analyze and Verify" checks on this specific chunk.
                 3.  Store findings in your temporary memory.
-            -   **Aggregate:** Synthesize all file-level findings into the final report.
+            -   **Aggregate:** Synthesize all file-level findings (yours or the subagents') into the final report.
 
 ### 2.3 Analyze and Verify
 **Perform the following checks on the retrieved diff:**
@@ -4096,8 +4094,7 @@ Once the review process and any subsequent actions (fixes, commits, cleanup) are
 2.  **Optional Revert Suggestion:** If the review reveals fundamental issues that cannot be easily fixed, ask the user if they would like to revert any specific unit of work (tasks or phases) identified during the review using a **Yes/No question**.
 3.  **Internal Handoff (Optional):**
     - If the user explicitly asks to revert work, you MUST use the \`conductor-revert\` skill to guide them through the process.
-    - Otherwise, inform the user they can use the \`conductor-status\` skill to see the current project overview, or use the \`conductor-revert\` skill manually if they decide to revert work later.
-`
+    - Otherwise, inform the user they can use the \`conductor-status\` skill to see the current project overview, or use the \`conductor-revert\` skill manually if they decide to revert work later.`
       },
       {
         sourcePath: "D:/conductor/src/internal/templates/data/skills/conductor-setup/SKILL.md",

@@ -4,9 +4,9 @@
   "description": "Conductor - Spec Driven Development CLI",
   "type": "module",
   "bin": {
-    "conductor": "dist/index.js"
+    "conductor": "dist/index.cjs"
   },
-  "main": "dist/index.js",
+  "main": "dist/index.cjs",
   "files": [
     "dist",
     "README.md"
@@ -15,18 +15,21 @@
     "node": ">=20.11"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json && cpy \"src/internal/templates/data/**/*\" dist/internal/templates/data",
+    "embed": "node scripts/embed-templates.mjs",
+    "clean": "node scripts/clean-dist.mjs",
+    "typecheck": "tsc -p tsconfig.json",
+    "build": "npm run clean && npm run embed && npm run typecheck && npm run bundle",
+    "bundle": "esbuild src/index.ts --bundle --platform=node --format=cjs --outfile=dist/index.cjs --sourcemap --allow-overwrite",
     "prepublishOnly": "npm run build",
-    "start": "node dist/index.js"
+    "start": "node dist/index.cjs"
   },
-  "dependencies": {
-    "@clack/prompts": "^0.7.0",
-    "chalk": "^5.3.0",
-    "commander": "^12.1.0"
-  },
+  "dependencies": {},
   "devDependencies": {
+    "@clack/prompts": "^0.7.0",
     "@types/node": "^20.11.0",
-    "cpy-cli": "^7.0.0",
+    "chalk": "^5.3.0",
+    "commander": "^12.1.0",
+    "esbuild": "^0.23.0",
     "typescript": "^5.4.0"
   },
   "keywords": [

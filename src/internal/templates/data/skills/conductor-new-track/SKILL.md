@@ -94,15 +94,16 @@ Adhere to this sequence precisely.
 
 2.  **Strategic Action:** Explain that the `plan.md` is the execution roadmap. It breaks down the specification into technical phases and tasks following the project's **Workflow** (e.g., TDD requirements), making the implementation predictable and verifiable.
 
-3.  **Generate Plan:**
-    *   Read the confirmed `spec.md` content for this track.
-    *   Locate and read the **Workflow** document as linked in `conductor/index.md`.
-    *   Generate a `plan.md` featuring a hierarchical list of Phases, Tasks, and Sub-tasks.
-    *   **CRITICAL:** The plan structure MUST strictly follow the methodology defined in the **Workflow** (e.g., ensuring TDD tasks like "Write Tests" precede "Implementation").
-    *   Include status markers `[ ]` for **EVERY** task and sub-task using the format:
+3.  **Generate Plan (Subagent Dispatch):** Delegate the plan drafting to a subagent so the verbose `workflow.md` contents and intermediate structuring never enter the orchestrator context.
+    *   **Dispatch:** Call the native `Task` tool with `subagent_type=general_purpose_task`, passing a closed prompt with: the approved `spec.md` content and the path to the **Workflow** document (linked in `conductor/index.md`).
+    *   **Subagent Constraints:** Read-only. MUST read the **Workflow** to extract its methodology (e.g., TDD ordering, checkpoint rules). MUST generate a hierarchical `plan.md` featuring Phases, Tasks, and Sub-tasks with status markers `[ ]` on EVERY task and sub-task using the format:
         -   Parent Task: `- [ ] Task: ...`
         -   Sub-task: `- [ ] ...`
-    *   **Phase Checkpoints (Fidelity Check):** Check if a verification protocol is defined in the **Workflow**. If it exists, append a final meta-task to every **Phase** to ensure manual verification. Example: `- [ ] Task: Phase Verification & Checkpoint (Refer to workflow.md)`.
+    *   **Phase Checkpoints (Fidelity Check):** If the **Workflow** defines a verification protocol, append a final meta-task to every Phase: `- [ ] Task: Phase Verification & Checkpoint (Refer to workflow.md)`.
+    *   **Condensed Return Schema (the ONLY thing the orchestrator absorbs):**
+        `{ plan_md: "<full plan.md content as a single string>" }`
+    *   **Fallback:** If no native `Task` tool is available, read `spec.md` and the **Workflow** inline and draft the plan yourself following the same rules.
+    *   **Orchestrator Note:** The returned `plan_md` is a DRAFT. The orchestrator MUST present it to the user for approval in step 4 below before writing it to disk.
 
 4.  **User Confirmation:**
     -   Present the drafted Implementation Plan to the user for review.
@@ -111,11 +112,13 @@ Adhere to this sequence precisely.
 
 ### 2.4 Interactive Skill Recommendation
 
-1.  **Analyze Needs & Trust Model:**
-    -   Read the skill catalog from `assets/catalog.md` (relative to this skill's directory).
-    -   Analyze the confirmed `spec.md` and `plan.md` against the `Detection Signals` in the loaded `catalog.md`.
-    -   Identify any relevant skills that are NOT yet installed.
-    -   **Trust Assessment:** Note the `Party` status (1p or 3p) for each identified skill.
+1.  **Analyze Needs & Trust Model (Subagent Dispatch):** Delegate the catalog matching to a subagent so the full `catalog.md` contents and cross-referencing never enter the orchestrator context.
+    -   **Dispatch:** Call the native `Task` tool with `subagent_type=general_purpose_task`, passing a closed prompt with: the confirmed `spec.md` content, the confirmed `plan.md` content, and the path to `assets/catalog.md` (relative to this skill's directory).
+    -   **Subagent Constraints:** Read-only. MUST read `catalog.md` and cross-reference its `Detection Signals` against the provided spec and plan. MUST NOT commit, write any file, or interact with the user. Receives no prior conversation history.
+    -   **Condensed Return Schema (the ONLY thing the orchestrator absorbs):**
+        `{ recommended: [{ name, reason, party, detection_signal }] }` where `party` is `1p` or `3p`.
+    -   **Fallback:** If no native `Task` tool is available, read `catalog.md` inline and perform the matching yourself following the same rules.
+    -   **Trust Assessment:** Use the `party` field from the returned schema to classify each recommendation.
 
 2.  **Recommendation & Installation Loop:**
     -   **Identify Recommendations:** If relevant missing skills are found, present them to the user, explaining their value for the current track.

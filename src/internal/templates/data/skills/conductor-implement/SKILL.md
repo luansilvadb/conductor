@@ -80,8 +80,19 @@ Adhere to this sequence to execute the selected track.
     -   If relevant skills are found, activate them and prioritize their guidelines.
 
 4.  **Execute Tasks and Update Track Plan:**
-    -   **Subagent Delegation (dispatch point):** Before looping, scan the remaining tasks in the **Implementation Plan** for independence (no shared files, no sequential/logical dependency between them). If 2+ independent tasks are found, this qualifies as a parallel-safe dispatch point — dispatch them in parallel using the native `Task` tool with `subagent_type=general_purpose_task`, **one subagent per independent task**. Each dispatched subagent implements exactly one task (steps in this section 3.4, scoped to that task, using the loaded Workflow file) and **must not commit or modify control files** (`tracks.md`, `plan.md`, `index.md`); it only returns its result (files touched, tests written, pass/fail) to the orchestrator, which **aggregates results and performs the actual commit** for each task in plan order. If no native `Task` tool is available, or tasks are interdependent, skip this and proceed sequentially.
-    -   Loop through each task in the track's **Implementation Plan** one by one (dispatching or executing directly per the above). For each task, defer to the **Workflow** file as the single source of truth for implementation, testing, and committing — the orchestrator performs the actual commit for each task in plan order, even when the underlying work was done in parallel by subagents.
+    -   **Subagent Delegation (dispatch point):** Before looping, scan the remaining tasks in the **Implementation Plan** and classify each as:
+        -   **Independent:** No shared files, no sequential/logical dependency. Candidates for parallel dispatch.
+        -   **Complex:** Estimated to touch multiple files or produce substantial diffs (e.g., new modules, refactors). Candidates for isolated sequential dispatch.
+        -   **Trivial:** Small, single-file changes safe to execute inline.
+    -   **Dispatch Rules:**
+        -   If 2+ **Independent** tasks are found, dispatch them in parallel using the native `Task` tool with `subagent_type=general_purpose_task`, **one subagent per task**.
+        -   For **Complex** tasks (whether independent or sequential), delegate each to its own subagent so the intermediate exploration, file reads, and iteration never enter the orchestrator context.
+        -   For **Trivial** tasks, execute inline.
+    -   **Subagent Constraints (all dispatches):** Each dispatched subagent implements exactly one task (scoped to that task, using the loaded Workflow file) and **must not commit or modify control files** (`tracks.md`, `plan.md`, `index.md`); it only returns its result to the orchestrator, which **aggregates results and performs the actual commit** for each task in plan order.
+    -   **Condensed Return Schema (the ONLY thing the orchestrator absorbs per task):**
+        `{ task_id, status: "done" | "blocked", files: [...], tests: { written: N, passed: N, failed: [...] }, notes: "..." }`
+    -   **Fallback:** If no native `Task` tool is available, execute all tasks sequentially inline following the Workflow.
+    -   Loop through each task in the track's **Implementation Plan** one by one (dispatching or executing directly per the above). For each task, defer to the **Workflow** file as the single source of truth for implementation, testing, and committing — the orchestrator performs the actual commit for each task in plan order, even when the underlying work was done by subagents.
     -   Ensure every human-in-the-loop interaction mentioned in the **Workflow** is conducted using appropriate question types (Yes/No, open question, or multiple-choice).
 
 5.  **Finalize Track:**
@@ -107,21 +118,16 @@ Adhere to this sequence to update project-level documentation based on the compl
         -   **Tech Stack**
         -   **Product Guidelines**
 
-5.  **Analyze and Update:**
-    a. **Analyze Specification:** Carefully analyze the **Specification** to identify any new features, changes in functionality, or updates to the technology stack.
-    b. **Update Product Definition:**
-        i. **Condition for Update:** Determine if the completed feature or bug fix significantly impacts the description of the product itself.
-        ii. **Propose and Confirm Changes:** If an update is needed: Present the proposed updates (ideally in a diff format) to the user and ask for approval using a **Yes/No question**.
-        iii. **Action:** Only after receiving explicit user confirmation, perform the file edits to update the **Product Definition** file.
-    c. **Update Tech Stack:**
-        i. **Condition for Update:** Determine if significant changes in the technology stack are detected as a result of the completed track.
-        ii. **Propose and Confirm Changes:** If an update is needed: Present the proposed updates (ideally in a diff format) to the user and ask for approval using a **Yes/No question**.
-        iii. **Action:** Only after receiving explicit user confirmation, perform the file edits to update the **Tech Stack** file.
-    d. **Update Product Guidelines (Strictly Controlled):**
-        i. **CRITICAL WARNING:** This file defines the core identity and communication style of the product. It should be modified with extreme caution and ONLY in cases of significant strategic shifts, such as a product rebrand or a fundamental change in user engagement philosophy.
-        ii. **Condition for Update:** You may ONLY propose an update to this file if the track's **Specification** explicitly describes a change that directly impacts branding, voice, tone, or other core product guidelines.
-        iii. **Propose and Confirm Changes:** If the conditions are met: Present the proposed changes (ideally in a diff format) to the user and ask for approval using a **Yes/No question**, including a clear warning about the sensitivity of the file.
-        iv. **Action:** Only after receiving explicit user confirmation, perform the file edits.
+5.  **Analyze and Update (Subagent Dispatch for Impact Analysis):** Delegate the impact analysis to a subagent so the full cross-referencing of the specification against all project documents never enters the orchestrator context.
+    -   **Dispatch:** Call the native `Task` tool with `subagent_type=general_purpose_task`, passing a closed prompt with: the track's **Specification** content, and the contents of **Product Definition**, **Tech Stack**, and **Product Guidelines**.
+    -   **Subagent Constraints:** Read-only. MUST NOT commit, write any file, or interact with the user. Receives no prior conversation history. Must respect the strict-controlled rule for **Product Guidelines** (only flag if the spec explicitly describes branding/voice/tone changes).
+    -   **Condensed Return Schema (the ONLY thing the orchestrator absorbs):**
+        `{ product_md: [{section, change_type, diff}], tech_stack: [{section, change_type, diff}], guidelines: [{section, change_type, diff}] }` — arrays are empty if no update is needed.
+    -   **Fallback:** If no native `Task` tool is available, perform the analysis inline following the same rules.
+    -   **Process Returned Diffs (Orchestrator-Side):** Using the schema returned by the subagent:
+        a. **Update Product Definition:** If `product_md` is non-empty, present the proposed diffs to the user and ask for approval using a **Yes/No question**. Only after explicit confirmation, perform the file edits.
+        b. **Update Tech Stack:** If `tech_stack` is non-empty, present the proposed diffs to the user and ask for approval using a **Yes/No question**. Only after explicit confirmation, perform the file edits.
+        c. **Update Product Guidelines (Strictly Controlled):** If `guidelines` is non-empty: **CRITICAL WARNING** — this file defines core identity. Present the proposed diffs with a clear warning about sensitivity and ask for approval using a **Yes/No question**. Only after explicit confirmation, perform the file edits.
 
 6.  **Final Report:** Announce the completion of the synchronization process and provide a summary of the actions taken.
     -   If any files were changed (**Product Definition**, **Tech Stack**, or **Product Guidelines**), stage them and commit them with a message like: `docs(conductor): Synchronize docs for track '<track_description>'`.

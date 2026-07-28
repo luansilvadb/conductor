@@ -84,12 +84,12 @@ and gather context sequentially.
 **If Brownfield:**
 
 - **Request Permission:** Ask: *"A brownfield project has been detected. May I perform a read-only scan to analyze the architecture?"*
-- **Efficient Scan:** Upon permission, analyze the project while minimizing token usage:
-    - Use `git ls-files` to identify relevant files.
-    - Respect `.gitignore` and `.geminiignore` patterns.
-    - Ignore common heavy directories (`node_modules`, `dist`, `build`).
-    - For files >1MB, read only the first and last 20 lines.
-    - Analyze `README.md` and manifests (`package.json`, `go.mod`, etc.) to extract the Tech Stack and Architecture.
+- **Isolated Architecture Scan (Subagent Dispatch):** Upon permission, delegate the scan to a subagent so the intermediate output (file listings, file heads/tails, manifest contents) never enters the orchestrator context.
+    -   **Dispatch:** Call the native `Task` tool with `subagent_type=general_purpose_task`, passing a closed prompt containing only the project root path and the scan rules: use `git ls-files` to identify relevant files; respect `.gitignore` and `.geminiignore`; skip heavy directories (`node_modules`, `dist`, `build`); for files >1MB read only the first and last 20 lines; analyze `README.md` and manifests (`package.json`, `go.mod`, etc.).
+    -   **Subagent Constraints:** Read-only. MUST NOT commit, write any file, or interact with the user. Receives no prior conversation history.
+    -   **Condensed Return Schema (the ONLY thing the orchestrator absorbs):**
+        `{ tech_stack: [...], architecture: "...", dependencies: [...], patterns: [...] }`
+    -   **Fallback:** If no native `Task` tool is available, perform the scan inline yourself following the same rules.
 
 **If Greenfield:**
 
@@ -146,7 +146,12 @@ Define and document the project's technology stack.
 Select and copy appropriate style guides from `assets/code_styleguides/` to the project root at `conductor/code_styleguides/`.
 
 1. **Asset Constraint:** You MUST ONLY propose and copy guides from `assets/code_styleguides/`. Do NOT generate style rules from scratch.
-2. **Recommendation:** Propose guides based on the Tech Stack confirmed in 2.3.
+2. **Recommendation (Subagent Dispatch):** Delegate the tech-stack → styleguide matching to a subagent so the contents of all styleguide files never enter the orchestrator context.
+    -   **Dispatch:** Call the native `Task` tool with `subagent_type=general_purpose_task`, passing a closed prompt with: the confirmed Tech Stack (from 2.3) and the path to `assets/code_styleguides/` (relative to this skill's directory).
+    -   **Subagent Constraints:** Read-only. MUST list the available styleguide files, read their language/framework tags, and cross-reference them against the provided Tech Stack. MUST NOT commit, write any file, or interact with the user. Receives no prior conversation history.
+    -   **Condensed Return Schema (the ONLY thing the orchestrator absorbs):**
+        `{ matches: [filename], extras: [filename] }` where `matches` are direct hits and `extras` are optional but valuable.
+    -   **Fallback:** If no native `Task` tool is available, list and read the styleguide headers inline and perform the matching yourself following the same rules.
 3. **Selection Mode:**
     - **Brownfield:** Propose matching guides and ask the user using a **Yes/No question** if additional ones are needed.
     - **Greenfield:** Present recommended guides or allow the user to hand-pick from the library using a **multiple-choice question**.
@@ -166,14 +171,15 @@ Configure the operational rules for the project.
 
 ### 2.6 Agent Skill Selection (Optional)
 
-1. **Analyze Needs & Trust Model:**
-    - Read the skill catalog from `assets/catalog.md` (relative to this skill's directory).
-    - Analyze the project context (e.g., `product.md`, `tech-stack.md`) against the `Detection Signals` in the loaded `catalog.md` to identify relevant skills NOT yet installed.
-    - **Trust Disclosure:** For each recommendation, disclose the `Party` status:
-        - **1p (Official):** Present as a verified, official Conductor skill.
-        - **3p (Community):** Present as a third-party skill. You MUST warn the user: *"Warning: This is a third-party skill. It will be installed as a frozen version (commit <sha>) for your safety."*
+1.  **Analyze Needs & Trust Model (Subagent Dispatch):** Delegate the catalog matching to a subagent so the full `catalog.md` contents and cross-referencing never enter the orchestrator context.
+    -   **Dispatch:** Call the native `Task` tool with `subagent_type=general_purpose_task`, passing a closed prompt with: the confirmed `product.md` content, the confirmed `tech-stack.md` content, and the path to `assets/catalog.md` (relative to this skill's directory).
+    -   **Subagent Constraints:** Read-only. MUST read `catalog.md` and cross-reference its `Detection Signals` against the provided product and tech-stack context to identify relevant skills NOT yet installed. MUST NOT commit, write any file, or interact with the user. Receives no prior conversation history.
+    -   **Condensed Return Schema (the ONLY thing the orchestrator absorbs):**
+        `{ recommended: [{ name, reason, party, detection_signal }] }` where `party` is `1p` or `3p`.
+    -   **Fallback:** If no native `Task` tool is available, read `catalog.md` inline and perform the matching yourself following the same rules.
+    -   **Trust Assessment:** Use the `party` field from the returned schema to classify each recommendation.
 
-2. **Recommendation & Installation Loop:**
+2.  **Recommendation & Installation Loop:**
     - **Identify Recommendations:** If relevant missing skills are found, present them to the user, explaining their value for the project.
     - **Trust Disclosure:** For each recommendation, disclose its status:
         - **1p (Official):** Present as a verified Conductor skill.

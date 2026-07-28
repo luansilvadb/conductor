@@ -43,24 +43,17 @@ Before starting the status overview process, you MUST locate and read the projec
 
 Follow this sequence to provide a status overview.
 
-### 2.1 Read Project Plan
-1.  **Locate and Read:** Read the content of the **Tracks Registry**. Check `conductor/index.md` for the link, otherwise use the Default Path: `conductor/tracks.md`.
-2.  **Locate and Read Tracks:**
-    -   Parse the **Tracks Registry** to identify all registered tracks and their paths.
-        *   **Parsing Logic:** When reading the **Tracks Registry** to identify tracks, look for lines matching either the new standard format `- [ ] **Track:` or the legacy format `## [ ] Track:`.
-    -   For each track, resolve and read its **Implementation Plan**. Check the track's `index.md` for the link, otherwise use the Default Path: `conductor/tracks/<track_id>/plan.md`.
+### 2.1 Read and Summarize (Subagent Dispatch)
+Delegate the parsing of the Tracks Registry and all track plans to a subagent so the verbose contents of every `plan.md` never enter the orchestrator context.
 
-### 2.2 Parse and Summarize Plan
-1.  **Parse Content:**
-    -   Identify major project phases/sections (e.g., top-level markdown headings).
-    -   Identify individual tasks and their current status by looking for checkbox markers: `[x]` for completed, `[~]` for in-progress, and `[ ]` for pending.
-2.  **Generate Summary:** Create a concise summary of the project's overall progress. This should include:
-    -   The total number of major phases.
-    -   The total number of tasks.
-    -   The number of tasks completed, in progress, and pending.
+1.  **Dispatch:** Call the native `Task` tool with `subagent_type=general_purpose_task`, passing a closed prompt with: the resolved path to the **Tracks Registry** (check `conductor/index.md`, otherwise default `conductor/tracks.md`) and the tracks directory path.
+2.  **Subagent Constraints:** Read-only. MUST read the **Tracks Registry** and every track's **Implementation Plan**. Parsing logic: identify tracks via `- [ ] **Track:` or legacy `## [ ] Track:`; identify task status via `[x]` (completed), `[~]` (in-progress), `[ ]` (pending). MUST NOT commit, write any file, or interact with the user. Receives no prior conversation history.
+3.  **Condensed Return Schema (the ONLY thing the orchestrator absorbs):**
+    `{ phases: N, tasks: { total, done, in_progress, pending }, current: { phase, task }, next: "...", blockers: [...] }`
+4.  **Fallback:** If no native `Task` tool is available, read and parse the registry and plans inline following the same rules.
 
-### 2.3 Present Status Overview
-1.  **Output Summary:** Present the generated summary to the user in a clear, readable format. The status report must include:
+### 2.2 Present Status Overview
+Using the schema returned by the subagent, present the generated summary to the user in a clear, readable format. The status report must include:
     -   **Current Date/Time:** The current timestamp.
     -   **Project Status:** A high-level summary of progress (e.g., "On Track", "Behind Schedule", "Blocked").
     -   **Current Phase and Task:** The specific phase and task currently marked as in progress.

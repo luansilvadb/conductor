@@ -139,17 +139,31 @@ that also concludes a phase in `plan.md`.
             tests **must** validate the functionality described in this phase's
             tasks (`plan.md`).
 
-3.  **Execute Automated Tests with Proactive Debugging:**
+3. **Execute Automated Tests with Proactive Debugging:**
 
-    -   Before execution, you **must** announce the exact shell command you will
+    - Before execution, you **must announce** the exact shell command you will
         use to run the tests.
-    -   **Example Announcement:** "I will now run the automated test suite to
+    - **Example Announcement:** "I will now run the automated test suite to
         verify the phase. **Command:** `CI=true npm test`"
-    -   Execute the announced command.
-    -   If tests fail, you **must** inform the user and begin debugging. You may
-        attempt to propose a fix a **maximum of two times**. If the tests still
-        fail after your second proposed fix, you **must stop**, report the
-        persistent failure, and ask the user for guidance.
+    - **Isolated Execution (Subagent Dispatch):** Delegate test execution and
+        the debug loop to a subagent so stack traces and rebuild logs never
+        enter the orchestrator context.
+        -   **Dispatch:** Call the native `Task` tool with
+            `subagent_type=general_purpose_task`, passing a closed prompt
+            containing only: the announced test command, the project root, and
+            the rule "attempt up to 2 fixes before giving up".
+        -   **Subagent Constraints:** MAY edit source/test files to apply fixes
+            and MAY run shell commands. MUST NOT commit. MUST NOT modify control
+            files (`plan.md`, `tracks.md`, `index.md`, `product.md`,
+            `tech-stack.md`). MUST NOT interact with the user. Receives no prior
+            conversation history.
+        -   **Condensed Return Schema (the ONLY thing the orchestrator
+            absorbs):**
+            `{ status: "pass" | "fail", failing_tests: [...], root_cause: "...", suggested_fix: "...", attempts: N }`
+        -   **Fallback:** If no native `Task` tool is available, execute the
+            command and debug loop inline yourself.
+    - If the subagent reports persistent failure after 2 attempts, you **must
+        stop**, report the condensed failure to the user, and ask for guidance.
 
 4.  **Propose a Detailed, Actionable Manual Verification Plan:**
 

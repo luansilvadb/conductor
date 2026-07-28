@@ -64,14 +64,13 @@ Before starting the review process, you MUST locate and read the project's found
 3.  **Confirm Scope:** Ensure you and the user agree on what is being reviewed by asking for confirmation using a **Yes/No question**.
 
 ### 2.2 Retrieve Context
-1.  **Load Project Context:**
-    -   Read `product-guidelines.md` and `tech-stack.md`.
-    -   **CRITICAL:** Check for the existence of `conductor/code_styleguides/` directory.
-        -   If it exists, list and read ALL `.md` files within it. These are the **Law**. Violations here are **High** severity.
-    -   **Check for Installed Skills:**
-        -   Check for the existence of `.agents/skills/` (Workspace tier) and `~/.agents/extensions/conductor/skills/` (Extension tier).
-        -   If either exists, list the subdirectories to identify installed skills across both paths.
-        -   If relevant skills (e.g., `gcp-*`) are found, enable specialized feedback for those domains.
+1.  **Load Project Context (Subagent Dispatch):** Delegate the loading of styleguides, guidelines, and installed skills to a subagent so the verbose contents of all styleguide and guidelines files never enter the orchestrator context.
+    -   **Dispatch:** Call the native `Task` tool with `subagent_type=general_purpose_task`, passing a closed prompt with: the resolved paths to `product-guidelines.md`, `tech-stack.md`, the `conductor/code_styleguides/` directory, and the installed-skills directories (`.agents/skills/` and `~/.agents/extensions/conductor/skills/`).
+    -   **Subagent Constraints:** Read-only. MUST: (a) read `product-guidelines.md` and `tech-stack.md` and extract their rule statements; (b) if `conductor/code_styleguides/` exists, list and read ALL `.md` files within it and extract each rule as a structured entry; (c) if either skills directory exists, list the subdirectories to identify installed skills across both paths. MUST NOT commit, write any file, or interact with the user. Receives no prior conversation history.
+    -   **Condensed Return Schema (the ONLY thing the orchestrator absorbs):**
+        `{ rules: [{ source, severity, statement }], installed_skills: [{ name, tier }] }` where `source` is the file path, `severity` is `high` for styleguides and `medium` otherwise, and `tier` is `workspace` or `extension`.
+    -   **Fallback:** If no native `Task` tool is available, read the files inline and extract the rules yourself following the same rules.
+    -   **Orchestrator Note:** Treat every entry in `rules` where `source` is under `code_styleguides/` as **High** severity (the **Law**). Use `installed_skills` to enable specialized feedback for matching domains (e.g., `gcp-*`).
 2.  **Load Track Context (if reviewing a track):**
     -   Read the track's `plan.md`.
     -   **Extract Commits:** Parse `plan.md` to find recorded git commit hashes (usually in the "Completed" tasks or "History" section).
@@ -101,10 +100,25 @@ Before starting the review process, you MUST locate and read the project's found
 3.  **Correctness & Safety:**
     -   Look for bugs, race conditions, null pointer risks.
     -   **Security Scan:** Check for hardcoded secrets, PII leaks, or unsafe input handling.
-4.  **Testing:**
+4. **Testing:**
     -   Are there new tests?
     -   Do the changes look like they are covered by existing tests?
-    -   *Action:* **Execute the test suite automatically.** Infer the test command based on the codebase languages and structure (e.g., `npm test`, `pytest`, `go test`). Run it. Analyze the output for failures.
+    -   *Action:* **Execute the test suite automatically (Subagent Dispatch).**
+        Delegate execution to a subagent so the full test output stays out of
+        the orchestrator context.
+        -   **Dispatch:** Call the native `Task` tool with
+            `subagent_type=general_purpose_task`, passing a closed prompt with
+            the inferred test command (e.g., `npm test`, `pytest`, `go test`)
+            and the project root.
+        -   **Subagent Constraints:** MAY run the test command. MUST NOT commit.
+            MUST NOT modify control files (`plan.md`, `tracks.md`, `index.md`,
+            `product.md`, `tech-stack.md`). MUST NOT interact with the user.
+            Receives no prior conversation history.
+        -   **Condensed Return Schema (the ONLY thing the orchestrator
+            absorbs):**
+            `{ status: "passed" | "failed", total: N, failed: [...], summary: "..." }`
+        -   **Fallback:** If no native `Task` tool is available, execute the
+            suite inline and analyze the output yourself.
 5.  **Skill-Specific Checks:**
     -   If specific skills are installed (e.g. GCP), verify compliance with their best practices.
 

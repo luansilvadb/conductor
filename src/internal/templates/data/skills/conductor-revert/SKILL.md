@@ -53,11 +53,13 @@ Before starting the revert process, you MUST locate and read the project's found
         3.  If "yes", establish this as the `target_intent` and proceed to Phase 2. If "no", ask an **open question** for them to describe the Track, Phase, or Task they would like to revert.
 
     *   **PATH B: Guided Selection Menu**
-        1.  **Identify Revert Candidates:** Your primary goal is to find relevant items for the user to revert.
-            *   **Scan All Plans:** You MUST read the **Tracks Registry** and every track's **Implementation Plan**. Resolve these by checking `conductor/index.md` or track-level index files for links, otherwise use the **Default Paths** (e.g., `conductor/tracks.md`, `conductor/tracks/<track_id>/plan.md`).
-            *   **Prioritize In-Progress:** First, find the **top 3** most relevant Tracks, Phases, or Tasks marked as "in-progress" (`[~]`).
-            *   **Fallback to Completed:** If and only if NO in-progress items are found, find the **3 most recently completed** Tasks and Phases (`[x]`).
-        2.  **Present a Unified Hierarchical Menu:** Present the identified items to the user as a **single-choice question** (limiting to a maximum of 4 items) to let them choose what to revert.
+        1.  **Identify Revert Candidates (Subagent Dispatch):** Delegate the scanning of all plans to a subagent so the verbose contents of every `plan.md` never enter the orchestrator context.
+            -   **Dispatch:** Call the native `Task` tool with `subagent_type=general_purpose_task`, passing a closed prompt with: the resolved **Tracks Registry** path (check `conductor/index.md`, otherwise default `conductor/tracks.md`) and the tracks directory path.
+            -   **Subagent Constraints:** Read-only. MUST read the **Tracks Registry** and every track's **Implementation Plan**. Resolve plan paths by checking track-level index files, otherwise use the default `conductor/tracks/<track_id>/plan.md`. MUST first find the **top 3** most relevant Tracks, Phases, or Tasks marked as "in-progress" (`[~]`); if and only if NO in-progress items are found, fall back to the **3 most recently completed** Tasks and Phases (`[x]`). MUST NOT commit, write any file, or interact with the user. Receives no prior conversation history.
+            -   **Condensed Return Schema (the ONLY thing the orchestrator absorbs):**
+                `{ candidates: [{ track, phase, task, status, plan_path }] }` where `status` is `in_progress` or `completed`, limited to top 3.
+            -   **Fallback:** If no native `Task` tool is available, read and parse the registry and plans inline following the same rules.
+        2.  **Present a Unified Hierarchical Menu:** Present the candidates returned by the subagent to the user as a **single-choice question** (limiting to a maximum of 4 items) to let them choose what to revert.
         3.  **Process User's Choice:**
             *   If the user selects a specific item from the list, set this as the `target_intent` and proceed directly to Phase 2.
             *   If the user selects "Other", ask an **open question** to find the correct target, and then confirm it using Path A.
@@ -72,20 +74,25 @@ Before starting the revert process, you MUST locate and read the project's found
 
 1.  **Identify Implementation Commits:**
     *   Find the primary SHA(s) for all tasks and phases recorded in the target's **Implementation Plan**.
-    *   **Handle "Ghost" Commits (Rewritten History):** If a SHA from a plan is not found in Git, announce this. Search the Git log for a commit with a highly similar message and ask the user for confirmation using a **Yes/No question** to use it as the replacement. If not confirmed, halt.
+    *   **Handle "Ghost" Commits (Rewritten History):** If a SHA from a plan is not found in Git, surface it as a candidate for user confirmation (handled in step 5 after the isolated investigation).
 
 2.  **Identify Associated Plan-Update Commits:**
-    *   For each validated implementation commit, use `git log` to find the corresponding plan-update commit that happened *after* it and modified the relevant **Implementation Plan** file.
+    *   For each implementation commit, find the corresponding plan-update commit that happened *after* it and modified the relevant **Implementation Plan** file.
 
 3.  **Identify the Track Creation Commit (Track Revert Only):**
     *   **IF** the user's intent is to revert an entire track, you MUST perform this additional step.
-    *   **Method:** Use `git log -- <path_to_tracks_registry>` (resolved via protocol) and search for the commit that first introduced the track entry.
+    *   **Method:** Search the history of the **Tracks Registry** file for the commit that first introduced the track entry.
         *   Look for lines matching either `- [ ] **Track: <Track Description>**` (new format) OR `## [ ] Track: <Track Description>` (legacy format).
     *   Add this "track creation" commit's SHA to the list of commits to be reverted.
 
-4.  **Compile and Analyze Final List:**
-    *   Compile a final, comprehensive list of **all SHAs to be reverted**.
-    *   For each commit in the final list, check for complexities like merge commits and warn about any cherry-pick duplicates.
+4.  **Compile and Analyze Final List (Isolated Git Investigation — Subagent Dispatch):** Delegate steps 1-3 plus the final compilation to a subagent so the verbose `git log` / `git show` output never enters the orchestrator context.
+    -   **Dispatch:** Call the native `Task` tool with `subagent_type=general_purpose_task`, passing a closed prompt with: the target intent (track/phase/task), the relevant **Implementation Plan** path(s), the **Tracks Registry** path (resolved via protocol), and the rules above for finding implementation, plan-update, and track-creation commits.
+    -   **Subagent Constraints:** MAY run `git log`, `git show`, and read-only Git inspection commands. MUST NOT commit, revert, reset, or modify any file. MUST NOT interact with the user. Receives no prior conversation history.
+    -   **Condensed Return Schema (the ONLY thing the orchestrator absorbs):**
+        `{ shas_to_revert: [...], ghost_candidates: [{ missing_sha: "...", best_match_sha: "...", match_message: "..." }], complexities: ["merge", "cherry-pick-duplicate", ...] }`
+    -   **Fallback:** If no native `Task` tool is available, perform the Git investigation inline yourself following the same rules.
+
+5.  **Resolve Ghost Commits (User Interaction, Orchestrator-Side):** For each entry in `ghost_candidates` returned by the subagent, announce the missing SHA and the best-match candidate, then ask the user for confirmation using a **Yes/No question** to use the match as the replacement. If not confirmed, halt. Append confirmed replacements to `shas_to_revert`.
 
 ---
 

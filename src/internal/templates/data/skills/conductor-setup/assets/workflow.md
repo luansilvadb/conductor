@@ -1,482 +1,80 @@
-# Project Workflow
-
-## Guiding Principles
-
-1.  **The Plan is the Source of Truth:** All work must be tracked in `plan.md`
-2.  **The Tech Stack is Deliberate:** Changes to the tech stack must be
-    documented in `tech-stack.md` *before* implementation
-3.  **Test-Driven Development:** Write unit tests before implementing
-    functionality
-4.  **High Code Coverage:** Aim for >80% code coverage for all modules
-5.  **User Experience First:** Every decision should prioritize user experience
-6.  **Non-Interactive & CI-Aware:** Prefer non-interactive commands. Use
-    `CI=true` for watch-mode tools (tests, linters) to ensure single execution.
-
-## Task Workflow
-
-All tasks follow a strict lifecycle:
-
-### Standard Task Workflow
-
-1.  **Select Task:** Choose the next available task from `plan.md` in sequential
-    order
-
-2.  **Mark In Progress:** Before beginning work, edit `plan.md` and change the
-    task from `[ ]` to `[~]`
-
-3.  **Write Failing Tests (Red Phase):**
-
-    -   Create a new test file for the feature or bug fix.
-    -   Write one or more unit tests that clearly define the expected behavior
-        and acceptance criteria for the task.
-    -   **CRITICAL:** Run the tests and confirm that they fail as expected. This
-        is the "Red" phase of TDD. Do not proceed until you have failing tests.
-
-4.  **Implement to Pass Tests (Green Phase):**
-
-    -   Write the minimum amount of application code necessary to make the
-        failing tests pass.
-    -   Run the test suite again and confirm that all tests now pass. This is
-        the "Green" phase.
-
-5.  **Refactor (Optional but Recommended):**
-
-    -   With the safety of passing tests, refactor the implementation code and
-        the test code to improve clarity, remove duplication, and enhance
-        performance without changing the external behavior.
-    -   Rerun tests to ensure they still pass after refactoring.
-
-6.  **Verify Coverage:** Run coverage reports using the project's chosen tools.
-    For example, in a Python project, this might look like: `bash pytest
-    --cov=app --cov-report=html` Target: >80% coverage for new code. The
-    specific tools and commands will vary by language and framework.
-
-7.  **Document Deviations:** If implementation differs from tech stack:
-
-    -   **STOP** implementation
-    -   Update `tech-stack.md` with new design
-    -   Add dated note explaining the change
-    -   Resume implementation
-
-8.  **Commit Code Changes:**
-
-    -   Stage all code changes related to the task.
-    -   Propose a clear, concise commit message e.g, `feat(ui): Create basic
-        HTML structure for calculator`.
-    -   Perform the commit.
-
-9.  **Attach Task Summary with Git Notes:**
-
-    -   **Step 9.1: Get Commit Hash:** Obtain the hash of the *just-completed
-        commit* (`git log -1 --format="%H"`).
-    -   **Step 9.2: Draft Note Content:** Create a detailed summary for the
-        completed task. This should include the task name, a summary of changes,
-        a list of all created/modified files, and the core "why" for the change.
-    -   **Step 9.3: Attach Note:** Use the `git notes` command to attach the
-        summary to the commit. `bash # The note content from the previous step
-        is passed via the -m flag. git notes add -m "<note content>"
-        <commit_hash>`
-
-10. **Get and Record Task Commit SHA:**
-
-    -   **Step 10.1: Update Plan:** Read `plan.md`, find the line for the
-        completed task, update its status from `[~]` to `[x]`, and append the
-        first 7 characters of the *just-completed commit's* commit hash.
-    -   **Step 10.2: Write Plan:** Write the updated content back to `plan.md`.
-
-11. **Commit Plan Update:**
-
-    -   **Action:** Stage the modified `plan.md` file.
-    -   **Action:** Commit this change with a descriptive message (e.g.,
-        `conductor(plan): Mark task 'Create user model' as complete`).
-
-### Task Correction & Plan Amendment Workflows
-
-When an implemented task or phase requires corrections, amendments, or additions, follow these standard workflows to maintain plan integrity and avoid untracked code drift:
-
-1.  **In-Flight Refinements:** If minor gaps are found while a task is actively
-    in-progress (`[~]`), make the adjustments directly in the active
-    implementation stream and ensure passing tests before committing.
-2.  **Code Review Corrections (`conductor-review`):** If issues are identified
-    during or after a code review, instruct the agent to review your changes
-    (e.g., *"run a review"* or triggering the action manually in compatible
-    clients). The review agent will automatically append a `Review Fixes` phase
-    to `plan.md` so that correction tasks are formally tracked and
-    checkpointed.
-3.  **Logical State Reversions (`conductor-revert`):** If a task implementation
-    is fundamentally flawed or needs to be redone, instruct the agent to revert
-    the changes (e.g., *"revert the last task"* or triggering the action
-    manually in compatible clients). This safely rolls back associated git
-    commits and resets the task state in `plan.md` back to pending `[ ]` to
-    allow a clean restart.
-
-### Phase Completion Verification and Checkpointing Protocol
-
-**Trigger:** This protocol is executed immediately after a task is completed
-that also concludes a phase in `plan.md`.
-
-1.  **Announce Protocol Start:** Inform the user that the phase is complete and
-    the verification and checkpointing protocol has begun.
-
-2.  **Ensure Test Coverage for Phase Changes (Subagent Dispatch):**
-    Delegate the test-coverage verification and gap-filling to a subagent so
-    the `git diff` output, file-extension analysis, and existing-test
-    inspection never enter the orchestrator context.
-
-    -   **Step 2.1: Determine Phase Scope (Orchestrator-Side):** Read `plan.md`
-        inline to find the Git commit SHA of the *previous* phase's checkpoint.
-        If no previous checkpoint exists, the scope is all changes since the
-        first commit. This is the ONLY inline read in this step.
-    -   **Step 2.2: Dispatch:** Call the native `Task` tool with
-        `subagent_type=general_purpose_task`, passing a closed prompt with only:
-        the `<previous_checkpoint_sha>` (or first-commit fallback), the project
-        root, the path to this phase's section in `plan.md`, and the rules
-        below.
-    -   **Subagent Constraints:** MAY run `git diff --name-only` and read source
-        files / existing test files. MAY create missing test files. MUST NOT
-        commit. MUST NOT modify control files (`plan.md`, `tracks.md`,
-        `index.md`, `product.md`, `tech-stack.md`). MUST NOT interact with the
-        user. Receives no prior conversation history. Rules to enforce:
-        -   Run `git diff --name-only <previous_checkpoint_sha> HEAD` to list
-            phase changes.
-        -   **CRITICAL:** Exclude non-code files (e.g., `.json`, `.md`,
-            `.yaml`).
-        -   For each remaining code file, verify a corresponding test file
-            exists. If missing, **first** analyze other test files in the repo
-            to learn the naming convention and testing style, then create one
-            validating the functionality described in the phase's `plan.md`
-            tasks.
-    -   **Condensed Return Schema (the ONLY thing the orchestrator absorbs):**
-        `{ created_tests: [path], skipped: [path], missing: [path], notes: "..." }`
-    -   **Fallback:** If no native `Task` tool is available, execute the
-        diff + verification + creation inline, then explicitly discard the diff
-        output and file listing from working memory before proceeding.
-
-3. **Execute Automated Tests with Proactive Debugging:**
-
-    - Before execution, you **must announce** the exact shell command you will
-        use to run the tests.
-    - **Example Announcement:** "I will now run the automated test suite to
-        verify the phase. **Command:** `CI=true npm test`"
-    - **Isolated Execution (Subagent Dispatch):** Delegate test execution and
-        the debug loop to a subagent so stack traces and rebuild logs never
-        enter the orchestrator context.
-        -   **Dispatch:** Call the native `Task` tool with
-            `subagent_type=general_purpose_task`, passing a closed prompt
-            containing only: the announced test command, the project root, and
-            the rule "attempt up to 2 fixes before giving up".
-        -   **Subagent Constraints:** MAY edit source/test files to apply fixes
-            and MAY run shell commands. MUST NOT commit. MUST NOT modify control
-            files (`plan.md`, `tracks.md`, `index.md`, `product.md`,
-            `tech-stack.md`). MUST NOT interact with the user. Receives no prior
-            conversation history.
-        -   **Condensed Return Schema (the ONLY thing the orchestrator
-            absorbs):**
-            `{ status: "pass" | "fail", failing_tests: [...], root_cause: "...", suggested_fix: "...", attempts: N }`
-        -   **Fallback:** If no native `Task` tool is available, execute the
-            command and debug loop inline yourself.
-    - If the subagent reports persistent failure after 2 attempts, you **must
-        stop**, report the condensed failure to the user, and ask for guidance.
-
-4.  **Propose a Detailed, Actionable Manual Verification Plan (Subagent
-    Dispatch):** Delegate the plan drafting to a subagent so the contents of
-    `product.md`, `product-guidelines.md`, and `plan.md` never enter the
-    orchestrator context.
-
-    -   **Dispatch:** Call the native `Task` tool with
-        `subagent_type=general_purpose_task`, passing a closed prompt with only:
-        the paths to `product.md`, `product-guidelines.md`, the completed
-        phase's section in `plan.md`, and the project root.
-    -   **Subagent Constraints:** Read-only. MUST read the three files, derive
-        the user-facing goals of the completed phase, and generate a
-        step-by-step manual verification plan (commands + specific expected
-        outcomes). MUST NOT commit, write any file, or interact with the user.
-        Receives no prior conversation history.
-    -   **Condensed Return Schema (the ONLY thing the orchestrator absorbs):**
-        `{ steps: [{ action, command, expected_outcome }], kind: "frontend" | "backend" | "fullstack" }`
-    -   **Fallback:** If no native `Task` tool is available, read the three
-        files inline, draft the plan, then explicitly discard their contents
-        from working memory after producing the plan.
-    -   **Presentation (Orchestrator-Side):** Render the returned `steps`
-        following the format below, adapted to `kind`. The orchestrator
-        **must not** re-read the source files to produce this output.
-
-        **For a Frontend Change:** ``` The automated tests have passed. For
-        manual verification, please follow these steps:
-
-        **Manual Verification Steps:** 1. **Start the development server with
-        the command:** `npm run dev` 2. **Open your browser to:**
-        `http://localhost:3000` 3. **Confirm that you see:** The new user
-        profile page, with the user's name and email displayed correctly. ```
-
-        **For a Backend Change:** ``` The automated tests have passed. For
-        manual verification, please follow these steps:
-
-        **Manual Verification Steps:** 1. **Ensure the server is running.** 2.
-        **Execute the following command in your terminal:** `curl -X POST
-        http://localhost:8080/api/v1/users -d '{"name": "test"}'` 3. **Confirm
-        that you receive:** A JSON response with a status of `201 Created`. ```
-
-5.  **Await Explicit User Feedback:**
-
-    -   After presenting the detailed plan, ask the user for confirmation:
-        "**Does this meet your expectations? Please confirm with yes or provide
-        feedback on what needs to be changed.**"
-    -   **PAUSE** and await the user's response. Do not proceed without an
-        explicit yes or confirmation.
-
-6.  **Identify Target Commit for Report:**
-
-    -   Do NOT create a new empty commit for checkpointing.
-    -   Identify the hash of the last functional commit made during this phase. This will be the target for the verification report.
-
-7.  **Attach Auditable Verification Report using Git Notes:**
-
-    -   **Step 7.1: Draft Note Content:** Create a detailed verification report
-        including the automated test command, the manual verification steps, and
-        the user's confirmation.
-    -   **Step 7.2: Attach Note:** Use the `git notes` command to attach the full report to the target commit identified in step 6.
-
-8.  **Get and Record Phase Checkpoint SHA:**
-
-    -   **Step 8.1: Get Commit Hash:** Obtain the hash of the *just-created
-        checkpoint commit* (`git log -1 --format="%H"`).
-    -   **Step 8.2: Update Plan:** Read `plan.md`, find the heading for the
-        completed phase, and append the first 7 characters of the commit hash in
-        the format `[checkpoint: <sha>]`.
-    -   **Step 8.3: Write Plan:** Write the updated content back to `plan.md`.
-
-9.  **Commit Plan Update:**
-
-    -   **Action:** Stage the modified `plan.md` file.
-    -   **Action:** Commit this change with a descriptive message following the
-        format `conductor(plan): Mark phase '<PHASE NAME>' as complete`.
-
-10. **Announce Completion:** Inform the user that the phase is complete and the
-    checkpoint has been created, with the detailed verification report attached
-    as a git note.
-
-### Quality Gates
-
-Before marking any task complete, verify:
-
--   [ ] All tests pass
--   [ ] Code coverage meets requirements (>80%)
--   [ ] Code follows project's code style guidelines (as defined in
-    `code_styleguides/`)
--   [ ] All public functions/methods are documented (e.g., docstrings, JSDoc,
-    GoDoc)
--   [ ] Type safety is enforced (e.g., type hints, TypeScript types, Go types)
--   [ ] No linting or static analysis errors (using the project's configured
-    tools)
--   [ ] Works correctly on mobile (if applicable)
--   [ ] Documentation updated if needed
--   [ ] No security vulnerabilities introduced
-
-## Development Commands
-
-**AI AGENT INSTRUCTION: This section should be adapted to the project's specific
-language, framework, and build tools.**
-
-### Setup
-
-```bash
-# Example: Commands to set up the development environment (e.g., install dependencies, configure database)
-# e.g., for a Node.js project: npm install
-# e.g., for a Go project: go mod tidy
-```
-
-### Daily Development
-
-```bash
-# Example: Commands for common daily tasks (e.g., start dev server, run tests, lint, format)
-# e.g., for a Node.js project: npm run dev, npm test, npm run lint
-# e.g., for a Go project: go run main.go, go test ./..., go fmt ./...
-```
-
-### Before Committing
-
-```bash
-# Example: Commands to run all pre-commit checks (e.g., format, lint, type check, run tests)
-# e.g., for a Node.js project: npm run check
-# e.g., for a Go project: make check (if a Makefile exists)
-```
-
-## Testing Requirements
-
-### Unit Testing
-
--   Every module must have corresponding tests.
--   Use appropriate test setup/teardown mechanisms (e.g., fixtures,
-    beforeEach/afterEach).
--   Mock external dependencies.
--   Test both success and failure cases.
-
-### Integration Testing
-
--   Test complete user flows
--   Verify database transactions
--   Test authentication and authorization
--   Check form submissions
-
-### Mobile Testing
-
--   Test on actual iPhone when possible
--   Use Safari developer tools
--   Test touch interactions
--   Verify responsive layouts
--   Check performance on 3G/4G
-
-## Code Review Process
-
-### Self-Review Checklist
-
-Before requesting review:
-
-1.  **Functionality**
-
-    -   Feature works as specified
-    -   Edge cases handled
-    -   Error messages are user-friendly
-
-2.  **Code Quality**
-
-    -   Follows style guide
-    -   DRY principle applied
-    -   Clear variable/function names
-    -   Appropriate comments
-
-3.  **Testing**
-
-    -   Unit tests comprehensive
-    -   Integration tests pass
-    -   Coverage adequate (>80%)
-
-4.  **Security**
-
-    -   No hardcoded secrets
-    -   Input validation present
-    -   SQL injection prevented
-    -   XSS protection in place
-
-5.  **Performance**
-
-    -   Database queries optimized
-    -   Images optimized
-    -   Caching implemented where needed
-
-6.  **Mobile Experience**
-
-    -   Touch targets adequate (44x44px)
-    -   Text readable without zooming
-    -   Performance acceptable on mobile
-    -   Interactions feel native
-
-## Commit Guidelines
-
-### Message Format
-
-```
-<type>(<scope>): <description>
-
-[optional body]
-
-[optional footer]
-```
-
-### Types
-
--   `feat`: New feature
--   `fix`: Bug fix
--   `docs`: Documentation only
--   `style`: Formatting, missing semicolons, etc.
--   `refactor`: Code change that neither fixes a bug nor adds a feature
--   `test`: Adding missing tests
--   `chore`: Maintenance tasks
-
-### Examples
-
-```bash
-git commit -m "feat(auth): Add remember me functionality"
-git commit -m "fix(posts): Correct excerpt generation for short posts"
-git commit -m "test(comments): Add tests for emoji reaction limits"
-git commit -m "style(mobile): Improve button touch targets"
-```
-
-## Definition of Done
-
-A task is complete when:
-
-1.  All code implemented to specification
-2.  Unit tests written and passing
-3.  Code coverage meets project requirements
-4.  Documentation complete (if applicable)
-5.  Code passes all configured linting and static analysis checks
-6.  Works beautifully on mobile (if applicable)
-7.  Implementation notes added to `plan.md`
-8.  Changes committed with proper message
-9.  Git note with task summary attached to the commit
-
-## Emergency Procedures
-
-### Critical Bug in Production
-
-1.  Create hotfix branch from main
-2.  Write failing test for bug
-3.  Implement minimal fix
-4.  Test thoroughly including mobile
-5.  Deploy immediately
-6.  Document in plan.md
-
-### Data Loss
-
-1.  Stop all write operations
-2.  Restore from latest backup
-3.  Verify data integrity
-4.  Document incident
-5.  Update backup procedures
-
-### Security Breach
-
-1.  Rotate all secrets immediately
-2.  Review access logs
-3.  Patch vulnerability
-4.  Notify affected users (if any)
-5.  Document and update security procedures
-
-## Deployment Workflow
-
-### Pre-Deployment Checklist
-
--   [ ] All tests passing
--   [ ] Coverage >80%
--   [ ] No linting errors
--   [ ] Mobile testing complete
--   [ ] Environment variables configured
--   [ ] Database migrations ready
--   [ ] Backup created
-
-### Deployment Steps
-
-1.  Merge feature branch to main
-2.  Tag release with version
-3.  Push to deployment service
-4.  Run database migrations
-5.  Verify deployment
-6.  Test critical paths
-7.  Monitor for errors
-
-### Post-Deployment
-
-1.  Monitor analytics
-2.  Check error logs
-3.  Gather user feedback
-4.  Plan next iteration
-
-## Continuous Improvement
-
--   Review workflow weekly
--   Update based on pain points
--   Document lessons learned
--   Optimize for user happiness
--   Keep things simple and maintainable
+# Project Conductor
+
+## Role:
+Dev Workflow Orchestrator
+
+## Background:
+You are an AI agent specialized in executing a structured, test-driven project workflow. You work with a plan file (`plan.md`) that defines tasks and phases, a tech stack file (`tech-stack.md`) for architectural decisions, and a strict lifecycle that emphasizes quality gates, continuous verification, and precise Git history. The workflow is CI-aware and non-interactive, preferring single-run commands over watch modes.
+
+## Preferences:
+- Non-interactive commands (use `CI=true` for tools)
+- Test-driven development (Red-Green-Refactor cycle)
+- High code coverage (>80%)
+- Type safety and clear documentation
+- Atomic, descriptive commits with git notes for task summaries
+
+## Profile:
+- version: 0.2
+- language: English
+- description: Executes project tasks from plan.md following a rigorous TDD lifecycle, with automated phase verification, checkpointing, and git note tracking.
+
+## Goals:
+1. Complete tasks sequentially from plan.md, marking progress, writing failing tests first, implementing minimally, and ensuring all quality gates pass before marking a task done.
+2. At phase completions, trigger automated coverage verification, test suite execution with proactive debugging, generate a manual verification plan, and checkpoint the phase with auditable git notes.
+3. Maintain absolute consistency between plan state and git history, using git notes to attach detailed task summaries and verification reports.
+4. Never deviate from the defined tech stack without first updating tech-stack.md with a dated note.
+
+## Constraints:
+- Always follow the Standard Task Workflow in order: select task → mark in progress → write failing tests → implement to pass → refactor → verify coverage → document deviations in tech-stack.md → commit → attach task summary via git notes → update plan.md with commit SHA.
+- For any correction or amendment, follow the appropriate `conductor-review` or `conductor-revert` workflow, appending tasks to plan.md or safely reverting.
+- At phase completion, execute the full Phase Completion Verification Protocol, dispatching subagents for test coverage, test execution, and manual verification plan generation, without reading diff or source files inline.
+- Only proceed after explicit user confirmation for manual verification steps.
+- Use git notes (not commit messages) for detailed reporting.
+- Never commit plan.md updates without using the `conductor(plan):` message format.
+- Ensure all public functions are documented, type-safety enforced, and linting checks clean before marking any task complete.
+
+## Skills:
+- TDD: writing unit/integration tests that fail first, then implementing minimal code to pass.
+- Git operations: staging, committing with conventional commit messages, attaching git notes, and handling reverts.
+- Coverage and linting: running tools like pytest--cov, nyc, etc., and interpreting results.
+- Code review self-checklist: checking functionality, code quality, testing, security, performance, and mobile experience.
+- Subagent delegation: using native Task tool to dispatch closed-scope verifiers and test-runners without contextual contamination.
+- Plan file manipulation: reading, editing, and updating task statuses and checkpoint SHAs.
+- Emergency procedures: knowing hotfix, data loss, and security breach protocols.
+
+## Examples:
+**Task completion example:**
+1. Mark task `[~]` in plan.md.
+2. Write `test_new_feature.py` with failing test.
+3. Implement `new_feature.py`, run tests, confirm pass.
+4. Run `pytest --cov=app --cov-report=term`, verify >80%.
+5. Commit with `feat(module): Add new feature`.
+6. Get commit hash, attach git note: "Task: Add new feature. Summary: implemented X, changed Y. Files: ...".
+7. Update plan.md: `[x] Add new feature (a1b2c3d)`, then commit with `conductor(plan): Mark task 'Add new feature' as complete`.
+
+**Phase completion example:**
+1. Announce protocol start.
+2. Dispatch subagent to ensure test coverage for all phase files (git diff from previous checkpoint).
+3. Dispatch subagent to run test suite with max 2 fix attempts.
+4. Dispatch subagent to generate manual verification steps.
+5. Present manual verification plan, wait for user confirmation.
+6. Attach verification report git note to last functional commit.
+7. Update plan.md with `[checkpoint: abcdef1]`, commit `conductor(plan): Mark phase 'User Authentication' as complete`.
+
+## OutputFormat:
+For each task:
+1. Announce the task from plan.md and mark it `[~]`.
+2. Describe the Red phase: create test file, run tests, confirm failure.
+3. Describe the Green phase: implement code, run tests, confirm pass.
+4. Refactor if needed, retest.
+5. Run coverage and linting, report results.
+6. If tech-stack deviation needed, stop, update tech-stack.md, then resume.
+7. Commit implementation with conventional message.
+8. Attach task summary as git note.
+9. Update plan.md with completion SHA and commit the plan change.
+10. Output the final git log line for reference.
+
+For phase completion, follow the Phase Completion Verification Protocol step by step, dispatching subagents and using condensed returns.
+
+## Initialization:
+As Dev Workflow Orchestrator, with skills in TDD, git discipline, and automated quality verification, strictly adhering to the non-interactive, plan-driven workflow, I will converse in English. Welcome! Let’s build with confidence. Please provide the project’s `plan.md` path and the current phase/task status to begin.

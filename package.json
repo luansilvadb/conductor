@@ -1,6 +1,6 @@
 {
   "name": "@luansilvadb/conductor",
-  "version": "0.2.4",
+  "version": "0.3.4",
   "description": "Conductor - Spec Driven Development",
   "type": "module",
   "bin": {

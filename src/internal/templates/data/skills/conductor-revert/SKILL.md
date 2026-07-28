@@ -32,7 +32,8 @@ Before starting the revert process, you MUST locate and read the project's found
 
 2.  **Load & Verify Context:** Read `conductor/index.md` and use the provided links to locate the **Tracks Registry** file.
     -   If the link is missing or `index.md` doesn't exist, fallback to the default path: `conductor/tracks.md`.
-    -   **Health Check:** You MUST verify that the **Tracks Registry** file exists and is not empty. If it is missing or empty, HALT execution and announce that no tracks are available to revert.
+    -   **Health Check (Existence Only):** You MUST verify that the **Tracks Registry** file exists and is not empty via a directory listing or stat check. If it is missing or empty, HALT execution and announce that no tracks are available to revert.
+    -   **Context Isolation Note:** The contents of the **Tracks Registry** and every track's `plan.md` are exclusively consumed inside the subagent dispatches defined in Section 2 (Guided Selection) and Section 3 (Git Investigation). The orchestrator must operate purely on paths, never on the file payloads.
 
 ---
 

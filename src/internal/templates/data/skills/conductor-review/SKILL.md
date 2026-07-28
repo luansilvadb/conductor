@@ -42,7 +42,16 @@ Before starting the review process, you MUST locate and read the project's found
     -   **Tech Stack** (`tech-stack.md`)
     -   **Workflow** (`workflow.md`)
     -   **Product Guidelines** (`product-guidelines.md`)
-    -   **Health Check:** You MUST verify that every linked file actually exists. If ANY of these core files are missing, HALT immediately. Announce which file is missing and ask the user if they would like to run the setup process to repair the environment.
+    -   **Health Check (Existence Only):** You MUST verify that every linked file
+        exists on disk. Do this via directory listing or a stat check — **do
+        NOT** read the file payloads inline. If ANY core file is missing, HALT
+        immediately, announce which file is missing, and ask the user if they
+        would like to run the setup process to repair the environment.
+    -   **Context Isolation Note:** The contents of `workflow.md`,
+        `product.md`, `tech-stack.md`, and `product-guidelines.md` are
+        exclusively consumed inside the subagent dispatches defined in Section
+        2. The orchestrator must operate purely on paths, never on the file
+        payloads.
 
 ---
 
@@ -75,52 +84,78 @@ Before starting the review process, you MUST locate and read the project's found
     -   Read the track's `plan.md`.
     -   **Extract Commits:** Parse `plan.md` to find recorded git commit hashes (usually in the "Completed" tasks or "History" section).
     -   **Determine Revision Range:** Identify the start (first commit parent) and end (last commit).
-3.  **Load and Analyze Changes (Smart Chunking):**
-    -   **Volume Check:** Run `git diff --shortstat <revision_range> -- . ':!conductor'` first.
-    -   **Strategy Selection:**
-        -   **Small/Medium Changes (< 300 lines):**
-            -   Run `git diff <revision_range> -- . ':!conductor'` to get the full context in one go.
-            -   Proceed to "Analyze and Verify".
-        -   **Large Changes (> 300 lines):**
-            -   **Confirm:** Ask the user for confirmation using a **Yes/No question** to proceed with a large review (explaining that it involves >300 lines of changes and will use 'Iterative Review Mode' which may take longer).
-            -   **List Files:** Run `git diff --name-only <revision_range> -- . ':!conductor'`.
-            -   **Iterate (Subagent Delegation, dispatch point):** This is a parallel-safe dispatch point — per-file diffs are independent of one another. Dispatch them in parallel using the native `Task` tool with `subagent_type=general_purpose_task`, **one subagent per source file** (ignore locks/assets). Each subagent runs `git diff <revision_range> -- <file_path>`, performs the "Analyze and Verify" checks (2.3) on that file only, and returns its findings in the Section 2.4 finding format; it **must not write any files**. The orchestrator **aggregates all findings** into the final report. If no native `Task` tool is available, fall back to iterating the files yourself, one at a time:
-                1.  Run `git diff <revision_range> -- <file_path>`.
-                2.  Perform the "Analyze and Verify" checks on this specific chunk.
-                3.  Store findings in your temporary memory.
-            -   **Aggregate:** Synthesize all file-level findings (yours or the subagents') into the final report.
+3.  **Load and Analyze Changes (Unified Subagent Dispatch):** The full diff
+    NEVER enters the orchestrator context, regardless of size. The volume check
+    below only selects the dispatch shape (single vs. parallel); it never gates
+    an inline read.
 
-### 2.3 Analyze and Verify
-**Perform the following checks on the retrieved diff:**
+    -   **Volume Check:** Run `git diff --shortstat <revision_range> -- . ':!conductor'`
+        first. This is the ONLY diff command the orchestrator runs directly.
+    -   **Dispatch Shape:**
+        -   **Small/Medium Changes (< 300 lines):** Dispatch a **single**
+            subagent covering the whole range.
+        -   **Large Changes (> 300 lines):** Ask the user for confirmation using
+            a **Yes/No question** (explaining >300 lines, 'Iterative Review
+            Mode'). On approval, run `git diff --name-only <revision_range> -- . ':!conductor'`
+            **inside the subagent prompt** (not inline), then dispatch
+            **one subagent per source file** in parallel (ignore
+            locks/assets).
+    -   **Dispatch:** Call the native `Task` tool with
+        `subagent_type=general_purpose_task`, passing a closed prompt with: the
+        `<revision_range>`, the project root, the file path (or the
+        `--name-only` rule for large sets), the paths to `plan.md`/`spec.md`,
+        the rules array returned by §2.2.1, and the Analyze-and-Verify
+        specification in §2.3 as the subagent's instruction set.
+    -   **Subagent Constraints:** MAY run `git diff` for its assigned scope. MAY
+        read source files. MUST NOT commit, write any file, or interact with the
+        user. Receives no prior conversation history. Returns findings in the
+        Section 2.4 finding format.
+    -   **Condensed Return Schema (the ONLY thing the orchestrator absorbs per
+        subagent):**
+        `{ findings: [{ severity, title, file, lines, context, suggestion_diff }], coverage_ok: bool }`
+    -   **Aggregate:** Synthesize all returned findings into the final report.
+    -   **Fallback:** If no native `Task` tool is available, iterate the files
+        yourself one at a time, run the §2.3 checks, store only the findings
+        (not the diff) in working memory, and explicitly discard each diff
+        before processing the next file.
 
-1.  **Intent Verification:** Does the code actually implement what the `plan.md` (and `spec.md` if available) asked for?
+### 2.3 Analyze and Verify (Subagent Specification)
+**This section is the instruction set executed by the subagents dispatched in
+§2.2.3. The orchestrator does NOT perform these checks inline.**
+
+1.  **Intent Verification:** Does the code actually implement what the `plan.md`
+    (and `spec.md` if available) asked for?
 2.  **Style Compliance:**
     -   Does it follow `product-guidelines.md`?
     -   Does it strictly follow `conductor/code_styleguides/*.md`?
 3.  **Correctness & Safety:**
     -   Look for bugs, race conditions, null pointer risks.
-    -   **Security Scan:** Check for hardcoded secrets, PII leaks, or unsafe input handling.
-4. **Testing:**
-    -   Are there new tests?
+    -   **Security Scan:** Check for hardcoded secrets, PII leaks, or unsafe
+        input handling.
+4.  **Static Testing Checks (per-file):**
+    -   Are there new tests alongside the source change?
     -   Do the changes look like they are covered by existing tests?
-    -   *Action:* **Execute the test suite automatically (Subagent Dispatch).**
-        Delegate execution to a subagent so the full test output stays out of
-        the orchestrator context.
-        -   **Dispatch:** Call the native `Task` tool with
-            `subagent_type=general_purpose_task`, passing a closed prompt with
-            the inferred test command (e.g., `npm test`, `pytest`, `go test`)
-            and the project root.
-        -   **Subagent Constraints:** MAY run the test command. MUST NOT commit.
-            MUST NOT modify control files (`plan.md`, `tracks.md`, `index.md`,
-            `product.md`, `tech-stack.md`). MUST NOT interact with the user.
-            Receives no prior conversation history.
-        -   **Condensed Return Schema (the ONLY thing the orchestrator
-            absorbs):**
-            `{ status: "passed" | "failed", total: N, failed: [...], summary: "..." }`
-        -   **Fallback:** If no native `Task` tool is available, execute the
-            suite inline and analyze the output yourself.
+    -   Return `coverage_ok: false` if a code file lacks a matching test.
 5.  **Skill-Specific Checks:**
-    -   If specific skills are installed (e.g. GCP), verify compliance with their best practices.
+    -   If specific skills are installed (e.g. GCP), verify compliance with
+        their best practices.
+
+**Orchestrator-Side Test Execution (Subagent Dispatch):** Separate from the
+per-file analysis, the orchestrator dispatches ONE test-suite execution so the
+full test output never enters its context.
+
+-   **Dispatch:** Call the native `Task` tool with
+    `subagent_type=general_purpose_task`, passing a closed prompt with the
+    inferred test command (e.g., `npm test`, `pytest`, `go test`) and the
+    project root.
+-   **Subagent Constraints:** MAY run the test command. MUST NOT commit. MUST
+    NOT modify control files (`plan.md`, `tracks.md`, `index.md`, `product.md`,
+    `tech-stack.md`). MUST NOT interact with the user. Receives no prior
+    conversation history.
+-   **Condensed Return Schema (the ONLY thing the orchestrator absorbs):**
+    `{ status: "passed" | "failed", total: N, failed: [...], summary: "..." }`
+-   **Fallback:** If no native `Task` tool is available, execute the suite
+    inline, extract the schema fields, then discard the raw output.
 
 ### 2.4 Output Findings
 **Format your output strictly as follows:**

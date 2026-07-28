@@ -118,26 +118,39 @@ that also concludes a phase in `plan.md`.
 1.  **Announce Protocol Start:** Inform the user that the phase is complete and
     the verification and checkpointing protocol has begun.
 
-2.  **Ensure Test Coverage for Phase Changes:**
+2.  **Ensure Test Coverage for Phase Changes (Subagent Dispatch):**
+    Delegate the test-coverage verification and gap-filling to a subagent so
+    the `git diff` output, file-extension analysis, and existing-test
+    inspection never enter the orchestrator context.
 
-    -   **Step 2.1: Determine Phase Scope:** To identify the files changed in
-        this phase, you must first find the starting point. Read `plan.md` to
-        find the Git commit SHA of the *previous* phase's checkpoint. If no
-        previous checkpoint exists, the scope is all changes since the first
-        commit.
-    -   **Step 2.2: List Changed Files:** Execute `git diff --name-only
-        <previous_checkpoint_sha> HEAD` to get a precise list of all files
-        modified during this phase.
-    -   **Step 2.3: Verify and Create Tests:** For each file in the list:
-        -   **CRITICAL:** First, check its extension. Exclude non-code files
-            (e.g., `.json`, `.md`, `.yaml`).
+    -   **Step 2.1: Determine Phase Scope (Orchestrator-Side):** Read `plan.md`
+        inline to find the Git commit SHA of the *previous* phase's checkpoint.
+        If no previous checkpoint exists, the scope is all changes since the
+        first commit. This is the ONLY inline read in this step.
+    -   **Step 2.2: Dispatch:** Call the native `Task` tool with
+        `subagent_type=general_purpose_task`, passing a closed prompt with only:
+        the `<previous_checkpoint_sha>` (or first-commit fallback), the project
+        root, the path to this phase's section in `plan.md`, and the rules
+        below.
+    -   **Subagent Constraints:** MAY run `git diff --name-only` and read source
+        files / existing test files. MAY create missing test files. MUST NOT
+        commit. MUST NOT modify control files (`plan.md`, `tracks.md`,
+        `index.md`, `product.md`, `tech-stack.md`). MUST NOT interact with the
+        user. Receives no prior conversation history. Rules to enforce:
+        -   Run `git diff --name-only <previous_checkpoint_sha> HEAD` to list
+            phase changes.
+        -   **CRITICAL:** Exclude non-code files (e.g., `.json`, `.md`,
+            `.yaml`).
         -   For each remaining code file, verify a corresponding test file
-            exists.
-        -   If a test file is missing, you **must** create one. Before writing
-            the test, **first, analyze other test files in the repository to
-            determine the correct naming convention and testing style.** The new
-            tests **must** validate the functionality described in this phase's
-            tasks (`plan.md`).
+            exists. If missing, **first** analyze other test files in the repo
+            to learn the naming convention and testing style, then create one
+            validating the functionality described in the phase's `plan.md`
+            tasks.
+    -   **Condensed Return Schema (the ONLY thing the orchestrator absorbs):**
+        `{ created_tests: [path], skipped: [path], missing: [path], notes: "..." }`
+    -   **Fallback:** If no native `Task` tool is available, execute the
+        diff + verification + creation inline, then explicitly discard the diff
+        output and file listing from working memory before proceeding.
 
 3. **Execute Automated Tests with Proactive Debugging:**
 
@@ -165,15 +178,28 @@ that also concludes a phase in `plan.md`.
     - If the subagent reports persistent failure after 2 attempts, you **must
         stop**, report the condensed failure to the user, and ask for guidance.
 
-4.  **Propose a Detailed, Actionable Manual Verification Plan:**
+4.  **Propose a Detailed, Actionable Manual Verification Plan (Subagent
+    Dispatch):** Delegate the plan drafting to a subagent so the contents of
+    `product.md`, `product-guidelines.md`, and `plan.md` never enter the
+    orchestrator context.
 
-    -   **CRITICAL:** To generate the plan, first analyze `product.md`,
-        `product-guidelines.md`, and `plan.md` to determine the user-facing
-        goals of the completed phase.
-    -   You **must** generate a step-by-step plan that walks the user through
-        the verification process, including any necessary commands and specific,
-        expected outcomes.
-    -   The plan you present to the user **must** follow this format:
+    -   **Dispatch:** Call the native `Task` tool with
+        `subagent_type=general_purpose_task`, passing a closed prompt with only:
+        the paths to `product.md`, `product-guidelines.md`, the completed
+        phase's section in `plan.md`, and the project root.
+    -   **Subagent Constraints:** Read-only. MUST read the three files, derive
+        the user-facing goals of the completed phase, and generate a
+        step-by-step manual verification plan (commands + specific expected
+        outcomes). MUST NOT commit, write any file, or interact with the user.
+        Receives no prior conversation history.
+    -   **Condensed Return Schema (the ONLY thing the orchestrator absorbs):**
+        `{ steps: [{ action, command, expected_outcome }], kind: "frontend" | "backend" | "fullstack" }`
+    -   **Fallback:** If no native `Task` tool is available, read the three
+        files inline, draft the plan, then explicitly discard their contents
+        from working memory after producing the plan.
+    -   **Presentation (Orchestrator-Side):** Render the returned `steps`
+        following the format below, adapted to `kind`. The orchestrator
+        **must not** re-read the source files to produce this output.
 
         **For a Frontend Change:** ``` The automated tests have passed. For
         manual verification, please follow these steps:

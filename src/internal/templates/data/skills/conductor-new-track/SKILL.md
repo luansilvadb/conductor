@@ -36,7 +36,17 @@ Before starting the planning process, you MUST locate and read the project's fou
     -   **Product Definition** (`product.md`)
     -   **Tech Stack** (`tech-stack.md`)
     -   **Workflow** (`workflow.md`)
-    -   **Health Check:** You MUST verify that every linked file actually exists. If ANY of these core files are missing, HALT immediately. Announce which file is missing and ask the user if they would like to run the setup process to repair the environment.
+    -   **Health Check (Existence Only):** You MUST verify that every linked file
+        exists on disk. Do this via directory listing or a stat check — **do
+        NOT** read the file payloads inline. If ANY of these core files are
+        missing, HALT immediately. Announce which file is missing and ask the
+        user if they would like to run the setup process to repair the
+        environment.
+    -   **Context Isolation Note:** The contents of `workflow.md`,
+        `product.md`, and `tech-stack.md` are exclusively consumed inside the
+        subagent dispatches defined in this skill (e.g., plan drafting in §2.3).
+        The orchestrator must operate purely on paths, never on the file
+        payloads.
 
 ---
 

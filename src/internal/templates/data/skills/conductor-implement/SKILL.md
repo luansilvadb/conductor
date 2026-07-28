@@ -34,7 +34,16 @@ Before starting the implementation process, you MUST locate and read the project
     -   **Product Definition** (`product.md`)
     -   **Tech Stack** (`tech-stack.md`)
     -   **Workflow** (`workflow.md`)
-    -   **Health Check:** You MUST verify that every linked file actually exists. If ANY of these core files are missing, HALT immediately. Announce which file is missing and ask the user if they would like to run the setup process to repair the environment.
+    -   **Health Check (Existence Only):** You MUST verify that every linked file
+        exists on disk. Do this via directory listing or a stat check — **do
+        NOT** read the file payloads inline. If ANY of these core files are
+        missing, HALT immediately. Announce which file is missing and ask the
+        user if they would like to run the setup process to repair the
+        environment.
+    -   **Context Isolation Note:** The contents of `workflow.md`,
+        `product.md`, and `tech-stack.md` are exclusively consumed inside the
+        subagent dispatches defined in this skill. The orchestrator must
+        operate purely on paths, never on the file payloads.
 
 ---
 
@@ -110,20 +119,23 @@ Adhere to this sequence to update project-level documentation based on the compl
 
 2.  **Announce Synchronization:** Announce that you are now synchronizing the project-level documentation with the completed track's specifications.
 
-3.  **Load Track Specification:** Read the track's **Specification**.
+3.  **Load Track Specification:** Read the track's **Specification**. (Required
+    inline because the orchestrator must present it to the impact-analysis
+    subagent; keep it scoped to this single file.)
 
-4.  **Load Project Documents:**
-    -   Locate and read:
+4.  **Resolve Project Document Paths (No Payload Read):**
+    -   Resolve the paths to (do **NOT** read their contents inline):
         -   **Product Definition**
         -   **Tech Stack**
         -   **Product Guidelines**
+    -   These payloads are consumed exclusively by the subagent in step 5.
 
 5.  **Analyze and Update (Subagent Dispatch for Impact Analysis):** Delegate the impact analysis to a subagent so the full cross-referencing of the specification against all project documents never enters the orchestrator context.
-    -   **Dispatch:** Call the native `Task` tool with `subagent_type=general_purpose_task`, passing a closed prompt with: the track's **Specification** content, and the contents of **Product Definition**, **Tech Stack**, and **Product Guidelines**.
-    -   **Subagent Constraints:** Read-only. MUST NOT commit, write any file, or interact with the user. Receives no prior conversation history. Must respect the strict-controlled rule for **Product Guidelines** (only flag if the spec explicitly describes branding/voice/tone changes).
+    -   **Dispatch:** Call the native `Task` tool with `subagent_type=general_purpose_task`, passing a closed prompt with: the track's **Specification** content (from step 3) and the **paths** to **Product Definition**, **Tech Stack**, and **Product Guidelines** (from step 4). The subagent reads them itself.
+    -   **Subagent Constraints:** Read-only. MUST read the three project documents from the provided paths. MUST NOT commit, write any file, or interact with the user. Receives no prior conversation history. Must respect the strict-controlled rule for **Product Guidelines** (only flag if the spec explicitly describes branding/voice/tone changes).
     -   **Condensed Return Schema (the ONLY thing the orchestrator absorbs):**
         `{ product_md: [{section, change_type, diff}], tech_stack: [{section, change_type, diff}], guidelines: [{section, change_type, diff}] }` — arrays are empty if no update is needed.
-    -   **Fallback:** If no native `Task` tool is available, perform the analysis inline following the same rules.
+    -   **Fallback:** If no native `Task` tool is available, read the three project documents inline, perform the analysis, then explicitly discard their payloads from working memory after producing the diffs.
     -   **Process Returned Diffs (Orchestrator-Side):** Using the schema returned by the subagent:
         a. **Update Product Definition:** If `product_md` is non-empty, present the proposed diffs to the user and ask for approval using a **Yes/No question**. Only after explicit confirmation, perform the file edits.
         b. **Update Tech Stack:** If `tech_stack` is non-empty, present the proposed diffs to the user and ask for approval using a **Yes/No question**. Only after explicit confirmation, perform the file edits.

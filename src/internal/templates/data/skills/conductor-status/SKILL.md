@@ -35,7 +35,16 @@ Before starting the status overview process, you MUST locate and read the projec
     -   **Product Definition** (`product.md`)
     -   **Tech Stack** (`tech-stack.md`)
     -   **Workflow** (`workflow.md`)
-    -   **Health Check:** You MUST verify that every linked file actually exists. If ANY of these core files are missing, HALT immediately. Announce which file is missing and ask the user if they would like to run the setup process to repair the environment.
+    -   **Health Check (Existence Only):** You MUST verify that every linked file
+        exists on disk. Do this via directory listing or a stat check — **do
+        NOT** read the file payloads inline. If ANY of these core files are
+        missing, HALT immediately. Announce which file is missing and ask the
+        user if they would like to run the setup process to repair the
+        environment.
+    -   **Context Isolation Note:** The contents of `tracks.md`, the track
+        `plan.md` files, `workflow.md`, `product.md`, and `tech-stack.md` are
+        exclusively consumed inside the subagent dispatch defined in §2.1. The
+        orchestrator must operate purely on paths, never on the file payloads.
 
 ---
 

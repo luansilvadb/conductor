@@ -14,13 +14,19 @@ export interface TemplateManager {
 }
 
 export class EmbeddedTemplateManager implements TemplateManager {
+  /** @internal Lazy cache — built once on first listAll() call. */
+  private _allCache: TemplateMeta[] | null = null;
+
   listAvailable(_tool: AIToolType): TemplateMeta[] {
     return this.listAll();
   }
 
   /** Lista todos os templates a partir dos dados embutidos no bundle. */
   listAll(): TemplateMeta[] {
-    return TEMPLATES.map((t) => toMeta(t));
+    if (!this._allCache) {
+      this._allCache = TEMPLATES.map((t) => toMeta(t));
+    }
+    return this._allCache;
   }
 
   getByName(name: string): TemplateMeta | undefined {

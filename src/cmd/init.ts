@@ -1,6 +1,7 @@
 import { Command } from 'commander';
 import { cwd } from 'node:process';
 import { existsSync, mkdirSync } from 'node:fs';
+import { select, isCancel } from '@clack/prompts';
 import { detectedResult, det, uiRenderer } from './root.js';
 import { AIToolType, parseToolFlag } from '../internal/detector/types.js';
 
@@ -55,8 +56,6 @@ export async function runInit(): Promise<boolean> {
 }
 
 export async function selectToolInteractively(): Promise<AIToolType> {
-  const { select, isCancel } = await import('@clack/prompts');
-
   const result = await select({
     message: 'Select your AI coding tool:',
     options: [

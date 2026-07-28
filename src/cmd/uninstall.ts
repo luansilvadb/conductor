@@ -101,11 +101,11 @@ function tryDetectNpm(ctx: InstallContext, binaryPath: string): InstallContext |
 
 function tryDetectGoInstall(ctx: InstallContext, binaryPath: string): InstallContext | null {
   try {
-    const goBin = execSync('go env GOPATH 2>nul || echo no-gopath', {
+    const goBin = execSync('go env GOPATH', {
       encoding: 'utf-8',
-      shell: 'cmd.exe',
+      stdio: ['ignore', 'pipe', 'ignore'],
     }).trim();
-    if (goBin && goBin !== 'no-gopath') {
+    if (goBin) {
       const goBinPath = join(goBin, 'bin');
       if (binaryPath && binaryPath.includes(goBinPath)) {
         return { ...ctx, method: 'go-install', goBinPath };

@@ -135,7 +135,13 @@ function generate() {
 
   for (const e of entries) {
     const relPath = e.abs.replace(/\\/g, '/');
-    const content = readFileSync(e.abs, 'utf-8');
+    let content;
+    try {
+      content = readFileSync(e.abs, 'utf-8');
+    } catch (err) {
+      console.warn(`[embed-templates] Skipping unreadable file: ${relPath} (${err.message})`);
+      continue;
+    }
     lines.push('  {');
     lines.push(`    sourcePath: ${JSON.stringify(relPath)},`);
     lines.push(`    category: ${JSON.stringify(e.category)},`);

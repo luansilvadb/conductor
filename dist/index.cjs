@@ -6207,12 +6207,17 @@ var init_manager = __esm({
     init_embedded();
     init_resolver();
     EmbeddedTemplateManager = class {
+      /** @internal Lazy cache — built once on first listAll() call. */
+      _allCache = null;
       listAvailable(_tool) {
         return this.listAll();
       }
       /** Lista todos os templates a partir dos dados embutidos no bundle. */
       listAll() {
-        return TEMPLATES.map((t) => toMeta(t));
+        if (!this._allCache) {
+          this._allCache = TEMPLATES.map((t) => toMeta(t));
+        }
+        return this._allCache;
       }
       getByName(name) {
         return this.listAll().find((t) => t.name === name || t.id === name);
@@ -7857,8 +7862,7 @@ async function runInit() {
   return true;
 }
 async function selectToolInteractively() {
-  const { select, isCancel } = await Promise.resolve().then(() => (init_dist2(), dist_exports));
-  const result = await select({
+  const result = await ie({
     message: "Select your AI coding tool:",
     options: [
       { label: "Cursor", value: "cursor" },
@@ -7867,7 +7871,7 @@ async function selectToolInteractively() {
       { label: "Trae", value: "trae" }
     ]
   });
-  if (isCancel(result)) return "unknown" /* Unknown */;
+  if (lD(result)) return "unknown" /* Unknown */;
   return parseToolFlag(result);
 }
 var import_node_process5, import_node_fs3;
@@ -7877,6 +7881,7 @@ var init_init = __esm({
     init_esm();
     import_node_process5 = require("node:process");
     import_node_fs3 = require("node:fs");
+    init_dist2();
     init_root();
     init_types();
   }
@@ -7892,7 +7897,7 @@ function outputSubdir(sourceDir, toolType) {
 }
 function getBaseDir(configDir, workingDir) {
   if (!configDir) return workingDir;
-  const base = configDir.replace(/\/commands$/, "");
+  const base = configDir.replace(/\\/g, "/").replace(/\/commands$/, "");
   return (0, import_node_path3.join)(workingDir, base);
 }
 var import_node_path3, FlatMarkdownStrategy;
@@ -8249,11 +8254,11 @@ function tryDetectNpm(ctx, binaryPath) {
 }
 function tryDetectGoInstall(ctx, binaryPath) {
   try {
-    const goBin = (0, import_node_child_process.execSync)("go env GOPATH 2>nul || echo no-gopath", {
+    const goBin = (0, import_node_child_process.execSync)("go env GOPATH", {
       encoding: "utf-8",
-      shell: "cmd.exe"
+      stdio: ["ignore", "pipe", "ignore"]
     }).trim();
-    if (goBin && goBin !== "no-gopath") {
+    if (goBin) {
       const goBinPath = (0, import_node_path4.join)(goBin, "bin");
       if (binaryPath && binaryPath.includes(goBinPath)) {
         return { ...ctx, method: "go-install", goBinPath };

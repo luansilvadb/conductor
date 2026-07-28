@@ -27,7 +27,9 @@ function outputSubdir(sourceDir: string, toolType: AIToolType): string {
  */
 function getBaseDir(configDir: string, workingDir: string): string {
   if (!configDir) return workingDir;
-  const base = configDir.replace(/\/commands$/, '');
+  // Normalize to forward slashes before stripping the `/commands` suffix
+  // so the regex works on both Windows (backslash) and Unix.
+  const base = configDir.replace(/\\/g, '/').replace(/\/commands$/, '');
   return join(workingDir, base);
 }
 

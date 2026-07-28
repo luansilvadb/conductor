@@ -80,8 +80,8 @@ Adhere to this sequence to execute the selected track.
     -   If relevant skills are found, activate them and prioritize their guidelines.
 
 4.  **Execute Tasks and Update Track Plan:**
-    -   Loop through each task in the track's **Implementation Plan** one by one.
-    -   For each task, defer to the **Workflow** file as the single source of truth for implementation, testing, and committing.
+    -   **Subagent Delegation (dispatch point):** Before looping, scan the remaining tasks in the **Implementation Plan** for independence (no shared files, no sequential/logical dependency between them). If 2+ independent tasks are found, this qualifies as a parallel-safe dispatch point — follow the Constitution's Native Subagent Dispatch protocol. Each dispatched subagent implements exactly one task (steps in this section 3.4, scoped to that task, using the loaded Workflow file), and returns its result (files touched, tests written, pass/fail) without committing. If no native subagent tool is available, or tasks are interdependent, skip this and proceed sequentially.
+    -   Loop through each task in the track's **Implementation Plan** one by one (dispatching or executing directly per the above). For each task, defer to the **Workflow** file as the single source of truth for implementation, testing, and committing — the orchestrator performs the actual commit for each task in plan order, even when the underlying work was done in parallel by subagents.
     -   Ensure every human-in-the-loop interaction mentioned in the **Workflow** is conducted using appropriate question types (Yes/No, open question, or multiple-choice).
 
 5.  **Finalize Track:**

@@ -85,11 +85,11 @@ Before starting the review process, you MUST locate and read the project's found
         -   **Large Changes (> 300 lines):**
             -   **Confirm:** Ask the user for confirmation using a **Yes/No question** to proceed with a large review (explaining that it involves >300 lines of changes and will use 'Iterative Review Mode' which may take longer).
             -   **List Files:** Run `git diff --name-only <revision_range> -- . ':!conductor'`.
-            -   **Iterate:** For each source file (ignore locks/assets):
+            -   **Iterate (Subagent Delegation, dispatch point):** This is a parallel-safe dispatch point — per-file diffs are independent of one another. Follow the Constitution's Native Subagent Dispatch protocol: for each source file (ignore locks/assets), dispatch one subagent to run `git diff <revision_range> -- <file_path>` and perform the "Analyze and Verify" checks (2.3) on that file only, returning its findings in the Section 2.4 finding format without writing any files. If no native subagent tool is available, fall back to iterating the files yourself, one at a time:
                 1.  Run `git diff <revision_range> -- <file_path>`.
                 2.  Perform the "Analyze and Verify" checks on this specific chunk.
                 3.  Store findings in your temporary memory.
-            -   **Aggregate:** Synthesize all file-level findings into the final report.
+            -   **Aggregate:** Synthesize all file-level findings (yours or the subagents') into the final report.
 
 ### 2.3 Analyze and Verify
 **Perform the following checks on the retrieved diff:**

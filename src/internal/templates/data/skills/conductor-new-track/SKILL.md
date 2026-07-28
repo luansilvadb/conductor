@@ -56,7 +56,7 @@ Adhere to this sequence precisely.
 
 ### 2.1 Track Description & Classification
 
-1.  **Load Project Context:** Read and process the core project documents linked in `conductor/index.md`.
+1.  **Load Index (Health Check Only):** The handshake in §1 already verified `conductor/index.md` existence and all linked files. No additional document reads are needed here — the `product.md` and `tech-stack.md` payloads are consumed exclusively by the Question Seeds subagent in §2.2.
 2.  **Acquire Track Description:**
     -   If the task description was not provided in the initial request, ask the
         user an **open question** to provide a brief description of the track
@@ -74,8 +74,18 @@ Adhere to this sequence precisely.
 2.  **Strategic Action:** Explain that the `spec.md` is the "Source of Truth" for the feature. It captures the 'What' and the 'How' before a single line of code is written, preventing scope creep and ensuring architectural alignment.
 
 3.  **Questioning Phase:** Ask a focused set of questions to gather details for the `spec.md`. Tailor questions based on the track type.
+
+    *   **Context-Aware Question Seeds (Subagent Dispatch):** Delegate the cross-referencing of the track description against **Product Definition** and **Tech Stack** to a subagent so their payloads never enter the orchestrator context.
+        -   **Dispatch:** Call the native `Task` tool with `subagent_type=general_purpose_task`, passing a closed prompt with: the track description, the track type (from §2.1), and the **paths** to `product.md` and `tech-stack.md` (resolved via `conductor/index.md`).
+        -   **Subagent Constraints:** Read-only. MUST read `product.md` and `tech-stack.md` from the provided paths and cross-reference them against the track description to generate context-aware question seeds. MUST NOT commit, write any file, or interact with the user. Receives no prior conversation history.
+        -   **Condensed Return Schema (the ONLY thing the orchestrator absorbs):**
+            `{ question_seeds: [{ topic, suggested_options: ["...","...","..."], rationale: "..." }] }`
+            -   Length: 3-4 seeds for MVP/Bootstrap and FEATURE types; 2-3 for Bug/Chore.
+            -   Each `suggested_options` array MUST contain 2-4 plausible options derived from the project context.
+        -   **Fallback:** If no native `Task` tool is available, read `product.md` and `tech-stack.md` inline, derive the seeds, then explicitly discard their contents from working memory after producing the seeds.
+
     *   **General Guidelines:**
-        *   Refer to information in **Product Definition**, **Tech Stack**, etc., to ask context-aware questions.
+        *   Use the `question_seeds` returned above as the basis for questions. Do NOT re-read the project documents.
         *   Provide a brief explanation and clear examples for each question.
         *   **Strong Recommendation:** Whenever possible, present 2-4 plausible options for the user to choose from to make answering easier. Always imply or provide an "Other" option.
     *   **Interaction Flow:**
@@ -90,8 +100,15 @@ Adhere to this sequence precisely.
     *   **If SOMETHING ELSE (Bug, Chore, etc.):**
         *   Ask 2-3 relevant questions to obtain necessary details (e.g., reproduction steps for bugs, specific scope for chores, or success criteria).
     *   **Loop Control (CRITICAL):** At the end of your questioning phase, ALWAYS ask: *"Is this sufficient information to draft the spec, or would you like me to ask more questions to clarify further?"* Repeat the Q&A loop until the user confirms they are ready to proceed.
+    *   **Response Aggregation (CRITICAL — Handoff Boundary):** After the user confirms readiness, collect **all user answers** from the Q&A loop into a single `gathered_responses` array (string entries, one per question, in order asked). This array is the ONLY thing the orchestrator retains from the questioning phase — the original `question_seeds` (subagent output from step 3) MUST be explicitly discarded from working memory once `gathered_responses` is formed.
 
-4.  **Draft `spec.md`:** Once sufficient information is gathered, draft the content for the track's `spec.md` file, including sections like Overview, Functional Requirements, Non-Functional Requirements (if any), Acceptance Criteria, and Out of Scope.
+4.  **Draft `spec.md` (Subagent Dispatch):** Delegate the drafting of the specification to a subagent so the synthesis of answers into structured prose never enters the orchestrator context.
+    -   **Dispatch:** Call the native `Task` tool with `subagent_type=general_purpose_task`, passing a closed prompt with: the `gathered_responses` array (from the questioning phase), the track description, and the track type (from §2.1).
+    -   **Subagent Constraints:** Read-only. MUST synthesize `gathered_responses` into a structured `spec.md` document (sections: Overview, Functional Requirements, Non-Functional Requirements, Acceptance Criteria, Out of Scope). MUST NOT read `product.md`/`tech-stack.md` (context-aware framing was already done via the seeds in step 3). MUST NOT commit, write any file, or interact with the user. Receives no prior conversation history.
+    -   **Condensed Return Schema (the ONLY thing the orchestrator absorbs):**
+        `{ spec_md: "<full spec.md content as a single string>" }`
+        -   **Orchestrator Note:** The returned `spec_md` is a DRAFT. It is NOT written to disk yet — step 5 below gates it.
+    -   **Fallback:** If no native `Task` tool is available, synthesize the spec inline from `gathered_responses`, then explicitly discard the responses array from working memory after producing `spec_md`.
 
 5.  **User Confirmation:**
     -   Present the drafted Specification to the user for review.
@@ -105,14 +122,14 @@ Adhere to this sequence precisely.
 2.  **Strategic Action:** Explain that the `plan.md` is the execution roadmap. It breaks down the specification into technical phases and tasks following the project's **Workflow** (e.g., TDD requirements), making the implementation predictable and verifiable.
 
 3.  **Generate Plan (Subagent Dispatch):** Delegate the plan drafting to a subagent so the verbose `workflow.md` contents and intermediate structuring never enter the orchestrator context.
-    *   **Dispatch:** Call the native `Task` tool with `subagent_type=general_purpose_task`, passing a closed prompt with: the approved `spec.md` content and the path to the **Workflow** document (linked in `conductor/index.md`).
+    *   **Dispatch:** Call the native `Task` tool with `subagent_type=general_purpose_task`, passing a closed prompt with: the approved `spec_md` content (returned by §2.2 step 4, possibly revised) and the **path** to the **Workflow** document (linked in `conductor/index.md`). Do NOT pass the path to `spec.md` on disk (it may not exist yet) — pass the string content directly.
     *   **Subagent Constraints:** Read-only. MUST read the **Workflow** to extract its methodology (e.g., TDD ordering, checkpoint rules). MUST generate a hierarchical `plan.md` featuring Phases, Tasks, and Sub-tasks with status markers `[ ]` on EVERY task and sub-task using the format:
         -   Parent Task: `- [ ] Task: ...`
         -   Sub-task: `- [ ] ...`
     *   **Phase Checkpoints (Fidelity Check):** If the **Workflow** defines a verification protocol, append a final meta-task to every Phase: `- [ ] Task: Phase Verification & Checkpoint (Refer to workflow.md)`.
     *   **Condensed Return Schema (the ONLY thing the orchestrator absorbs):**
         `{ plan_md: "<full plan.md content as a single string>" }`
-    *   **Fallback:** If no native `Task` tool is available, read `spec.md` and the **Workflow** inline and draft the plan yourself following the same rules.
+    *   **Fallback:** If no native `Task` tool is available, read the **Workflow** inline and draft the plan yourself from the approved `spec_md` content following the same rules. Explicitly discard the `workflow.md` payload from working memory after producing `plan_md`.
     *   **Orchestrator Note:** The returned `plan_md` is a DRAFT. The orchestrator MUST present it to the user for approval in step 4 below before writing it to disk.
 
 4.  **User Confirmation:**
@@ -152,7 +169,13 @@ Adhere to this sequence precisely.
 2.  **Resolve Tracks Path:**
     -   Identify the tracks directory and registry using the links provided in `conductor/index.md`.
     -   **Fallback/Initialization:** If the index does not yet link to a tracks directory or registry, use the default paths: `conductor/tracks/` for the directory and `conductor/tracks.md` for the registry.
-    -   **Collision Check:** List existing track directories in the resolved path. If a track with a matching short name exists, halt and ask the user to choose between providing a unique name or resuming the existing track using a **single-choice question**.
+    -   **Collision Check (Subagent Dispatch):** Delegate the listing and name-matching to a subagent so directory enumeration never enters the orchestrator context.
+        -   **Dispatch:** Call the native `Task` tool with `subagent_type=general_purpose_task`, passing a closed prompt with: the resolved tracks directory path and the proposed track short name.
+        -   **Subagent Constraints:** Read-only. MUST list the subdirectories of the tracks directory and check if any matches the proposed short name (case-insensitive). MUST NOT commit, write any file, or interact with the user. Receives no prior conversation history.
+        -   **Condensed Return Schema (the ONLY thing the orchestrator absorbs):**
+            `{ collision: bool, existing_path: "..." | null, failed_files: [...] }`
+        -   **Fallback:** If no native `Task` tool is available, enumerate the directories inline, extract the schema, then explicitly discard the listing from working memory after producing the schema.
+        -   **If `collision` is `true`:** HALT and ask the user to choose between providing a unique name or resuming the existing track at `existing_path` using a **single-choice question**.
 
 3.  **Generate Track ID & Directory:**
     -   Create a unique Track ID (e.g., `shortname_YYYYMMDD`).
@@ -160,7 +183,7 @@ Adhere to this sequence precisely.
 
 4.  **Write Track Artifacts:**
     -   **Metadata:** Create `metadata.json` with the track ID, type, status ("new"), and timestamps.
-    -   **Documents:** Write the confirmed `spec.md` and `plan.md` to the track directory.
+    -   **Documents:** Write the approved `spec_md` and `plan_md` strings (held in orchestrator working memory from §2.2 step 4 and §2.3 step 3) to the track directory as `spec.md` and `plan.md` files. Do NOT re-read any subagent output — use the strings already in memory.
     -   **Track Handshake:** Create `conductor/tracks/<track_id>/index.md` linking to the local spec, plan, and metadata.
 
 5.  **Update Tracks Registry:**

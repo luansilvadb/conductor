@@ -64,11 +64,15 @@ Before starting the review process, you MUST locate and read the project's found
     -   Check if the user provided specific arguments or a track name for the review in their initial request.
     -   If arguments were provided, use them as the target scope.
 
-2.  **Auto-Detect Scope:**
-    -   If no input was provided, read the **Tracks Registry**.
-    -   Look for a track marked as `[~]` (In Progress).
-    -   **If one exists:** Ask the user for confirmation using a **Yes/No question** to proceed with reviewing that specific track.
-    -   **If no track is in progress, or the user declines:** Ask the user to clarify what they would like to review by asking an **open question**, suggesting options like entering a specific track name or 'current' for uncommitted changes.
+2.  **Auto-Detect Scope (Subagent Dispatch):** Delegate the parsing of the **Tracks Registry** to a subagent so its payload never enters the orchestrator context.
+    -   Resolve the **path** (do NOT read payload) to the **Tracks Registry** via `conductor/index.md` (default `conductor/tracks.md`).
+    -   **Dispatch:** Call the native `Task` tool with `subagent_type=general_purpose_task`, passing a closed prompt with: the resolved path to the **Tracks Registry**.
+    -   **Subagent Constraints:** Read-only. MUST read the registry, identify all tracks, parse status markers, and find ONE track marked as `[~]` (In Progress). MUST NOT commit, write any file, or interact with the user. Receives no prior conversation history.
+    -   **Condensed Return Schema (the ONLY thing the orchestrator absorbs):**
+        `{ in_progress_track: { id, description, path } | null, failed_files: [...] }`
+    -   **Fallback:** If no native `Task` tool is available, read the registry inline, extract the schema, then explicitly discard its payload from working memory after producing the schema.
+    -   **If `in_progress_track` is not null:** Ask the user for confirmation using a **Yes/No question** to proceed with reviewing that specific track.
+    -   **If `in_progress_track` is null, or the user declines:** Ask the user to clarify what they would like to review by asking an **open question**, suggesting options like entering a specific track name or 'current' for uncommitted changes.
 
 3.  **Confirm Scope:** Ensure you and the user agree on what is being reviewed by asking for confirmation using a **Yes/No question**.
 
@@ -78,12 +82,17 @@ Before starting the review process, you MUST locate and read the project's found
     -   **Subagent Constraints:** Read-only. MUST: (a) read `product-guidelines.md` and `tech-stack.md` and extract their rule statements; (b) if `conductor/code_styleguides/` exists, list and read ALL `.md` files within it and extract each rule as a structured entry; (c) if either skills directory exists, list the subdirectories to identify installed skills across both paths. MUST NOT commit, write any file, or interact with the user. Receives no prior conversation history.
     -   **Condensed Return Schema (the ONLY thing the orchestrator absorbs):**
         `{ rules: [{ source, severity, statement }], installed_skills: [{ name, tier }] }` where `source` is the file path, `severity` is `high` for styleguides and `medium` otherwise, and `tier` is `workspace` or `extension`.
-    -   **Fallback:** If no native `Task` tool is available, read the files inline and extract the rules yourself following the same rules.
+    -   **Fallback:** If no native `Task` tool is available, read the files inline and extract the rules yourself following the same rules, then explicitly discard the payloads of ALL styleguide files, `product-guidelines.md`, and `tech-stack.md` from working memory after producing the schema.
     -   **Orchestrator Note:** Treat every entry in `rules` where `source` is under `code_styleguides/` as **High** severity (the **Law**). Use `installed_skills` to enable specialized feedback for matching domains (e.g., `gcp-*`).
-2.  **Load Track Context (if reviewing a track):**
-    -   Read the track's `plan.md`.
-    -   **Extract Commits:** Parse `plan.md` to find recorded git commit hashes (usually in the "Completed" tasks or "History" section).
-    -   **Determine Revision Range:** Identify the start (first commit parent) and end (last commit).
+2.  **Load Track Context (Subagent Dispatch):** Delegate the parsing of `plan.md` for commit SHAs to a subagent so its payload never enters the orchestrator context.
+    -   **Resolve Path:** Resolve the **path** (do NOT read payload) to the track's `plan.md` (check the track's `index.md` for links, or use the default `conductor/tracks/<track_id>/plan.md`).
+    -   **Dispatch:** Call the native `Task` tool with `subagent_type=general_purpose_task`, passing a closed prompt with: the resolved path to `plan.md`.
+    -   **Subagent Constraints:** Read-only. MUST read `plan.md`, find all recorded git commit hashes from "Completed" (`[x]`) tasks and any "History"/"checkpoint" sections. MUST derive the contiguous revision range from the earliest parent to the latest commit. MUST NOT commit, write any file, or interact with the user. Receives no prior conversation history.
+    -   **Condensed Return Schema (the ONLY thing the orchestrator absorbs):**
+        `{ revision_range: "<sha_start>..<sha_end>", checkpoint_shas: [...], failed_files: [...] }`
+        If `plan.md` could not be read, `failed_files` lists it; otherwise empty.
+    -   **Fallback:** If no native `Task` tool is available, read `plan.md` inline, extract the schema, then explicitly discard its payload from working memory after producing the schema.
+    -   **If `failed_files` is non-empty:** HALT and inform the user.
 3.  **Load and Analyze Changes (Unified Subagent Dispatch):** The full diff
     NEVER enters the orchestrator context, regardless of size. The volume check
     below only selects the dispatch shape (single vs. parallel); it never gates
@@ -217,21 +226,30 @@ full test output never enters its context.
         b. **Handle Track-Specific Changes:**
             i.   **Confirm with User:** Ask the user for confirmation using a **Yes/No question** if you should commit the uncommitted changes and update the track's plan.
             ii.  **If Yes:**
-                 - **Update Plan (Add Review Task):**
-                   - Read the track's `plan.md`.
-                   - Append a new phase (if it doesn't exist) and task to the end of the file.
-                   - **Format:**
+                 - **Append Review Fixes to Plan (Subagent Dispatch):** Delegate the read-and-append of `plan.md` to a subagent so its payload never enters the orchestrator context.
+                   - **Resolve Path:** Resolve the **path** (do NOT read payload) to the track's `plan.md`.
+                   - **Dispatch:** Call the native `Task` tool with `subagent_type=general_purpose_task`, passing a closed prompt with: the resolved path to `plan.md` and the Review Fixes section template:
                      ```markdown
                      ## Phase: Review Fixes
                      - [~] Task: Apply review suggestions
                      ```
-                 - **Commit Code:**
+                   - **Subagent Constraints:** Read-only + append. MUST read `plan.md`, append the Review Fixes section (if a Phase "Review Fixes" does not already exist — if it exists, only append the task), and return the full modified content. MUST NOT commit, write any file, or interact with the user. Receives no prior conversation history.
+                   - **Condensed Return Schema (the ONLY thing the orchestrator absorbs):**
+                     `{ updated_plan_md: "<full plan.md after append>", task_line_number: N, failed_files: [...] }`
+                     `task_line_number` is the line index of the `- [~] Task: Apply review suggestions` entry within `updated_plan_md` (for the SHA update dispatch below).
+                   - **Fallback:** If no native `Task` tool is available, read `plan.md` inline, append the section, then explicitly discard its payload from working memory after producing `updated_plan_md`.
+                   - **Write:** The orchestrator writes `updated_plan_md` to disk at the resolved `plan.md` path.
+                 - **Commit Code (Orchestrator-Side):**
                    - Stage all code changes related to the track (excluding `plan.md`).
                    - Commit with message: `fix(conductor): Apply review suggestions for track '<track_name>'`.
-                 - **Record SHA:**
-                   - Get the short SHA (first 7 characters) of the commit.
-                   - Update the task in `plan.md` to: `- [x] Task: Apply review suggestions <sha>`.
-                 - **Commit Plan Update:**
+                 - **Record SHA and Finalize Plan (Subagent Dispatch):** Delegate the task-status update to a subagent so `plan.md` is never re-read by the orchestrator.
+                   - **Dispatch:** Call the native `Task` tool with `subagent_type=general_purpose_task`, passing a closed prompt with: the resolved path to `plan.md`, the `task_line_number` from the previous dispatch, and the short SHA (first 7 characters) of the code commit.
+                   - **Subagent Constraints:** Read-only + targeted edit. MUST read `plan.md`, find the task at `task_line_number` (verifying it is still `- [~] Task: Apply review suggestions`), and update it to `- [x] Task: Apply review suggestions <sha>`. MUST NOT commit, write any file, or interact with the user. Receives no prior conversation history.
+                   - **Condensed Return Schema (the ONLY thing the orchestrator absorbs):**
+                     `{ updated_plan_md: "<full plan.md after SHA update>", failed_files: [...] }`
+                   - **Fallback:** If no native `Task` tool is available, read `plan.md` inline, perform the line update, then explicitly discard its payload from working memory after producing `updated_plan_md`.
+                   - **Write:** The orchestrator writes `updated_plan_md` to disk.
+                 - **Commit Plan Update (Orchestrator-Side):**
                    - Stage `plan.md`.
                    - Commit with message: `conductor(plan): Mark task 'Apply review suggestions' as complete`.
                  - **Announce Success:** "Review changes committed and tracked in the plan."

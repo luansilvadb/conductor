@@ -53,10 +53,14 @@ Adhere to this sequence to identify and select the track to be implemented.
 
 1.  **Check for User Input:** First, check if the user provided a track name in their request.
 
-2.  **Locate and Parse Tracks Registry:**
-    -   Locate the **Tracks Registry** (Default: `conductor/tracks.md`).
-    -   Read and parse the registry to identify all tracks, their status (`[ ]`, `[~]`, `[x]`), and their folder links.
-    -   **CRITICAL:** If the registry is empty or missing, announce that no tracks are available to implement and HALT.
+2.  **Locate and Parse Tracks Registry (Subagent Dispatch):** Delegate the parsing of the **Tracks Registry** to a subagent so its payload never enters the orchestrator context.
+    -   Resolve the **path** (do NOT read payload) to the **Tracks Registry** via `conductor/index.md` (default `conductor/tracks.md`).
+    -   **Dispatch:** Call the native `Task` tool with `subagent_type=general_purpose_task`, passing a closed prompt with: the resolved path to the **Tracks Registry**.
+    -   **Subagent Constraints:** Read-only. MUST read the registry, identify every track, parse its status marker (`[ ]`/`[~]`/`[x]`), and resolve its folder link to a path. MUST NOT commit, write any file, or interact with the user. Receives no prior conversation history.
+    -   **Condensed Return Schema (the ONLY thing the orchestrator absorbs):**
+        `{ tracks: [{ id, description, status: "pending" | "in_progress" | "completed", path }], registry_empty: bool }`
+    -   **Fallback:** If no native `Task` tool is available, read the registry inline, extract the schema, then explicitly discard its payload from working memory after producing the schema.
+    -   **CRITICAL:** If `registry_empty` is `true` or `tracks` is empty, announce that no tracks are available to implement and HALT.
 
 3.  **Select Track:**
     -   **If a track name was provided:**
@@ -80,29 +84,29 @@ Adhere to this sequence to execute the selected track.
     -   Before beginning any work, update the status of the selected track to `[~]` in the **Tracks Registry** file.
     -   Stage the file and commit: `chore(conductor): Mark track '<track_description>' as in progress`.
 
-3.  **Load Track Context:**
-    -   Identify the track folder from the tracks file to get the `<track_id>`.
-    -   Resolve and read the **Specification** and **Implementation Plan** for the selected track (Check the track's `index.md` for links, or use default paths).
-    -   Resolve and read the **Workflow** document (Check `conductor/index.md` for the link, or use default path).
-    -   If you fail to read any of these files, halt and inform the user.
-    -   Check for installed skills in `.agents/skills/` and `~/.agents/extensions/conductor/skills/`.
-    -   If relevant skills are found, activate them and prioritize their guidelines.
+3.  **Load Track Context (Subagent Dispatch — Task Plumber):** Delegate the parsing of the track's plan/spec/workflow and task classification to a subagent so their payloads never enter the orchestrator context.
+    -   **Identify Track Folder:** Resolve `<track_id>` via the tracks file. Resolve the **paths** (do NOT read payloads) to the track's **Specification** and **Implementation Plan** (check the track's `index.md` for links, or use default paths: `conductor/tracks/<track_id>/spec.md` and `conductor/tracks/<track_id>/plan.md`). Resolve the **path** to the **Workflow** document via `conductor/index.md` (default `conductor/workflow.md`).
+    -   **Dispatch:** Call the native `Task` tool with `subagent_type=general_purpose_task`, passing a closed prompt with: the resolved paths to `spec.md`, `plan.md`, and `workflow.md`, and the classification rules below.
+    -   **Subagent Constraints:** Read-only. MUST read `plan.md` to extract every task with its `task_id` (derived from heading/line position) and current status marker (`[ ]`/`[~]`/`[x]`). MUST read `spec.md` and `workflow.md` to derive scope hints and TDD ordering. MUST classify each pending task as **Independent**, **Complex**, or **Trivial**. MUST NOT commit, write any file, or interact with the user. Receives no prior conversation history.
+    -   **Condensed Return Schema (the ONLY thing the orchestrator absorbs):**
+        `{ tasks: [{ task_id, description, type: "independent" | "complex" | "trivial", scope_hint: "...", dependencies: [task_id] }], workflow_summary: "<one-line TDD/checkpoint rule>", failed_files: [...] }`
+        If any path could not be read, `failed_files` lists it; otherwise empty.
+    -   **Fallback:** If no native `Task` tool is available, read the three files inline, perform the classification, then explicitly discard their payloads from working memory after producing the schema.
+    -   **If `failed_files` is non-empty:** HALT and inform the user which file could not be read.
+    -   **Installed Skills Check:** Check for installed skills in `.agents/skills/` and `~/.agents/extensions/conductor/skills/`. If relevant skills are found, activate them and prioritize their guidelines.
 
 4.  **Execute Tasks and Update Track Plan:**
-    -   **Subagent Delegation (dispatch point):** Before looping, scan the remaining tasks in the **Implementation Plan** and classify each as:
-        -   **Independent:** No shared files, no sequential/logical dependency. Candidates for parallel dispatch.
-        -   **Complex:** Estimated to touch multiple files or produce substantial diffs (e.g., new modules, refactors). Candidates for isolated sequential dispatch.
-        -   **Trivial:** Small, single-file changes safe to execute inline.
-    -   **Dispatch Rules:**
-        -   If 2+ **Independent** tasks are found, dispatch them in parallel using the native `Task` tool with `subagent_type=general_purpose_task`, **one subagent per task**.
+    -   **Subagent Delegation (dispatch point):** Use the `tasks` array and `workflow_summary` returned by the Task Plumber in step 3 (the orchestrator no longer scans or classifies tasks inline). Dispatch according to each task's `type`:
+        -   If 2+ tasks of **Independent** type are found, dispatch them in parallel using the native `Task` tool with `subagent_type=general_purpose_task`, **one subagent per task**.
         -   For **Complex** tasks (whether independent or sequential), delegate each to its own subagent so the intermediate exploration, file reads, and iteration never enter the orchestrator context.
         -   For **Trivial** tasks, execute inline.
-    -   **Subagent Constraints (all dispatches):** Each dispatched subagent implements exactly one task (scoped to that task, using the loaded Workflow file) and **must not commit or modify control files** (`tracks.md`, `plan.md`, `index.md`); it only returns its result to the orchestrator, which **aggregates results and performs the actual commit** for each task in plan order.
+        -   Respect the `dependencies` field: a task MUST NOT be dispatched before its declared dependencies report `status: "done"` or `status: "blocked"`.
+    -   **Subagent Constraints (all dispatches):** Each dispatched subagent implements exactly one task (the prompt MUST include: the `task_id`, the `task_ids` it depends on, the resolved **paths** to the track's `spec.md`/`plan.md`/`workflow.md`, and the `workflow_summary` string as a quick-reference TDD/checkpoint rule). The subagent reads `plan.md`/`spec.md`/`workflow.md` itself to obtain the full task description, acceptance criteria, and TDD protocol — the `scope_hint` is only a routing hint, NOT the full task spec. The subagent **must not commit or modify control files** (`tracks.md`, `plan.md`, `index.md`); it only returns its result to the orchestrator, which **aggregates results and performs the actual commit** for each task in plan order.
     -   **Condensed Return Schema (the ONLY thing the orchestrator absorbs per task):**
         `{ task_id, status: "done" | "blocked", files: [...], tests: { written: N, passed: N, failed: [...] }, notes: "..." }`
-    -   **Fallback:** If no native `Task` tool is available, execute all tasks sequentially inline following the Workflow.
-    -   Loop through each task in the track's **Implementation Plan** one by one (dispatching or executing directly per the above). For each task, defer to the **Workflow** file as the single source of truth for implementation, testing, and committing — the orchestrator performs the actual commit for each task in plan order, even when the underlying work was done by subagents.
-    -   Ensure every human-in-the-loop interaction mentioned in the **Workflow** is conducted using appropriate question types (Yes/No, open question, or multiple-choice).
+    -   **Fallback:** If no native `Task` tool is available, the orchestrator MUST read `plan.md`, `spec.md`, and `workflow.md` inline (one-time read), execute all tasks sequentially using the full task descriptions and TDD protocol, then explicitly discard all three payloads from working memory once every task is committed. The `workflow_summary` is NOT sufficient for inline fallback — the full documents are required.
+    -   Loop through each task (in plan order, per `task_id`). The orchestrator performs the actual commit for each task in plan order, even when the underlying work was done by subagents.
+    -   Ensure every human-in-the-loop interaction implied by the Workflow is conducted using appropriate question types (Yes/No, open question, or multiple-choice).
 
 5.  **Finalize Track:**
     -   After all tasks are completed, update the track status to `[x]` in the **Tracks Registry**.
@@ -119,9 +123,7 @@ Adhere to this sequence to update project-level documentation based on the compl
 
 2.  **Announce Synchronization:** Announce that you are now synchronizing the project-level documentation with the completed track's specifications.
 
-3.  **Load Track Specification:** Read the track's **Specification**. (Required
-    inline because the orchestrator must present it to the impact-analysis
-    subagent; keep it scoped to this single file.)
+3.  **Resolve Track Specification Path:** Resolve the **path** (do NOT read payload) to the track's **Specification** (check the track's `index.md` for links, or use default `conductor/tracks/<track_id>/spec.md`). This path is consumed exclusively by the subagent in step 5 — the orchestrator must NOT read `spec.md` inline.
 
 4.  **Resolve Project Document Paths (No Payload Read):**
     -   Resolve the paths to (do **NOT** read their contents inline):
@@ -131,7 +133,7 @@ Adhere to this sequence to update project-level documentation based on the compl
     -   These payloads are consumed exclusively by the subagent in step 5.
 
 5.  **Analyze and Update (Subagent Dispatch for Impact Analysis):** Delegate the impact analysis to a subagent so the full cross-referencing of the specification against all project documents never enters the orchestrator context.
-    -   **Dispatch:** Call the native `Task` tool with `subagent_type=general_purpose_task`, passing a closed prompt with: the track's **Specification** content (from step 3) and the **paths** to **Product Definition**, **Tech Stack**, and **Product Guidelines** (from step 4). The subagent reads them itself.
+    -   **Dispatch:** Call the native `Task` tool with `subagent_type=general_purpose_task`, passing a closed prompt with: the **path** to the track's **Specification** (from step 3) and the **paths** to **Product Definition**, **Tech Stack**, and **Product Guidelines** (from step 4). The subagent reads all four files itself.
     -   **Subagent Constraints:** Read-only. MUST read the three project documents from the provided paths. MUST NOT commit, write any file, or interact with the user. Receives no prior conversation history. Must respect the strict-controlled rule for **Product Guidelines** (only flag if the spec explicitly describes branding/voice/tone changes).
     -   **Condensed Return Schema (the ONLY thing the orchestrator absorbs):**
         `{ product_md: [{section, change_type, diff}], tech_stack: [{section, change_type, diff}], guidelines: [{section, change_type, diff}] }` — arrays are empty if no update is needed.

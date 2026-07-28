@@ -91,7 +91,7 @@ Before starting the revert process, you MUST locate and read the project's found
     -   **Subagent Constraints:** MAY run `git log`, `git show`, and read-only Git inspection commands. MUST NOT commit, revert, reset, or modify any file. MUST NOT interact with the user. Receives no prior conversation history.
     -   **Condensed Return Schema (the ONLY thing the orchestrator absorbs):**
         `{ shas_to_revert: [...], ghost_candidates: [{ missing_sha: "...", best_match_sha: "...", match_message: "..." }], complexities: ["merge", "cherry-pick-duplicate", ...] }`
-    -   **Fallback:** If no native `Task` tool is available, perform the Git investigation inline yourself following the same rules.
+    -   **Fallback:** If no native `Task` tool is available, perform the Git investigation inline yourself following the same rules, then explicitly discard the `git log` / `git show` output and `plan.md` payloads from working memory after producing the schema.
 
 5.  **Resolve Ghost Commits (User Interaction, Orchestrator-Side):** For each entry in `ghost_candidates` returned by the subagent, announce the missing SHA and the best-match candidate, then ask the user for confirmation using a **Yes/No question** to use the match as the replacement. If not confirmed, halt. Append confirmed replacements to `shas_to_revert`.
 
@@ -128,5 +128,12 @@ Before starting the revert process, you MUST locate and read the project's found
         - Identify the commit *before* the earliest commit in your list to be reverted. Let's call it `<base_sha>`.
         - Run `git reset --hard <base_sha>`.
 2.  **Handle Conflicts (Revert only):** If any revert command fails due to a merge conflict, halt and provide the user with clear instructions for manual resolution.
-3.  **Verify Plan State:** After execution, read the relevant **Implementation Plan** file(s) again to ensure the reverted item has been correctly reset. If not, perform a file edit to fix it and commit the correction.
+3.  **Verify Plan State (Subagent Dispatch):** Delegate the post-revert plan verification to a subagent so `plan.md` never enters the orchestrator context.
+    -   **Dispatch:** Call the native `Task` tool with `subagent_type=general_purpose_task`, passing a closed prompt with: the resolved **path** to the relevant **Implementation Plan** file(s), the reverted `target_intent` (track/phase/task), and the expected post-revert state (e.g., task status should be reset to `[ ]`).
+    -   **Subagent Constraints:** Read-only. MUST read the plan file(s) and verify that the reverted item has been correctly reset to the expected state. MUST NOT commit, write any file, or interact with the user. Receives no prior conversation history.
+    -   **Condensed Return Schema (the ONLY thing the orchestrator absorbs):**
+        `{ synced: bool, correction: "<diff or description of the fix needed>" | null, failed_files: [...] }`
+    -   **Fallback:** If no native `Task` tool is available, read the plan file(s) inline, verify state, then explicitly discard their payloads from working memory after producing the schema.
+    -   **If `synced` is `false` and `correction` is not null:** The orchestrator performs the file edit described in `correction` and commits the correction with message `chore(conductor): Synchronize plan after revert`.
+    -   **If `synced` is `true`:** Proceed to step 4.
 4.  **Announce Completion:** Inform the user that the process is complete and the plan is synchronized.

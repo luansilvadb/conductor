@@ -1,8 +1,9 @@
-import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync } from 'node:fs';
-import { join, parse } from 'node:path';
+import { writeFileSync, existsSync, mkdirSync } from 'node:fs';
+import { parse } from 'node:path';
 import { AIToolType } from '../detector/types.js';
 import { type TemplateMeta, type GenerateRequest, type GenerateResult, parseFrontmatter } from './types.js';
 import { FileExistsError } from '../errors.js';
+import { TEMPLATES } from './embedded.js';
 
 export interface TemplateManager {
   listAvailable(tool: AIToolType): TemplateMeta[];
@@ -11,20 +12,14 @@ export interface TemplateManager {
   generate(req: GenerateRequest): GenerateResult;
 }
 
-const DATA_DIR = join(import.meta.dirname, 'data');
-
 export class EmbeddedTemplateManager implements TemplateManager {
   listAvailable(_tool: AIToolType): TemplateMeta[] {
     return this.listAll();
   }
 
-  /** Load all top-level .md files from every category directory. */
+  /** Lista todos os templates a partir dos dados embutidos no bundle. */
   listAll(): TemplateMeta[] {
-    const commands = loadTemplatesFromDir(join(DATA_DIR, 'commands'), 'commands');
-    const rules = loadTemplatesFromDir(join(DATA_DIR, 'rules'), 'rules');
-    const agents = loadTemplatesFromDirRecursive(join(DATA_DIR, 'agents'), 'agents');
-    const skills = loadTemplatesFromDirRecursive(join(DATA_DIR, 'skills'), 'skills');
-    return [...commands, ...rules, ...agents, ...skills];
+    return TEMPLATES.map((t) => toMeta(t));
   }
 
   getByName(name: string): TemplateMeta | undefined {
@@ -61,51 +56,12 @@ export class EmbeddedTemplateManager implements TemplateManager {
   }
 }
 
-function loadTemplatesFromDir(dir: string, sourceDir: string, subpath = ''): TemplateMeta[] {
-  try {
-    const entries = readdirSync(dir, { withFileTypes: true });
-    const templates: TemplateMeta[] = [];
-
-    for (const entry of entries) {
-      if (!entry.isFile() || !entry.name.endsWith('.md')) continue;
-      const meta = parseMetaFromFile(join(dir, entry.name));
-      meta.sourceDir = sourceDir;
-      meta.subpath = subpath;
-      templates.push(meta);
-    }
-
-    return templates;
-  } catch {
-    return [];
-  }
-}
-
-function loadTemplatesFromDirRecursive(dir: string, sourceDir: string): TemplateMeta[] {
-  try {
-    const entries = readdirSync(dir, { withFileTypes: true });
-    const templates: TemplateMeta[] = [];
-
-    for (const entry of entries) {
-      if (entry.isFile() && entry.name.endsWith('.md')) {
-        const meta = parseMetaFromFile(join(dir, entry.name));
-        meta.sourceDir = sourceDir;
-        templates.push(meta);
-      } else if (entry.isDirectory()) {
-        templates.push(...loadTemplatesFromDir(join(dir, entry.name), sourceDir, entry.name));
-      }
-    }
-
-    return templates;
-  } catch {
-    return [];
-  }
-}
-
-function parseMetaFromFile(filePath: string): TemplateMeta {
-  const content = readFileSync(filePath, 'utf-8');
-  const meta = parseFrontmatter(content);
+function toMeta(t: (typeof TEMPLATES)[number]): TemplateMeta {
+  const meta = parseFrontmatter(t.content);
+  meta.sourceDir = t.category;
+  meta.subpath = t.subpath;
   if (!meta.id) {
-    const fileName = filePath.split(/[\\/]/).pop() || '';
+    const fileName = t.sourcePath.split(/[\\/]/).pop() || '';
     meta.id = fileName.replace(/\.md$/, '');
     meta.name = meta.name || meta.id;
   }

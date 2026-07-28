@@ -3299,7 +3299,16 @@ Before starting the implementation process, you MUST locate and read the project
     -   **Product Definition** (\`product.md\`)
     -   **Tech Stack** (\`tech-stack.md\`)
     -   **Workflow** (\`workflow.md\`)
-    -   **Health Check:** You MUST verify that every linked file actually exists. If ANY of these core files are missing, HALT immediately. Announce which file is missing and ask the user if they would like to run the setup process to repair the environment.
+    -   **Health Check (Existence Only):** You MUST verify that every linked file
+        exists on disk. Do this via directory listing or a stat check \u2014 **do
+        NOT** read the file payloads inline. If ANY of these core files are
+        missing, HALT immediately. Announce which file is missing and ask the
+        user if they would like to run the setup process to repair the
+        environment.
+    -   **Context Isolation Note:** The contents of \`workflow.md\`,
+        \`product.md\`, and \`tech-stack.md\` are exclusively consumed inside the
+        subagent dispatches defined in this skill. The orchestrator must
+        operate purely on paths, never on the file payloads.
 
 ---
 
@@ -3309,10 +3318,14 @@ Adhere to this sequence to identify and select the track to be implemented.
 
 1.  **Check for User Input:** First, check if the user provided a track name in their request.
 
-2.  **Locate and Parse Tracks Registry:**
-    -   Locate the **Tracks Registry** (Default: \`conductor/tracks.md\`).
-    -   Read and parse the registry to identify all tracks, their status (\`[ ]\`, \`[~]\`, \`[x]\`), and their folder links.
-    -   **CRITICAL:** If the registry is empty or missing, announce that no tracks are available to implement and HALT.
+2.  **Locate and Parse Tracks Registry (Subagent Dispatch):** Delegate the parsing of the **Tracks Registry** to a subagent so its payload never enters the orchestrator context.
+    -   Resolve the **path** (do NOT read payload) to the **Tracks Registry** via \`conductor/index.md\` (default \`conductor/tracks.md\`).
+    -   **Dispatch:** Call the native \`Task\` tool with \`subagent_type=general_purpose_task\`, passing a closed prompt with: the resolved path to the **Tracks Registry**.
+    -   **Subagent Constraints:** Read-only. MUST read the registry, identify every track, parse its status marker (\`[ ]\`/\`[~]\`/\`[x]\`), and resolve its folder link to a path. MUST NOT commit, write any file, or interact with the user. Receives no prior conversation history.
+    -   **Condensed Return Schema (the ONLY thing the orchestrator absorbs):**
+        \`{ tracks: [{ id, description, status: "pending" | "in_progress" | "completed", path }], registry_empty: bool }\`
+    -   **Fallback:** If no native \`Task\` tool is available, read the registry inline, extract the schema, then explicitly discard its payload from working memory after producing the schema.
+    -   **CRITICAL:** If \`registry_empty\` is \`true\` or \`tracks\` is empty, announce that no tracks are available to implement and HALT.
 
 3.  **Select Track:**
     -   **If a track name was provided:**
@@ -3336,18 +3349,29 @@ Adhere to this sequence to execute the selected track.
     -   Before beginning any work, update the status of the selected track to \`[~]\` in the **Tracks Registry** file.
     -   Stage the file and commit: \`chore(conductor): Mark track '<track_description>' as in progress\`.
 
-3.  **Load Track Context:**
-    -   Identify the track folder from the tracks file to get the \`<track_id>\`.
-    -   Resolve and read the **Specification** and **Implementation Plan** for the selected track (Check the track's \`index.md\` for links, or use default paths).
-    -   Resolve and read the **Workflow** document (Check \`conductor/index.md\` for the link, or use default path).
-    -   If you fail to read any of these files, halt and inform the user.
-    -   Check for installed skills in \`.agents/skills/\` and \`~/.agents/extensions/conductor/skills/\`.
-    -   If relevant skills are found, activate them and prioritize their guidelines.
+3.  **Load Track Context (Subagent Dispatch \u2014 Task Plumber):** Delegate the parsing of the track's plan/spec/workflow and task classification to a subagent so their payloads never enter the orchestrator context.
+    -   **Identify Track Folder:** Resolve \`<track_id>\` via the tracks file. Resolve the **paths** (do NOT read payloads) to the track's **Specification** and **Implementation Plan** (check the track's \`index.md\` for links, or use default paths: \`conductor/tracks/<track_id>/spec.md\` and \`conductor/tracks/<track_id>/plan.md\`). Resolve the **path** to the **Workflow** document via \`conductor/index.md\` (default \`conductor/workflow.md\`).
+    -   **Dispatch:** Call the native \`Task\` tool with \`subagent_type=general_purpose_task\`, passing a closed prompt with: the resolved paths to \`spec.md\`, \`plan.md\`, and \`workflow.md\`, and the classification rules below.
+    -   **Subagent Constraints:** Read-only. MUST read \`plan.md\` to extract every task with its \`task_id\` (derived from heading/line position) and current status marker (\`[ ]\`/\`[~]\`/\`[x]\`). MUST read \`spec.md\` and \`workflow.md\` to derive scope hints and TDD ordering. MUST classify each pending task as **Independent**, **Complex**, or **Trivial**. MUST NOT commit, write any file, or interact with the user. Receives no prior conversation history.
+    -   **Condensed Return Schema (the ONLY thing the orchestrator absorbs):**
+        \`{ tasks: [{ task_id, description, type: "independent" | "complex" | "trivial", scope_hint: "...", dependencies: [task_id] }], workflow_summary: "<one-line TDD/checkpoint rule>", failed_files: [...] }\`
+        If any path could not be read, \`failed_files\` lists it; otherwise empty.
+    -   **Fallback:** If no native \`Task\` tool is available, read the three files inline, perform the classification, then explicitly discard their payloads from working memory after producing the schema.
+    -   **If \`failed_files\` is non-empty:** HALT and inform the user which file could not be read.
+    -   **Installed Skills Check:** Check for installed skills in \`.agents/skills/\` and \`~/.agents/extensions/conductor/skills/\`. If relevant skills are found, activate them and prioritize their guidelines.
 
 4.  **Execute Tasks and Update Track Plan:**
-    -   **Subagent Delegation (dispatch point):** Before looping, scan the remaining tasks in the **Implementation Plan** for independence (no shared files, no sequential/logical dependency between them). If 2+ independent tasks are found, this qualifies as a parallel-safe dispatch point \u2014 dispatch them in parallel using the native \`Task\` tool with \`subagent_type=general_purpose_task\`, **one subagent per independent task**. Each dispatched subagent implements exactly one task (steps in this section 3.4, scoped to that task, using the loaded Workflow file) and **must not commit or modify control files** (\`tracks.md\`, \`plan.md\`, \`index.md\`); it only returns its result (files touched, tests written, pass/fail) to the orchestrator, which **aggregates results and performs the actual commit** for each task in plan order. If no native \`Task\` tool is available, or tasks are interdependent, skip this and proceed sequentially.
-    -   Loop through each task in the track's **Implementation Plan** one by one (dispatching or executing directly per the above). For each task, defer to the **Workflow** file as the single source of truth for implementation, testing, and committing \u2014 the orchestrator performs the actual commit for each task in plan order, even when the underlying work was done in parallel by subagents.
-    -   Ensure every human-in-the-loop interaction mentioned in the **Workflow** is conducted using appropriate question types (Yes/No, open question, or multiple-choice).
+    -   **Subagent Delegation (dispatch point):** Use the \`tasks\` array and \`workflow_summary\` returned by the Task Plumber in step 3 (the orchestrator no longer scans or classifies tasks inline). Dispatch according to each task's \`type\`:
+        -   If 2+ tasks of **Independent** type are found, dispatch them in parallel using the native \`Task\` tool with \`subagent_type=general_purpose_task\`, **one subagent per task**.
+        -   For **Complex** tasks (whether independent or sequential), delegate each to its own subagent so the intermediate exploration, file reads, and iteration never enter the orchestrator context.
+        -   For **Trivial** tasks, execute inline.
+        -   Respect the \`dependencies\` field: a task MUST NOT be dispatched before its declared dependencies report \`status: "done"\` or \`status: "blocked"\`.
+    -   **Subagent Constraints (all dispatches):** Each dispatched subagent implements exactly one task (the prompt MUST include: the \`task_id\`, the \`task_ids\` it depends on, the resolved **paths** to the track's \`spec.md\`/\`plan.md\`/\`workflow.md\`, and the \`workflow_summary\` string as a quick-reference TDD/checkpoint rule). The subagent reads \`plan.md\`/\`spec.md\`/\`workflow.md\` itself to obtain the full task description, acceptance criteria, and TDD protocol \u2014 the \`scope_hint\` is only a routing hint, NOT the full task spec. The subagent **must not commit or modify control files** (\`tracks.md\`, \`plan.md\`, \`index.md\`); it only returns its result to the orchestrator, which **aggregates results and performs the actual commit** for each task in plan order.
+    -   **Condensed Return Schema (the ONLY thing the orchestrator absorbs per task):**
+        \`{ task_id, status: "done" | "blocked", files: [...], tests: { written: N, passed: N, failed: [...] }, notes: "..." }\`
+    -   **Fallback:** If no native \`Task\` tool is available, the orchestrator MUST read \`plan.md\`, \`spec.md\`, and \`workflow.md\` inline (one-time read), execute all tasks sequentially using the full task descriptions and TDD protocol, then explicitly discard all three payloads from working memory once every task is committed. The \`workflow_summary\` is NOT sufficient for inline fallback \u2014 the full documents are required.
+    -   Loop through each task (in plan order, per \`task_id\`). The orchestrator performs the actual commit for each task in plan order, even when the underlying work was done by subagents.
+    -   Ensure every human-in-the-loop interaction implied by the Workflow is conducted using appropriate question types (Yes/No, open question, or multiple-choice).
 
 5.  **Finalize Track:**
     -   After all tasks are completed, update the track status to \`[x]\` in the **Tracks Registry**.
@@ -3364,29 +3388,25 @@ Adhere to this sequence to update project-level documentation based on the compl
 
 2.  **Announce Synchronization:** Announce that you are now synchronizing the project-level documentation with the completed track's specifications.
 
-3.  **Load Track Specification:** Read the track's **Specification**.
+3.  **Resolve Track Specification Path:** Resolve the **path** (do NOT read payload) to the track's **Specification** (check the track's \`index.md\` for links, or use default \`conductor/tracks/<track_id>/spec.md\`). This path is consumed exclusively by the subagent in step 5 \u2014 the orchestrator must NOT read \`spec.md\` inline.
 
-4.  **Load Project Documents:**
-    -   Locate and read:
+4.  **Resolve Project Document Paths (No Payload Read):**
+    -   Resolve the paths to (do **NOT** read their contents inline):
         -   **Product Definition**
         -   **Tech Stack**
         -   **Product Guidelines**
+    -   These payloads are consumed exclusively by the subagent in step 5.
 
-5.  **Analyze and Update:**
-    a. **Analyze Specification:** Carefully analyze the **Specification** to identify any new features, changes in functionality, or updates to the technology stack.
-    b. **Update Product Definition:**
-        i. **Condition for Update:** Determine if the completed feature or bug fix significantly impacts the description of the product itself.
-        ii. **Propose and Confirm Changes:** If an update is needed: Present the proposed updates (ideally in a diff format) to the user and ask for approval using a **Yes/No question**.
-        iii. **Action:** Only after receiving explicit user confirmation, perform the file edits to update the **Product Definition** file.
-    c. **Update Tech Stack:**
-        i. **Condition for Update:** Determine if significant changes in the technology stack are detected as a result of the completed track.
-        ii. **Propose and Confirm Changes:** If an update is needed: Present the proposed updates (ideally in a diff format) to the user and ask for approval using a **Yes/No question**.
-        iii. **Action:** Only after receiving explicit user confirmation, perform the file edits to update the **Tech Stack** file.
-    d. **Update Product Guidelines (Strictly Controlled):**
-        i. **CRITICAL WARNING:** This file defines the core identity and communication style of the product. It should be modified with extreme caution and ONLY in cases of significant strategic shifts, such as a product rebrand or a fundamental change in user engagement philosophy.
-        ii. **Condition for Update:** You may ONLY propose an update to this file if the track's **Specification** explicitly describes a change that directly impacts branding, voice, tone, or other core product guidelines.
-        iii. **Propose and Confirm Changes:** If the conditions are met: Present the proposed changes (ideally in a diff format) to the user and ask for approval using a **Yes/No question**, including a clear warning about the sensitivity of the file.
-        iv. **Action:** Only after receiving explicit user confirmation, perform the file edits.
+5.  **Analyze and Update (Subagent Dispatch for Impact Analysis):** Delegate the impact analysis to a subagent so the full cross-referencing of the specification against all project documents never enters the orchestrator context.
+    -   **Dispatch:** Call the native \`Task\` tool with \`subagent_type=general_purpose_task\`, passing a closed prompt with: the **path** to the track's **Specification** (from step 3) and the **paths** to **Product Definition**, **Tech Stack**, and **Product Guidelines** (from step 4). The subagent reads all four files itself.
+    -   **Subagent Constraints:** Read-only. MUST read the three project documents from the provided paths. MUST NOT commit, write any file, or interact with the user. Receives no prior conversation history. Must respect the strict-controlled rule for **Product Guidelines** (only flag if the spec explicitly describes branding/voice/tone changes).
+    -   **Condensed Return Schema (the ONLY thing the orchestrator absorbs):**
+        \`{ product_md: [{section, change_type, diff}], tech_stack: [{section, change_type, diff}], guidelines: [{section, change_type, diff}] }\` \u2014 arrays are empty if no update is needed.
+    -   **Fallback:** If no native \`Task\` tool is available, read the three project documents inline, perform the analysis, then explicitly discard their payloads from working memory after producing the diffs.
+    -   **Process Returned Diffs (Orchestrator-Side):** Using the schema returned by the subagent:
+        a. **Update Product Definition:** If \`product_md\` is non-empty, present the proposed diffs to the user and ask for approval using a **Yes/No question**. Only after explicit confirmation, perform the file edits.
+        b. **Update Tech Stack:** If \`tech_stack\` is non-empty, present the proposed diffs to the user and ask for approval using a **Yes/No question**. Only after explicit confirmation, perform the file edits.
+        c. **Update Product Guidelines (Strictly Controlled):** If \`guidelines\` is non-empty: **CRITICAL WARNING** \u2014 this file defines core identity. Present the proposed diffs with a clear warning about sensitivity and ask for approval using a **Yes/No question**. Only after explicit confirmation, perform the file edits.
 
 6.  **Final Report:** Announce the completion of the synchronization process and provide a summary of the actions taken.
     -   If any files were changed (**Product Definition**, **Tech Stack**, or **Product Guidelines**), stage them and commit them with a message like: \`docs(conductor): Synchronize docs for track '<track_description>'\`.
@@ -3446,7 +3466,17 @@ Before starting the planning process, you MUST locate and read the project's fou
     -   **Product Definition** (\`product.md\`)
     -   **Tech Stack** (\`tech-stack.md\`)
     -   **Workflow** (\`workflow.md\`)
-    -   **Health Check:** You MUST verify that every linked file actually exists. If ANY of these core files are missing, HALT immediately. Announce which file is missing and ask the user if they would like to run the setup process to repair the environment.
+    -   **Health Check (Existence Only):** You MUST verify that every linked file
+        exists on disk. Do this via directory listing or a stat check \u2014 **do
+        NOT** read the file payloads inline. If ANY of these core files are
+        missing, HALT immediately. Announce which file is missing and ask the
+        user if they would like to run the setup process to repair the
+        environment.
+    -   **Context Isolation Note:** The contents of \`workflow.md\`,
+        \`product.md\`, and \`tech-stack.md\` are exclusively consumed inside the
+        subagent dispatches defined in this skill (e.g., plan drafting in \xA72.3).
+        The orchestrator must operate purely on paths, never on the file
+        payloads.
 
 ---
 
@@ -3456,7 +3486,7 @@ Adhere to this sequence precisely.
 
 ### 2.1 Track Description & Classification
 
-1.  **Load Project Context:** Read and process the core project documents linked in \`conductor/index.md\`.
+1.  **Load Index (Health Check Only):** The handshake in \xA71 already verified \`conductor/index.md\` existence and all linked files. No additional document reads are needed here \u2014 the \`product.md\` and \`tech-stack.md\` payloads are consumed exclusively by the Question Seeds subagent in \xA72.2.
 2.  **Acquire Track Description:**
     -   If the task description was not provided in the initial request, ask the
         user an **open question** to provide a brief description of the track
@@ -3474,8 +3504,18 @@ Adhere to this sequence precisely.
 2.  **Strategic Action:** Explain that the \`spec.md\` is the "Source of Truth" for the feature. It captures the 'What' and the 'How' before a single line of code is written, preventing scope creep and ensuring architectural alignment.
 
 3.  **Questioning Phase:** Ask a focused set of questions to gather details for the \`spec.md\`. Tailor questions based on the track type.
+
+    *   **Context-Aware Question Seeds (Subagent Dispatch):** Delegate the cross-referencing of the track description against **Product Definition** and **Tech Stack** to a subagent so their payloads never enter the orchestrator context.
+        -   **Dispatch:** Call the native \`Task\` tool with \`subagent_type=general_purpose_task\`, passing a closed prompt with: the track description, the track type (from \xA72.1), and the **paths** to \`product.md\` and \`tech-stack.md\` (resolved via \`conductor/index.md\`).
+        -   **Subagent Constraints:** Read-only. MUST read \`product.md\` and \`tech-stack.md\` from the provided paths and cross-reference them against the track description to generate context-aware question seeds. MUST NOT commit, write any file, or interact with the user. Receives no prior conversation history.
+        -   **Condensed Return Schema (the ONLY thing the orchestrator absorbs):**
+            \`{ question_seeds: [{ topic, suggested_options: ["...","...","..."], rationale: "..." }] }\`
+            -   Length: 3-4 seeds for MVP/Bootstrap and FEATURE types; 2-3 for Bug/Chore.
+            -   Each \`suggested_options\` array MUST contain 2-4 plausible options derived from the project context.
+        -   **Fallback:** If no native \`Task\` tool is available, read \`product.md\` and \`tech-stack.md\` inline, derive the seeds, then explicitly discard their contents from working memory after producing the seeds.
+
     *   **General Guidelines:**
-        *   Refer to information in **Product Definition**, **Tech Stack**, etc., to ask context-aware questions.
+        *   Use the \`question_seeds\` returned above as the basis for questions. Do NOT re-read the project documents.
         *   Provide a brief explanation and clear examples for each question.
         *   **Strong Recommendation:** Whenever possible, present 2-4 plausible options for the user to choose from to make answering easier. Always imply or provide an "Other" option.
     *   **Interaction Flow:**
@@ -3490,8 +3530,15 @@ Adhere to this sequence precisely.
     *   **If SOMETHING ELSE (Bug, Chore, etc.):**
         *   Ask 2-3 relevant questions to obtain necessary details (e.g., reproduction steps for bugs, specific scope for chores, or success criteria).
     *   **Loop Control (CRITICAL):** At the end of your questioning phase, ALWAYS ask: *"Is this sufficient information to draft the spec, or would you like me to ask more questions to clarify further?"* Repeat the Q&A loop until the user confirms they are ready to proceed.
+    *   **Response Aggregation (CRITICAL \u2014 Handoff Boundary):** After the user confirms readiness, collect **all user answers** from the Q&A loop into a single \`gathered_responses\` array (string entries, one per question, in order asked). This array is the ONLY thing the orchestrator retains from the questioning phase \u2014 the original \`question_seeds\` (subagent output from step 3) MUST be explicitly discarded from working memory once \`gathered_responses\` is formed.
 
-4.  **Draft \`spec.md\`:** Once sufficient information is gathered, draft the content for the track's \`spec.md\` file, including sections like Overview, Functional Requirements, Non-Functional Requirements (if any), Acceptance Criteria, and Out of Scope.
+4.  **Draft \`spec.md\` (Subagent Dispatch):** Delegate the drafting of the specification to a subagent so the synthesis of answers into structured prose never enters the orchestrator context.
+    -   **Dispatch:** Call the native \`Task\` tool with \`subagent_type=general_purpose_task\`, passing a closed prompt with: the \`gathered_responses\` array (from the questioning phase), the track description, and the track type (from \xA72.1).
+    -   **Subagent Constraints:** Read-only. MUST synthesize \`gathered_responses\` into a structured \`spec.md\` document (sections: Overview, Functional Requirements, Non-Functional Requirements, Acceptance Criteria, Out of Scope). MUST NOT read \`product.md\`/\`tech-stack.md\` (context-aware framing was already done via the seeds in step 3). MUST NOT commit, write any file, or interact with the user. Receives no prior conversation history.
+    -   **Condensed Return Schema (the ONLY thing the orchestrator absorbs):**
+        \`{ spec_md: "<full spec.md content as a single string>" }\`
+        -   **Orchestrator Note:** The returned \`spec_md\` is a DRAFT. It is NOT written to disk yet \u2014 step 5 below gates it.
+    -   **Fallback:** If no native \`Task\` tool is available, synthesize the spec inline from \`gathered_responses\`, then explicitly discard the responses array from working memory after producing \`spec_md\`.
 
 5.  **User Confirmation:**
     -   Present the drafted Specification to the user for review.
@@ -3504,15 +3551,16 @@ Adhere to this sequence precisely.
 
 2.  **Strategic Action:** Explain that the \`plan.md\` is the execution roadmap. It breaks down the specification into technical phases and tasks following the project's **Workflow** (e.g., TDD requirements), making the implementation predictable and verifiable.
 
-3.  **Generate Plan:**
-    *   Read the confirmed \`spec.md\` content for this track.
-    *   Locate and read the **Workflow** document as linked in \`conductor/index.md\`.
-    *   Generate a \`plan.md\` featuring a hierarchical list of Phases, Tasks, and Sub-tasks.
-    *   **CRITICAL:** The plan structure MUST strictly follow the methodology defined in the **Workflow** (e.g., ensuring TDD tasks like "Write Tests" precede "Implementation").
-    *   Include status markers \`[ ]\` for **EVERY** task and sub-task using the format:
+3.  **Generate Plan (Subagent Dispatch):** Delegate the plan drafting to a subagent so the verbose \`workflow.md\` contents and intermediate structuring never enter the orchestrator context.
+    *   **Dispatch:** Call the native \`Task\` tool with \`subagent_type=general_purpose_task\`, passing a closed prompt with: the approved \`spec_md\` content (returned by \xA72.2 step 4, possibly revised) and the **path** to the **Workflow** document (linked in \`conductor/index.md\`). Do NOT pass the path to \`spec.md\` on disk (it may not exist yet) \u2014 pass the string content directly.
+    *   **Subagent Constraints:** Read-only. MUST read the **Workflow** to extract its methodology (e.g., TDD ordering, checkpoint rules). MUST generate a hierarchical \`plan.md\` featuring Phases, Tasks, and Sub-tasks with status markers \`[ ]\` on EVERY task and sub-task using the format:
         -   Parent Task: \`- [ ] Task: ...\`
         -   Sub-task: \`- [ ] ...\`
-    *   **Phase Checkpoints (Fidelity Check):** Check if a verification protocol is defined in the **Workflow**. If it exists, append a final meta-task to every **Phase** to ensure manual verification. Example: \`- [ ] Task: Phase Verification & Checkpoint (Refer to workflow.md)\`.
+    *   **Phase Checkpoints (Fidelity Check):** If the **Workflow** defines a verification protocol, append a final meta-task to every Phase: \`- [ ] Task: Phase Verification & Checkpoint (Refer to workflow.md)\`.
+    *   **Condensed Return Schema (the ONLY thing the orchestrator absorbs):**
+        \`{ plan_md: "<full plan.md content as a single string>" }\`
+    *   **Fallback:** If no native \`Task\` tool is available, read the **Workflow** inline and draft the plan yourself from the approved \`spec_md\` content following the same rules. Explicitly discard the \`workflow.md\` payload from working memory after producing \`plan_md\`.
+    *   **Orchestrator Note:** The returned \`plan_md\` is a DRAFT. The orchestrator MUST present it to the user for approval in step 4 below before writing it to disk.
 
 4.  **User Confirmation:**
     -   Present the drafted Implementation Plan to the user for review.
@@ -3521,11 +3569,13 @@ Adhere to this sequence precisely.
 
 ### 2.4 Interactive Skill Recommendation
 
-1.  **Analyze Needs & Trust Model:**
-    -   Read the skill catalog from \`assets/catalog.md\` (relative to this skill's directory).
-    -   Analyze the confirmed \`spec.md\` and \`plan.md\` against the \`Detection Signals\` in the loaded \`catalog.md\`.
-    -   Identify any relevant skills that are NOT yet installed.
-    -   **Trust Assessment:** Note the \`Party\` status (1p or 3p) for each identified skill.
+1.  **Analyze Needs & Trust Model (Subagent Dispatch):** Delegate the catalog matching to a subagent so the full \`catalog.md\` contents and cross-referencing never enter the orchestrator context.
+    -   **Dispatch:** Call the native \`Task\` tool with \`subagent_type=general_purpose_task\`, passing a closed prompt with: the confirmed \`spec.md\` content, the confirmed \`plan.md\` content, and the path to \`assets/catalog.md\` (relative to this skill's directory).
+    -   **Subagent Constraints:** Read-only. MUST read \`catalog.md\` and cross-reference its \`Detection Signals\` against the provided spec and plan. MUST NOT commit, write any file, or interact with the user. Receives no prior conversation history.
+    -   **Condensed Return Schema (the ONLY thing the orchestrator absorbs):**
+        \`{ recommended: [{ name, reason, party, detection_signal }] }\` where \`party\` is \`1p\` or \`3p\`.
+    -   **Fallback:** If no native \`Task\` tool is available, read \`catalog.md\` inline and perform the matching yourself following the same rules.
+    -   **Trust Assessment:** Use the \`party\` field from the returned schema to classify each recommendation.
 
 2.  **Recommendation & Installation Loop:**
     -   **Identify Recommendations:** If relevant missing skills are found, present them to the user, explaining their value for the current track.
@@ -3549,7 +3599,13 @@ Adhere to this sequence precisely.
 2.  **Resolve Tracks Path:**
     -   Identify the tracks directory and registry using the links provided in \`conductor/index.md\`.
     -   **Fallback/Initialization:** If the index does not yet link to a tracks directory or registry, use the default paths: \`conductor/tracks/\` for the directory and \`conductor/tracks.md\` for the registry.
-    -   **Collision Check:** List existing track directories in the resolved path. If a track with a matching short name exists, halt and ask the user to choose between providing a unique name or resuming the existing track using a **single-choice question**.
+    -   **Collision Check (Subagent Dispatch):** Delegate the listing and name-matching to a subagent so directory enumeration never enters the orchestrator context.
+        -   **Dispatch:** Call the native \`Task\` tool with \`subagent_type=general_purpose_task\`, passing a closed prompt with: the resolved tracks directory path and the proposed track short name.
+        -   **Subagent Constraints:** Read-only. MUST list the subdirectories of the tracks directory and check if any matches the proposed short name (case-insensitive). MUST NOT commit, write any file, or interact with the user. Receives no prior conversation history.
+        -   **Condensed Return Schema (the ONLY thing the orchestrator absorbs):**
+            \`{ collision: bool, existing_path: "..." | null, failed_files: [...] }\`
+        -   **Fallback:** If no native \`Task\` tool is available, enumerate the directories inline, extract the schema, then explicitly discard the listing from working memory after producing the schema.
+        -   **If \`collision\` is \`true\`:** HALT and ask the user to choose between providing a unique name or resuming the existing track at \`existing_path\` using a **single-choice question**.
 
 3.  **Generate Track ID & Directory:**
     -   Create a unique Track ID (e.g., \`shortname_YYYYMMDD\`).
@@ -3557,7 +3613,7 @@ Adhere to this sequence precisely.
 
 4.  **Write Track Artifacts:**
     -   **Metadata:** Create \`metadata.json\` with the track ID, type, status ("new"), and timestamps.
-    -   **Documents:** Write the confirmed \`spec.md\` and \`plan.md\` to the track directory.
+    -   **Documents:** Write the approved \`spec_md\` and \`plan_md\` strings (held in orchestrator working memory from \xA72.2 step 4 and \xA72.3 step 3) to the track directory as \`spec.md\` and \`plan.md\` files. Do NOT re-read any subagent output \u2014 use the strings already in memory.
     -   **Track Handshake:** Create \`conductor/tracks/<track_id>/index.md\` linking to the local spec, plan, and metadata.
 
 5.  **Update Tracks Registry:**
@@ -3776,7 +3832,8 @@ Before starting the revert process, you MUST locate and read the project's found
 
 2.  **Load & Verify Context:** Read \`conductor/index.md\` and use the provided links to locate the **Tracks Registry** file.
     -   If the link is missing or \`index.md\` doesn't exist, fallback to the default path: \`conductor/tracks.md\`.
-    -   **Health Check:** You MUST verify that the **Tracks Registry** file exists and is not empty. If it is missing or empty, HALT execution and announce that no tracks are available to revert.
+    -   **Health Check (Existence Only):** You MUST verify that the **Tracks Registry** file exists and is not empty via a directory listing or stat check. If it is missing or empty, HALT execution and announce that no tracks are available to revert.
+    -   **Context Isolation Note:** The contents of the **Tracks Registry** and every track's \`plan.md\` are exclusively consumed inside the subagent dispatches defined in Section 2 (Guided Selection) and Section 3 (Git Investigation). The orchestrator must operate purely on paths, never on the file payloads.
 
 ---
 
@@ -3797,11 +3854,13 @@ Before starting the revert process, you MUST locate and read the project's found
         3.  If "yes", establish this as the \`target_intent\` and proceed to Phase 2. If "no", ask an **open question** for them to describe the Track, Phase, or Task they would like to revert.
 
     *   **PATH B: Guided Selection Menu**
-        1.  **Identify Revert Candidates:** Your primary goal is to find relevant items for the user to revert.
-            *   **Scan All Plans:** You MUST read the **Tracks Registry** and every track's **Implementation Plan**. Resolve these by checking \`conductor/index.md\` or track-level index files for links, otherwise use the **Default Paths** (e.g., \`conductor/tracks.md\`, \`conductor/tracks/<track_id>/plan.md\`).
-            *   **Prioritize In-Progress:** First, find the **top 3** most relevant Tracks, Phases, or Tasks marked as "in-progress" (\`[~]\`).
-            *   **Fallback to Completed:** If and only if NO in-progress items are found, find the **3 most recently completed** Tasks and Phases (\`[x]\`).
-        2.  **Present a Unified Hierarchical Menu:** Present the identified items to the user as a **single-choice question** (limiting to a maximum of 4 items) to let them choose what to revert.
+        1.  **Identify Revert Candidates (Subagent Dispatch):** Delegate the scanning of all plans to a subagent so the verbose contents of every \`plan.md\` never enter the orchestrator context.
+            -   **Dispatch:** Call the native \`Task\` tool with \`subagent_type=general_purpose_task\`, passing a closed prompt with: the resolved **Tracks Registry** path (check \`conductor/index.md\`, otherwise default \`conductor/tracks.md\`) and the tracks directory path.
+            -   **Subagent Constraints:** Read-only. MUST read the **Tracks Registry** and every track's **Implementation Plan**. Resolve plan paths by checking track-level index files, otherwise use the default \`conductor/tracks/<track_id>/plan.md\`. MUST first find the **top 3** most relevant Tracks, Phases, or Tasks marked as "in-progress" (\`[~]\`); if and only if NO in-progress items are found, fall back to the **3 most recently completed** Tasks and Phases (\`[x]\`). MUST NOT commit, write any file, or interact with the user. Receives no prior conversation history.
+            -   **Condensed Return Schema (the ONLY thing the orchestrator absorbs):**
+                \`{ candidates: [{ track, phase, task, status, plan_path }] }\` where \`status\` is \`in_progress\` or \`completed\`, limited to top 3.
+            -   **Fallback:** If no native \`Task\` tool is available, read and parse the registry and plans inline following the same rules.
+        2.  **Present a Unified Hierarchical Menu:** Present the candidates returned by the subagent to the user as a **single-choice question** (limiting to a maximum of 4 items) to let them choose what to revert.
         3.  **Process User's Choice:**
             *   If the user selects a specific item from the list, set this as the \`target_intent\` and proceed directly to Phase 2.
             *   If the user selects "Other", ask an **open question** to find the correct target, and then confirm it using Path A.
@@ -3816,20 +3875,25 @@ Before starting the revert process, you MUST locate and read the project's found
 
 1.  **Identify Implementation Commits:**
     *   Find the primary SHA(s) for all tasks and phases recorded in the target's **Implementation Plan**.
-    *   **Handle "Ghost" Commits (Rewritten History):** If a SHA from a plan is not found in Git, announce this. Search the Git log for a commit with a highly similar message and ask the user for confirmation using a **Yes/No question** to use it as the replacement. If not confirmed, halt.
+    *   **Handle "Ghost" Commits (Rewritten History):** If a SHA from a plan is not found in Git, surface it as a candidate for user confirmation (handled in step 5 after the isolated investigation).
 
 2.  **Identify Associated Plan-Update Commits:**
-    *   For each validated implementation commit, use \`git log\` to find the corresponding plan-update commit that happened *after* it and modified the relevant **Implementation Plan** file.
+    *   For each implementation commit, find the corresponding plan-update commit that happened *after* it and modified the relevant **Implementation Plan** file.
 
 3.  **Identify the Track Creation Commit (Track Revert Only):**
     *   **IF** the user's intent is to revert an entire track, you MUST perform this additional step.
-    *   **Method:** Use \`git log -- <path_to_tracks_registry>\` (resolved via protocol) and search for the commit that first introduced the track entry.
+    *   **Method:** Search the history of the **Tracks Registry** file for the commit that first introduced the track entry.
         *   Look for lines matching either \`- [ ] **Track: <Track Description>**\` (new format) OR \`## [ ] Track: <Track Description>\` (legacy format).
     *   Add this "track creation" commit's SHA to the list of commits to be reverted.
 
-4.  **Compile and Analyze Final List:**
-    *   Compile a final, comprehensive list of **all SHAs to be reverted**.
-    *   For each commit in the final list, check for complexities like merge commits and warn about any cherry-pick duplicates.
+4.  **Compile and Analyze Final List (Isolated Git Investigation \u2014 Subagent Dispatch):** Delegate steps 1-3 plus the final compilation to a subagent so the verbose \`git log\` / \`git show\` output never enters the orchestrator context.
+    -   **Dispatch:** Call the native \`Task\` tool with \`subagent_type=general_purpose_task\`, passing a closed prompt with: the target intent (track/phase/task), the relevant **Implementation Plan** path(s), the **Tracks Registry** path (resolved via protocol), and the rules above for finding implementation, plan-update, and track-creation commits.
+    -   **Subagent Constraints:** MAY run \`git log\`, \`git show\`, and read-only Git inspection commands. MUST NOT commit, revert, reset, or modify any file. MUST NOT interact with the user. Receives no prior conversation history.
+    -   **Condensed Return Schema (the ONLY thing the orchestrator absorbs):**
+        \`{ shas_to_revert: [...], ghost_candidates: [{ missing_sha: "...", best_match_sha: "...", match_message: "..." }], complexities: ["merge", "cherry-pick-duplicate", ...] }\`
+    -   **Fallback:** If no native \`Task\` tool is available, perform the Git investigation inline yourself following the same rules, then explicitly discard the \`git log\` / \`git show\` output and \`plan.md\` payloads from working memory after producing the schema.
+
+5.  **Resolve Ghost Commits (User Interaction, Orchestrator-Side):** For each entry in \`ghost_candidates\` returned by the subagent, announce the missing SHA and the best-match candidate, then ask the user for confirmation using a **Yes/No question** to use the match as the replacement. If not confirmed, halt. Append confirmed replacements to \`shas_to_revert\`.
 
 ---
 
@@ -3864,7 +3928,14 @@ Before starting the revert process, you MUST locate and read the project's found
         - Identify the commit *before* the earliest commit in your list to be reverted. Let's call it \`<base_sha>\`.
         - Run \`git reset --hard <base_sha>\`.
 2.  **Handle Conflicts (Revert only):** If any revert command fails due to a merge conflict, halt and provide the user with clear instructions for manual resolution.
-3.  **Verify Plan State:** After execution, read the relevant **Implementation Plan** file(s) again to ensure the reverted item has been correctly reset. If not, perform a file edit to fix it and commit the correction.
+3.  **Verify Plan State (Subagent Dispatch):** Delegate the post-revert plan verification to a subagent so \`plan.md\` never enters the orchestrator context.
+    -   **Dispatch:** Call the native \`Task\` tool with \`subagent_type=general_purpose_task\`, passing a closed prompt with: the resolved **path** to the relevant **Implementation Plan** file(s), the reverted \`target_intent\` (track/phase/task), and the expected post-revert state (e.g., task status should be reset to \`[ ]\`).
+    -   **Subagent Constraints:** Read-only. MUST read the plan file(s) and verify that the reverted item has been correctly reset to the expected state. MUST NOT commit, write any file, or interact with the user. Receives no prior conversation history.
+    -   **Condensed Return Schema (the ONLY thing the orchestrator absorbs):**
+        \`{ synced: bool, correction: "<diff or description of the fix needed>" | null, failed_files: [...] }\`
+    -   **Fallback:** If no native \`Task\` tool is available, read the plan file(s) inline, verify state, then explicitly discard their payloads from working memory after producing the schema.
+    -   **If \`synced\` is \`false\` and \`correction\` is not null:** The orchestrator performs the file edit described in \`correction\` and commits the correction with message \`chore(conductor): Synchronize plan after revert\`.
+    -   **If \`synced\` is \`true\`:** Proceed to step 4.
 4.  **Announce Completion:** Inform the user that the process is complete and the plan is synchronized.
 `
       },
@@ -3917,7 +3988,16 @@ Before starting the review process, you MUST locate and read the project's found
     -   **Tech Stack** (\`tech-stack.md\`)
     -   **Workflow** (\`workflow.md\`)
     -   **Product Guidelines** (\`product-guidelines.md\`)
-    -   **Health Check:** You MUST verify that every linked file actually exists. If ANY of these core files are missing, HALT immediately. Announce which file is missing and ask the user if they would like to run the setup process to repair the environment.
+    -   **Health Check (Existence Only):** You MUST verify that every linked file
+        exists on disk. Do this via directory listing or a stat check \u2014 **do
+        NOT** read the file payloads inline. If ANY core file is missing, HALT
+        immediately, announce which file is missing, and ask the user if they
+        would like to run the setup process to repair the environment.
+    -   **Context Isolation Note:** The contents of \`workflow.md\`,
+        \`product.md\`, \`tech-stack.md\`, and \`product-guidelines.md\` are
+        exclusively consumed inside the subagent dispatches defined in Section
+        2. The orchestrator must operate purely on paths, never on the file
+        payloads.
 
 ---
 
@@ -3930,58 +4010,107 @@ Before starting the review process, you MUST locate and read the project's found
     -   Check if the user provided specific arguments or a track name for the review in their initial request.
     -   If arguments were provided, use them as the target scope.
 
-2.  **Auto-Detect Scope:**
-    -   If no input was provided, read the **Tracks Registry**.
-    -   Look for a track marked as \`[~]\` (In Progress).
-    -   **If one exists:** Ask the user for confirmation using a **Yes/No question** to proceed with reviewing that specific track.
-    -   **If no track is in progress, or the user declines:** Ask the user to clarify what they would like to review by asking an **open question**, suggesting options like entering a specific track name or 'current' for uncommitted changes.
+2.  **Auto-Detect Scope (Subagent Dispatch):** Delegate the parsing of the **Tracks Registry** to a subagent so its payload never enters the orchestrator context.
+    -   Resolve the **path** (do NOT read payload) to the **Tracks Registry** via \`conductor/index.md\` (default \`conductor/tracks.md\`).
+    -   **Dispatch:** Call the native \`Task\` tool with \`subagent_type=general_purpose_task\`, passing a closed prompt with: the resolved path to the **Tracks Registry**.
+    -   **Subagent Constraints:** Read-only. MUST read the registry, identify all tracks, parse status markers, and find ONE track marked as \`[~]\` (In Progress). MUST NOT commit, write any file, or interact with the user. Receives no prior conversation history.
+    -   **Condensed Return Schema (the ONLY thing the orchestrator absorbs):**
+        \`{ in_progress_track: { id, description, path } | null, failed_files: [...] }\`
+    -   **Fallback:** If no native \`Task\` tool is available, read the registry inline, extract the schema, then explicitly discard its payload from working memory after producing the schema.
+    -   **If \`in_progress_track\` is not null:** Ask the user for confirmation using a **Yes/No question** to proceed with reviewing that specific track.
+    -   **If \`in_progress_track\` is null, or the user declines:** Ask the user to clarify what they would like to review by asking an **open question**, suggesting options like entering a specific track name or 'current' for uncommitted changes.
 
 3.  **Confirm Scope:** Ensure you and the user agree on what is being reviewed by asking for confirmation using a **Yes/No question**.
 
 ### 2.2 Retrieve Context
-1.  **Load Project Context:**
-    -   Read \`product-guidelines.md\` and \`tech-stack.md\`.
-    -   **CRITICAL:** Check for the existence of \`conductor/code_styleguides/\` directory.
-        -   If it exists, list and read ALL \`.md\` files within it. These are the **Law**. Violations here are **High** severity.
-    -   **Check for Installed Skills:**
-        -   Check for the existence of \`.agents/skills/\` (Workspace tier) and \`~/.agents/extensions/conductor/skills/\` (Extension tier).
-        -   If either exists, list the subdirectories to identify installed skills across both paths.
-        -   If relevant skills (e.g., \`gcp-*\`) are found, enable specialized feedback for those domains.
-2.  **Load Track Context (if reviewing a track):**
-    -   Read the track's \`plan.md\`.
-    -   **Extract Commits:** Parse \`plan.md\` to find recorded git commit hashes (usually in the "Completed" tasks or "History" section).
-    -   **Determine Revision Range:** Identify the start (first commit parent) and end (last commit).
-3.  **Load and Analyze Changes (Smart Chunking):**
-    -   **Volume Check:** Run \`git diff --shortstat <revision_range> -- . ':!conductor'\` first.
-    -   **Strategy Selection:**
-        -   **Small/Medium Changes (< 300 lines):**
-            -   Run \`git diff <revision_range> -- . ':!conductor'\` to get the full context in one go.
-            -   Proceed to "Analyze and Verify".
-        -   **Large Changes (> 300 lines):**
-            -   **Confirm:** Ask the user for confirmation using a **Yes/No question** to proceed with a large review (explaining that it involves >300 lines of changes and will use 'Iterative Review Mode' which may take longer).
-            -   **List Files:** Run \`git diff --name-only <revision_range> -- . ':!conductor'\`.
-            -   **Iterate (Subagent Delegation, dispatch point):** This is a parallel-safe dispatch point \u2014 per-file diffs are independent of one another. Dispatch them in parallel using the native \`Task\` tool with \`subagent_type=general_purpose_task\`, **one subagent per source file** (ignore locks/assets). Each subagent runs \`git diff <revision_range> -- <file_path>\`, performs the "Analyze and Verify" checks (2.3) on that file only, and returns its findings in the Section 2.4 finding format; it **must not write any files**. The orchestrator **aggregates all findings** into the final report. If no native \`Task\` tool is available, fall back to iterating the files yourself, one at a time:
-                1.  Run \`git diff <revision_range> -- <file_path>\`.
-                2.  Perform the "Analyze and Verify" checks on this specific chunk.
-                3.  Store findings in your temporary memory.
-            -   **Aggregate:** Synthesize all file-level findings (yours or the subagents') into the final report.
+1.  **Load Project Context (Subagent Dispatch):** Delegate the loading of styleguides, guidelines, and installed skills to a subagent so the verbose contents of all styleguide and guidelines files never enter the orchestrator context.
+    -   **Dispatch:** Call the native \`Task\` tool with \`subagent_type=general_purpose_task\`, passing a closed prompt with: the resolved paths to \`product-guidelines.md\`, \`tech-stack.md\`, the \`conductor/code_styleguides/\` directory, and the installed-skills directories (\`.agents/skills/\` and \`~/.agents/extensions/conductor/skills/\`).
+    -   **Subagent Constraints:** Read-only. MUST: (a) read \`product-guidelines.md\` and \`tech-stack.md\` and extract their rule statements; (b) if \`conductor/code_styleguides/\` exists, list and read ALL \`.md\` files within it and extract each rule as a structured entry; (c) if either skills directory exists, list the subdirectories to identify installed skills across both paths. MUST NOT commit, write any file, or interact with the user. Receives no prior conversation history.
+    -   **Condensed Return Schema (the ONLY thing the orchestrator absorbs):**
+        \`{ rules: [{ source, severity, statement }], installed_skills: [{ name, tier }] }\` where \`source\` is the file path, \`severity\` is \`high\` for styleguides and \`medium\` otherwise, and \`tier\` is \`workspace\` or \`extension\`.
+    -   **Fallback:** If no native \`Task\` tool is available, read the files inline and extract the rules yourself following the same rules, then explicitly discard the payloads of ALL styleguide files, \`product-guidelines.md\`, and \`tech-stack.md\` from working memory after producing the schema.
+    -   **Orchestrator Note:** Treat every entry in \`rules\` where \`source\` is under \`code_styleguides/\` as **High** severity (the **Law**). Use \`installed_skills\` to enable specialized feedback for matching domains (e.g., \`gcp-*\`).
+2.  **Load Track Context (Subagent Dispatch):** Delegate the parsing of \`plan.md\` for commit SHAs to a subagent so its payload never enters the orchestrator context.
+    -   **Resolve Path:** Resolve the **path** (do NOT read payload) to the track's \`plan.md\` (check the track's \`index.md\` for links, or use the default \`conductor/tracks/<track_id>/plan.md\`).
+    -   **Dispatch:** Call the native \`Task\` tool with \`subagent_type=general_purpose_task\`, passing a closed prompt with: the resolved path to \`plan.md\`.
+    -   **Subagent Constraints:** Read-only. MUST read \`plan.md\`, find all recorded git commit hashes from "Completed" (\`[x]\`) tasks and any "History"/"checkpoint" sections. MUST derive the contiguous revision range from the earliest parent to the latest commit. MUST NOT commit, write any file, or interact with the user. Receives no prior conversation history.
+    -   **Condensed Return Schema (the ONLY thing the orchestrator absorbs):**
+        \`{ revision_range: "<sha_start>..<sha_end>", checkpoint_shas: [...], failed_files: [...] }\`
+        If \`plan.md\` could not be read, \`failed_files\` lists it; otherwise empty.
+    -   **Fallback:** If no native \`Task\` tool is available, read \`plan.md\` inline, extract the schema, then explicitly discard its payload from working memory after producing the schema.
+    -   **If \`failed_files\` is non-empty:** HALT and inform the user.
+3.  **Load and Analyze Changes (Unified Subagent Dispatch):** The full diff
+    NEVER enters the orchestrator context, regardless of size. The volume check
+    below only selects the dispatch shape (single vs. parallel); it never gates
+    an inline read.
 
-### 2.3 Analyze and Verify
-**Perform the following checks on the retrieved diff:**
+    -   **Volume Check:** Run \`git diff --shortstat <revision_range> -- . ':!conductor'\`
+        first. This is the ONLY diff command the orchestrator runs directly.
+    -   **Dispatch Shape:**
+        -   **Small/Medium Changes (< 300 lines):** Dispatch a **single**
+            subagent covering the whole range.
+        -   **Large Changes (> 300 lines):** Ask the user for confirmation using
+            a **Yes/No question** (explaining >300 lines, 'Iterative Review
+            Mode'). On approval, run \`git diff --name-only <revision_range> -- . ':!conductor'\`
+            **inside the subagent prompt** (not inline), then dispatch
+            **one subagent per source file** in parallel (ignore
+            locks/assets).
+    -   **Dispatch:** Call the native \`Task\` tool with
+        \`subagent_type=general_purpose_task\`, passing a closed prompt with: the
+        \`<revision_range>\`, the project root, the file path (or the
+        \`--name-only\` rule for large sets), the paths to \`plan.md\`/\`spec.md\`,
+        the rules array returned by \xA72.2.1, and the Analyze-and-Verify
+        specification in \xA72.3 as the subagent's instruction set.
+    -   **Subagent Constraints:** MAY run \`git diff\` for its assigned scope. MAY
+        read source files. MUST NOT commit, write any file, or interact with the
+        user. Receives no prior conversation history. Returns findings in the
+        Section 2.4 finding format.
+    -   **Condensed Return Schema (the ONLY thing the orchestrator absorbs per
+        subagent):**
+        \`{ findings: [{ severity, title, file, lines, context, suggestion_diff }], coverage_ok: bool }\`
+    -   **Aggregate:** Synthesize all returned findings into the final report.
+    -   **Fallback:** If no native \`Task\` tool is available, iterate the files
+        yourself one at a time, run the \xA72.3 checks, store only the findings
+        (not the diff) in working memory, and explicitly discard each diff
+        before processing the next file.
 
-1.  **Intent Verification:** Does the code actually implement what the \`plan.md\` (and \`spec.md\` if available) asked for?
+### 2.3 Analyze and Verify (Subagent Specification)
+**This section is the instruction set executed by the subagents dispatched in
+\xA72.2.3. The orchestrator does NOT perform these checks inline.**
+
+1.  **Intent Verification:** Does the code actually implement what the \`plan.md\`
+    (and \`spec.md\` if available) asked for?
 2.  **Style Compliance:**
     -   Does it follow \`product-guidelines.md\`?
     -   Does it strictly follow \`conductor/code_styleguides/*.md\`?
 3.  **Correctness & Safety:**
     -   Look for bugs, race conditions, null pointer risks.
-    -   **Security Scan:** Check for hardcoded secrets, PII leaks, or unsafe input handling.
-4.  **Testing:**
-    -   Are there new tests?
+    -   **Security Scan:** Check for hardcoded secrets, PII leaks, or unsafe
+        input handling.
+4.  **Static Testing Checks (per-file):**
+    -   Are there new tests alongside the source change?
     -   Do the changes look like they are covered by existing tests?
-    -   *Action:* **Execute the test suite automatically.** Infer the test command based on the codebase languages and structure (e.g., \`npm test\`, \`pytest\`, \`go test\`). Run it. Analyze the output for failures.
+    -   Return \`coverage_ok: false\` if a code file lacks a matching test.
 5.  **Skill-Specific Checks:**
-    -   If specific skills are installed (e.g. GCP), verify compliance with their best practices.
+    -   If specific skills are installed (e.g. GCP), verify compliance with
+        their best practices.
+
+**Orchestrator-Side Test Execution (Subagent Dispatch):** Separate from the
+per-file analysis, the orchestrator dispatches ONE test-suite execution so the
+full test output never enters its context.
+
+-   **Dispatch:** Call the native \`Task\` tool with
+    \`subagent_type=general_purpose_task\`, passing a closed prompt with the
+    inferred test command (e.g., \`npm test\`, \`pytest\`, \`go test\`) and the
+    project root.
+-   **Subagent Constraints:** MAY run the test command. MUST NOT commit. MUST
+    NOT modify control files (\`plan.md\`, \`tracks.md\`, \`index.md\`, \`product.md\`,
+    \`tech-stack.md\`). MUST NOT interact with the user. Receives no prior
+    conversation history.
+-   **Condensed Return Schema (the ONLY thing the orchestrator absorbs):**
+    \`{ status: "passed" | "failed", total: N, failed: [...], summary: "..." }\`
+-   **Fallback:** If no native \`Task\` tool is available, execute the suite
+    inline, extract the schema fields, then discard the raw output.
 
 ### 2.4 Output Findings
 **Format your output strictly as follows:**
@@ -4043,21 +4172,30 @@ Before starting the review process, you MUST locate and read the project's found
         b. **Handle Track-Specific Changes:**
             i.   **Confirm with User:** Ask the user for confirmation using a **Yes/No question** if you should commit the uncommitted changes and update the track's plan.
             ii.  **If Yes:**
-                 - **Update Plan (Add Review Task):**
-                   - Read the track's \`plan.md\`.
-                   - Append a new phase (if it doesn't exist) and task to the end of the file.
-                   - **Format:**
+                 - **Append Review Fixes to Plan (Subagent Dispatch):** Delegate the read-and-append of \`plan.md\` to a subagent so its payload never enters the orchestrator context.
+                   - **Resolve Path:** Resolve the **path** (do NOT read payload) to the track's \`plan.md\`.
+                   - **Dispatch:** Call the native \`Task\` tool with \`subagent_type=general_purpose_task\`, passing a closed prompt with: the resolved path to \`plan.md\` and the Review Fixes section template:
                      \`\`\`markdown
                      ## Phase: Review Fixes
                      - [~] Task: Apply review suggestions
                      \`\`\`
-                 - **Commit Code:**
+                   - **Subagent Constraints:** Read-only + append. MUST read \`plan.md\`, append the Review Fixes section (if a Phase "Review Fixes" does not already exist \u2014 if it exists, only append the task), and return the full modified content. MUST NOT commit, write any file, or interact with the user. Receives no prior conversation history.
+                   - **Condensed Return Schema (the ONLY thing the orchestrator absorbs):**
+                     \`{ updated_plan_md: "<full plan.md after append>", task_line_number: N, failed_files: [...] }\`
+                     \`task_line_number\` is the line index of the \`- [~] Task: Apply review suggestions\` entry within \`updated_plan_md\` (for the SHA update dispatch below).
+                   - **Fallback:** If no native \`Task\` tool is available, read \`plan.md\` inline, append the section, then explicitly discard its payload from working memory after producing \`updated_plan_md\`.
+                   - **Write:** The orchestrator writes \`updated_plan_md\` to disk at the resolved \`plan.md\` path.
+                 - **Commit Code (Orchestrator-Side):**
                    - Stage all code changes related to the track (excluding \`plan.md\`).
                    - Commit with message: \`fix(conductor): Apply review suggestions for track '<track_name>'\`.
-                 - **Record SHA:**
-                   - Get the short SHA (first 7 characters) of the commit.
-                   - Update the task in \`plan.md\` to: \`- [x] Task: Apply review suggestions <sha>\`.
-                 - **Commit Plan Update:**
+                 - **Record SHA and Finalize Plan (Subagent Dispatch):** Delegate the task-status update to a subagent so \`plan.md\` is never re-read by the orchestrator.
+                   - **Dispatch:** Call the native \`Task\` tool with \`subagent_type=general_purpose_task\`, passing a closed prompt with: the resolved path to \`plan.md\`, the \`task_line_number\` from the previous dispatch, and the short SHA (first 7 characters) of the code commit.
+                   - **Subagent Constraints:** Read-only + targeted edit. MUST read \`plan.md\`, find the task at \`task_line_number\` (verifying it is still \`- [~] Task: Apply review suggestions\`), and update it to \`- [x] Task: Apply review suggestions <sha>\`. MUST NOT commit, write any file, or interact with the user. Receives no prior conversation history.
+                   - **Condensed Return Schema (the ONLY thing the orchestrator absorbs):**
+                     \`{ updated_plan_md: "<full plan.md after SHA update>", failed_files: [...] }\`
+                   - **Fallback:** If no native \`Task\` tool is available, read \`plan.md\` inline, perform the line update, then explicitly discard its payload from working memory after producing \`updated_plan_md\`.
+                   - **Write:** The orchestrator writes \`updated_plan_md\` to disk.
+                 - **Commit Plan Update (Orchestrator-Side):**
                    - Stage \`plan.md\`.
                    - Commit with message: \`conductor(plan): Mark task 'Apply review suggestions' as complete\`.
                  - **Announce Success:** "Review changes committed and tracked in the plan."
@@ -4187,12 +4325,12 @@ and gather context sequentially.
 **If Brownfield:**
 
 - **Request Permission:** Ask: *"A brownfield project has been detected. May I perform a read-only scan to analyze the architecture?"*
-- **Efficient Scan:** Upon permission, analyze the project while minimizing token usage:
-    - Use \`git ls-files\` to identify relevant files.
-    - Respect \`.gitignore\` and \`.geminiignore\` patterns.
-    - Ignore common heavy directories (\`node_modules\`, \`dist\`, \`build\`).
-    - For files >1MB, read only the first and last 20 lines.
-    - Analyze \`README.md\` and manifests (\`package.json\`, \`go.mod\`, etc.) to extract the Tech Stack and Architecture.
+- **Isolated Architecture Scan (Subagent Dispatch):** Upon permission, delegate the scan to a subagent so the intermediate output (file listings, file heads/tails, manifest contents) never enters the orchestrator context.
+    -   **Dispatch:** Call the native \`Task\` tool with \`subagent_type=general_purpose_task\`, passing a closed prompt containing only the project root path and the scan rules: use \`git ls-files\` to identify relevant files; respect \`.gitignore\` and \`.geminiignore\`; skip heavy directories (\`node_modules\`, \`dist\`, \`build\`); for files >1MB read only the first and last 20 lines; analyze \`README.md\` and manifests (\`package.json\`, \`go.mod\`, etc.).
+    -   **Subagent Constraints:** Read-only. MUST NOT commit, write any file, or interact with the user. Receives no prior conversation history.
+    -   **Condensed Return Schema (the ONLY thing the orchestrator absorbs):**
+        \`{ tech_stack: [...], architecture: "...", dependencies: [...], patterns: [...] }\`
+    -   **Fallback:** If no native \`Task\` tool is available, perform the scan inline yourself following the same rules.
 
 **If Greenfield:**
 
@@ -4249,7 +4387,12 @@ Define and document the project's technology stack.
 Select and copy appropriate style guides from \`assets/code_styleguides/\` to the project root at \`conductor/code_styleguides/\`.
 
 1. **Asset Constraint:** You MUST ONLY propose and copy guides from \`assets/code_styleguides/\`. Do NOT generate style rules from scratch.
-2. **Recommendation:** Propose guides based on the Tech Stack confirmed in 2.3.
+2. **Recommendation (Subagent Dispatch):** Delegate the tech-stack \u2192 styleguide matching to a subagent so the contents of all styleguide files never enter the orchestrator context.
+    -   **Dispatch:** Call the native \`Task\` tool with \`subagent_type=general_purpose_task\`, passing a closed prompt with: the confirmed Tech Stack (from 2.3) and the path to \`assets/code_styleguides/\` (relative to this skill's directory).
+    -   **Subagent Constraints:** Read-only. MUST list the available styleguide files, read their language/framework tags, and cross-reference them against the provided Tech Stack. MUST NOT commit, write any file, or interact with the user. Receives no prior conversation history.
+    -   **Condensed Return Schema (the ONLY thing the orchestrator absorbs):**
+        \`{ matches: [filename], extras: [filename] }\` where \`matches\` are direct hits and \`extras\` are optional but valuable.
+    -   **Fallback:** If no native \`Task\` tool is available, list and read the styleguide headers inline and perform the matching yourself following the same rules.
 3. **Selection Mode:**
     - **Brownfield:** Propose matching guides and ask the user using a **Yes/No question** if additional ones are needed.
     - **Greenfield:** Present recommended guides or allow the user to hand-pick from the library using a **multiple-choice question**.
@@ -4269,14 +4412,15 @@ Configure the operational rules for the project.
 
 ### 2.6 Agent Skill Selection (Optional)
 
-1. **Analyze Needs & Trust Model:**
-    - Read the skill catalog from \`assets/catalog.md\` (relative to this skill's directory).
-    - Analyze the project context (e.g., \`product.md\`, \`tech-stack.md\`) against the \`Detection Signals\` in the loaded \`catalog.md\` to identify relevant skills NOT yet installed.
-    - **Trust Disclosure:** For each recommendation, disclose the \`Party\` status:
-        - **1p (Official):** Present as a verified, official Conductor skill.
-        - **3p (Community):** Present as a third-party skill. You MUST warn the user: *"Warning: This is a third-party skill. It will be installed as a frozen version (commit <sha>) for your safety."*
+1.  **Analyze Needs & Trust Model (Subagent Dispatch):** Delegate the catalog matching to a subagent so the full \`catalog.md\` contents and cross-referencing never enter the orchestrator context.
+    -   **Dispatch:** Call the native \`Task\` tool with \`subagent_type=general_purpose_task\`, passing a closed prompt with: the confirmed \`product.md\` content, the confirmed \`tech-stack.md\` content, and the path to \`assets/catalog.md\` (relative to this skill's directory).
+    -   **Subagent Constraints:** Read-only. MUST read \`catalog.md\` and cross-reference its \`Detection Signals\` against the provided product and tech-stack context to identify relevant skills NOT yet installed. MUST NOT commit, write any file, or interact with the user. Receives no prior conversation history.
+    -   **Condensed Return Schema (the ONLY thing the orchestrator absorbs):**
+        \`{ recommended: [{ name, reason, party, detection_signal }] }\` where \`party\` is \`1p\` or \`3p\`.
+    -   **Fallback:** If no native \`Task\` tool is available, read \`catalog.md\` inline and perform the matching yourself following the same rules.
+    -   **Trust Assessment:** Use the \`party\` field from the returned schema to classify each recommendation.
 
-2. **Recommendation & Installation Loop:**
+2.  **Recommendation & Installation Loop:**
     - **Identify Recommendations:** If relevant missing skills are found, present them to the user, explaining their value for the project.
     - **Trust Disclosure:** For each recommendation, disclose its status:
         - **1p (Official):** Present as a verified Conductor skill.
@@ -5668,48 +5812,88 @@ that also concludes a phase in \`plan.md\`.
 1.  **Announce Protocol Start:** Inform the user that the phase is complete and
     the verification and checkpointing protocol has begun.
 
-2.  **Ensure Test Coverage for Phase Changes:**
+2.  **Ensure Test Coverage for Phase Changes (Subagent Dispatch):**
+    Delegate the test-coverage verification and gap-filling to a subagent so
+    the \`git diff\` output, file-extension analysis, and existing-test
+    inspection never enter the orchestrator context.
 
-    -   **Step 2.1: Determine Phase Scope:** To identify the files changed in
-        this phase, you must first find the starting point. Read \`plan.md\` to
-        find the Git commit SHA of the *previous* phase's checkpoint. If no
-        previous checkpoint exists, the scope is all changes since the first
-        commit.
-    -   **Step 2.2: List Changed Files:** Execute \`git diff --name-only
-        <previous_checkpoint_sha> HEAD\` to get a precise list of all files
-        modified during this phase.
-    -   **Step 2.3: Verify and Create Tests:** For each file in the list:
-        -   **CRITICAL:** First, check its extension. Exclude non-code files
-            (e.g., \`.json\`, \`.md\`, \`.yaml\`).
+    -   **Step 2.1: Determine Phase Scope (Orchestrator-Side):** Read \`plan.md\`
+        inline to find the Git commit SHA of the *previous* phase's checkpoint.
+        If no previous checkpoint exists, the scope is all changes since the
+        first commit. This is the ONLY inline read in this step.
+    -   **Step 2.2: Dispatch:** Call the native \`Task\` tool with
+        \`subagent_type=general_purpose_task\`, passing a closed prompt with only:
+        the \`<previous_checkpoint_sha>\` (or first-commit fallback), the project
+        root, the path to this phase's section in \`plan.md\`, and the rules
+        below.
+    -   **Subagent Constraints:** MAY run \`git diff --name-only\` and read source
+        files / existing test files. MAY create missing test files. MUST NOT
+        commit. MUST NOT modify control files (\`plan.md\`, \`tracks.md\`,
+        \`index.md\`, \`product.md\`, \`tech-stack.md\`). MUST NOT interact with the
+        user. Receives no prior conversation history. Rules to enforce:
+        -   Run \`git diff --name-only <previous_checkpoint_sha> HEAD\` to list
+            phase changes.
+        -   **CRITICAL:** Exclude non-code files (e.g., \`.json\`, \`.md\`,
+            \`.yaml\`).
         -   For each remaining code file, verify a corresponding test file
-            exists.
-        -   If a test file is missing, you **must** create one. Before writing
-            the test, **first, analyze other test files in the repository to
-            determine the correct naming convention and testing style.** The new
-            tests **must** validate the functionality described in this phase's
-            tasks (\`plan.md\`).
+            exists. If missing, **first** analyze other test files in the repo
+            to learn the naming convention and testing style, then create one
+            validating the functionality described in the phase's \`plan.md\`
+            tasks.
+    -   **Condensed Return Schema (the ONLY thing the orchestrator absorbs):**
+        \`{ created_tests: [path], skipped: [path], missing: [path], notes: "..." }\`
+    -   **Fallback:** If no native \`Task\` tool is available, execute the
+        diff + verification + creation inline, then explicitly discard the diff
+        output and file listing from working memory before proceeding.
 
-3.  **Execute Automated Tests with Proactive Debugging:**
+3. **Execute Automated Tests with Proactive Debugging:**
 
-    -   Before execution, you **must** announce the exact shell command you will
+    - Before execution, you **must announce** the exact shell command you will
         use to run the tests.
-    -   **Example Announcement:** "I will now run the automated test suite to
+    - **Example Announcement:** "I will now run the automated test suite to
         verify the phase. **Command:** \`CI=true npm test\`"
-    -   Execute the announced command.
-    -   If tests fail, you **must** inform the user and begin debugging. You may
-        attempt to propose a fix a **maximum of two times**. If the tests still
-        fail after your second proposed fix, you **must stop**, report the
-        persistent failure, and ask the user for guidance.
+    - **Isolated Execution (Subagent Dispatch):** Delegate test execution and
+        the debug loop to a subagent so stack traces and rebuild logs never
+        enter the orchestrator context.
+        -   **Dispatch:** Call the native \`Task\` tool with
+            \`subagent_type=general_purpose_task\`, passing a closed prompt
+            containing only: the announced test command, the project root, and
+            the rule "attempt up to 2 fixes before giving up".
+        -   **Subagent Constraints:** MAY edit source/test files to apply fixes
+            and MAY run shell commands. MUST NOT commit. MUST NOT modify control
+            files (\`plan.md\`, \`tracks.md\`, \`index.md\`, \`product.md\`,
+            \`tech-stack.md\`). MUST NOT interact with the user. Receives no prior
+            conversation history.
+        -   **Condensed Return Schema (the ONLY thing the orchestrator
+            absorbs):**
+            \`{ status: "pass" | "fail", failing_tests: [...], root_cause: "...", suggested_fix: "...", attempts: N }\`
+        -   **Fallback:** If no native \`Task\` tool is available, execute the
+            command and debug loop inline yourself.
+    - If the subagent reports persistent failure after 2 attempts, you **must
+        stop**, report the condensed failure to the user, and ask for guidance.
 
-4.  **Propose a Detailed, Actionable Manual Verification Plan:**
+4.  **Propose a Detailed, Actionable Manual Verification Plan (Subagent
+    Dispatch):** Delegate the plan drafting to a subagent so the contents of
+    \`product.md\`, \`product-guidelines.md\`, and \`plan.md\` never enter the
+    orchestrator context.
 
-    -   **CRITICAL:** To generate the plan, first analyze \`product.md\`,
-        \`product-guidelines.md\`, and \`plan.md\` to determine the user-facing
-        goals of the completed phase.
-    -   You **must** generate a step-by-step plan that walks the user through
-        the verification process, including any necessary commands and specific,
-        expected outcomes.
-    -   The plan you present to the user **must** follow this format:
+    -   **Dispatch:** Call the native \`Task\` tool with
+        \`subagent_type=general_purpose_task\`, passing a closed prompt with only:
+        the paths to \`product.md\`, \`product-guidelines.md\`, the completed
+        phase's section in \`plan.md\`, and the project root.
+    -   **Subagent Constraints:** Read-only. MUST read the three files, derive
+        the user-facing goals of the completed phase, and generate a
+        step-by-step manual verification plan (commands + specific expected
+        outcomes). MUST NOT commit, write any file, or interact with the user.
+        Receives no prior conversation history.
+    -   **Condensed Return Schema (the ONLY thing the orchestrator absorbs):**
+        \`{ steps: [{ action, command, expected_outcome }], kind: "frontend" | "backend" | "fullstack" }\`
+    -   **Fallback:** If no native \`Task\` tool is available, read the three
+        files inline, draft the plan, then explicitly discard their contents
+        from working memory after producing the plan.
+    -   **Presentation (Orchestrator-Side):** Render the returned \`steps\`
+        following the format below, adapted to \`kind\`. The orchestrator
+        **must not** re-read the source files to produce this output.
 
         **For a Frontend Change:** \`\`\` The automated tests have passed. For
         manual verification, please follow these steps:
@@ -6095,7 +6279,16 @@ Before starting the status overview process, you MUST locate and read the projec
     -   **Product Definition** (\`product.md\`)
     -   **Tech Stack** (\`tech-stack.md\`)
     -   **Workflow** (\`workflow.md\`)
-    -   **Health Check:** You MUST verify that every linked file actually exists. If ANY of these core files are missing, HALT immediately. Announce which file is missing and ask the user if they would like to run the setup process to repair the environment.
+    -   **Health Check (Existence Only):** You MUST verify that every linked file
+        exists on disk. Do this via directory listing or a stat check \u2014 **do
+        NOT** read the file payloads inline. If ANY of these core files are
+        missing, HALT immediately. Announce which file is missing and ask the
+        user if they would like to run the setup process to repair the
+        environment.
+    -   **Context Isolation Note:** The contents of \`tracks.md\`, the track
+        \`plan.md\` files, \`workflow.md\`, \`product.md\`, and \`tech-stack.md\` are
+        exclusively consumed inside the subagent dispatch defined in \xA72.1. The
+        orchestrator must operate purely on paths, never on the file payloads.
 
 ---
 
@@ -6103,24 +6296,17 @@ Before starting the status overview process, you MUST locate and read the projec
 
 Follow this sequence to provide a status overview.
 
-### 2.1 Read Project Plan
-1.  **Locate and Read:** Read the content of the **Tracks Registry**. Check \`conductor/index.md\` for the link, otherwise use the Default Path: \`conductor/tracks.md\`.
-2.  **Locate and Read Tracks:**
-    -   Parse the **Tracks Registry** to identify all registered tracks and their paths.
-        *   **Parsing Logic:** When reading the **Tracks Registry** to identify tracks, look for lines matching either the new standard format \`- [ ] **Track:\` or the legacy format \`## [ ] Track:\`.
-    -   For each track, resolve and read its **Implementation Plan**. Check the track's \`index.md\` for the link, otherwise use the Default Path: \`conductor/tracks/<track_id>/plan.md\`.
+### 2.1 Read and Summarize (Subagent Dispatch)
+Delegate the parsing of the Tracks Registry and all track plans to a subagent so the verbose contents of every \`plan.md\` never enter the orchestrator context.
 
-### 2.2 Parse and Summarize Plan
-1.  **Parse Content:**
-    -   Identify major project phases/sections (e.g., top-level markdown headings).
-    -   Identify individual tasks and their current status by looking for checkbox markers: \`[x]\` for completed, \`[~]\` for in-progress, and \`[ ]\` for pending.
-2.  **Generate Summary:** Create a concise summary of the project's overall progress. This should include:
-    -   The total number of major phases.
-    -   The total number of tasks.
-    -   The number of tasks completed, in progress, and pending.
+1.  **Dispatch:** Call the native \`Task\` tool with \`subagent_type=general_purpose_task\`, passing a closed prompt with: the resolved path to the **Tracks Registry** (check \`conductor/index.md\`, otherwise default \`conductor/tracks.md\`) and the tracks directory path.
+2.  **Subagent Constraints:** Read-only. MUST read the **Tracks Registry** and every track's **Implementation Plan**. Parsing logic: identify tracks via \`- [ ] **Track:\` or legacy \`## [ ] Track:\`; identify task status via \`[x]\` (completed), \`[~]\` (in-progress), \`[ ]\` (pending). MUST NOT commit, write any file, or interact with the user. Receives no prior conversation history.
+3.  **Condensed Return Schema (the ONLY thing the orchestrator absorbs):**
+    \`{ phases: N, tasks: { total, done, in_progress, pending }, current: { phase, task }, next: "...", blockers: [...] }\`
+4.  **Fallback:** If no native \`Task\` tool is available, read and parse the registry and plans inline following the same rules.
 
-### 2.3 Present Status Overview
-1.  **Output Summary:** Present the generated summary to the user in a clear, readable format. The status report must include:
+### 2.2 Present Status Overview
+Using the schema returned by the subagent, present the generated summary to the user in a clear, readable format. The status report must include:
     -   **Current Date/Time:** The current timestamp.
     -   **Project Status:** A high-level summary of progress (e.g., "On Track", "Behind Schedule", "Blocked").
     -   **Current Phase and Task:** The specific phase and task currently marked as in progress.

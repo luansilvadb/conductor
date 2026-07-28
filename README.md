@@ -114,7 +114,7 @@ O Conductor detecta automaticamente a ferramenta de IA que você já usa no proj
 
 ## Requisitos
 
-- Node.js 20.11+ (uso de `import.meta.dirname`).
+- Node.js 20.11+.
 
 ## Uso sem clonar (npx)
 
@@ -130,14 +130,14 @@ npx github:luansilvadb/conductor generate
 
 Repositório: https://github.com/luansilvadb/conductor
 
-O `npx` baixa o tarball do repositório, instala as dependências declaradas em [package.json](package.json) e executa o binário registrado no campo `bin` ([dist/index.js](dist/index.js)). O `dist/` é versionado exatamente por isso — o `npx` **não** executa `postinstall`/build, então o JS (e os templates) precisam estar prontos.
+O Conductor é distribuído como um **single-file bundle**: as dependências (`commander`, `chalk`, `@clack/prompts`) e todos os templates `.md` são embutidos diretamente em [dist/index.cjs](dist/index.cjs). Por isso o `package.json` declara `dependencies: {}` — o `npx` baixa apenas o tarball, **sem instalar nada no cache `_npx`**. Isso elimina a classe inteira de problemas de `EPERM` no Windows causados por file watchers de IDEs sobre o cache do `npx`.
 
 > **Problema com `EALLOWSCRIPTS`?** Se o seu `~/.npmrc` tem `allow-scripts` em modo estrito, o `npx github:...` pode falhar na preparação do git dep. Alternativa: instale o tarball da [última release](https://github.com/luansilvadb/conductor/releases) diretamente:
 > ```bash
 > npx https://github.com/luansilvadb/conductor/releases/latest/download/conductor.tgz
 > ```
 >
-> **Nota:** esta URL exige que exista uma release publicada com o asset `conductor.tgz` anexado. Enquanto não houver releases, use a [instalação a partir do código-fonte](#instalação-a-partir-do-código-fonte) ou o [workaround para Windows](#windows--ide-file-watcher-eperm).
+> **Nota:** esta URL exige que exista uma release publicada com o asset `conductor.tgz` anexado. Enquanto não houver releases, use a [instalação a partir do código-fonte](#instalação-a-partir-do-código-fonte).
 >
 > Dica: para evitar a digitação longa, crie um alias no seu shell:
 > `alias conductor="npx github:luansilvadb/conductor"`.
@@ -146,7 +146,9 @@ O `npx` baixa o tarball do repositório, instala as dependências declaradas em 
 
 ### Windows + IDE file watcher (EPERM)
 
-No Windows, quando uma IDE com file watcher ativo (ex.: **Trae IDE**, **VS Code** com watcher agressivo, **WebStorm**) está aberta sobre o workspace, o `npx github:luansilvadb/conductor` pode falhar antes de executar o binário com `exit code 1` e mensagens do tipo:
+> **Resolvido na versão single-file bundle.** A partir da refatoração que embute todas as dependências e templates em `dist/index.cjs`, o `npx` não precisa mais instalar nada no cache `_npx` — portanto não há arquivos para o file watcher travar. Esta seção permanece como referência histórica e para usuários em versões anteriores.
+
+Em versões anteriores (com `dependencies` runtime como `@clack/prompts`, `chalk`, `commander`), no Windows quando uma IDE com file watcher ativo (ex.: **Trae IDE**, **VS Code** com watcher agressivo, **WebStorm**) estava aberta sobre o workspace, o `npx github:luansilvadb/conductor` podia falhar antes de executar o binário com `exit code 1` e mensagens do tipo:
 
 ```
 npm warn cleanup Failed to remove some directories [
@@ -154,11 +156,9 @@ npm warn cleanup   [ Error: EPERM: operation not permitted, rmdir
 npm warn cleanup     '...\AppData\Local\npm-cache\_npx\<hash>\node_modules\@clack\prompts' ] ]
 ```
 
-**Causa:** o file watcher da IDE abre handles sobre os arquivos de `node_modules` assim que o npm os cria dentro do cache temporário `_npx\<hash>\`. Na fase de cleanup, o `rmdir` do npm falha com `EPERM` porque os handles ainda estão sendo usados. O npm trata a falha de cleanup como fatal e aborta antes de invocar o binário — o diretório alvo fica vazio.
+**Causa raiz:** o file watcher da IDE abria handles sobre os arquivos de `node_modules` assim que o npm os criava dentro do cache temporário `_npx\<hash>\`. Na fase de cleanup, o `rmdir` do npm falhava com `EPERM` porque os handles ainda estavam sendo usados. O npm tratava a falha de cleanup como fatal e abortava antes de invocar o binário — o diretório alvo ficava vazio.
 
-Este é um problema conhecido de interação `npm` × Windows × file watchers, não um bug do Conductor em si. **Não ocorre** em Windows headless ou com o watcher desativado.
-
-**Workaround recomendado** (clone + `npm ci` + execução direta do binário):
+**Para versões antigas**, o workaround era clone + `npm ci` + execução direta do binário:
 
 ```powershell
 git clone --depth 1 https://github.com/luansilvadb/conductor.git D:\conductor-src
@@ -166,12 +166,10 @@ cd D:\conductor-src
 npm ci --omit=dev --no-audit --no-fund
 
 # a partir do diretório do projeto alvo
-node D:\conductor-src\dist\index.js generate --tool trae
+node D:\conductor-src\dist\index.cjs generate --tool trae
 ```
 
-A instalação acontece em um diretório de projeto estável (não no cache `_npx`), então não há handles externos e o `npm ci` conclui em ~550ms sem EPERM.
-
-**Alternativas:**
+Se você ainda assim encontrar `EPERM` em algum cenário, as alternativas são:
 
 - Fechar a IDE (ou desabilitar o file watcher) antes de rodar o `npx`.
 - Limpar o cache `_npx` antes de tentar de novo: `Remove-Item -Recurse -Force "$env:LOCALAPPDATA\npm-cache\_npx"` (o npm recria sob demanda).
@@ -181,7 +179,7 @@ A instalação acontece em um diretório de projeto estável (não no cache `_np
 
 ```bash
 npm install
-npm run build      # gera dist/
+npm run build      # gera dist/index.cjs (single-file bundle)
 npm link           # disponibiliza `conductor` globalmente
 ```
 
@@ -287,13 +285,24 @@ Cada template usa YAML frontmatter (`name`, `id`, `category`, `description`) par
 
 ## Desenvolvimento
 
+O build é um pipeline em 4 passos (definido no `scripts` do `package.json`):
+
 ```bash
-npm install        # instala deps (inclui cpy-cli para cópia de templates)
-npm run build      # tsc (compila TS) + cpy (copia .md para dist/)
-node dist/index.js # testa localmente
+npm install        # instala devDeps (esbuild, typescript, @clack/prompts, chalk, commander)
+npm run build      # clean + embed + typecheck + bundle
+node dist/index.cjs  # testa localmente
 ```
 
-> **Importante:** o build copia os templates `.md` de `src/internal/templates/data/` para `dist/` (o `tsc` não copia assets). Sempre rode `npm run build` antes de commitar mudanças em `src/`.
+| Passo | Script | O que faz |
+|-------|--------|-----------|
+| `clean` | `scripts/clean-dist.mjs` | Limpa `dist/` renomeando para `dist.old/` (robusto a EPERM de file watchers em dev). |
+| `embed` | `scripts/embed-templates.mjs` | Lê os `.md` de `src/internal/templates/data/` e gera `src/internal/templates/embedded.ts` com todos os conteúdos como strings TS. |
+| `typecheck` | `tsc -p tsconfig.json` | Apenas type-check (`noEmit: true`); não produz JS. |
+| `bundle` | `esbuild src/index.ts --bundle --format=cjs ...` | Compila TS + inlines deps + embedded templates em um único `dist/index.cjs` (~296kb) + sourcemap. |
+
+> **Importante:** os templates `.md` são lidos pelo `scripts/embed-templates.mjs` no build e viram strings embutidas no bundle. Nunca edite `src/internal/templates/embedded.ts` (ele é gerado e está no `.gitignore`). Para alterar um template, edite o `.md` correspondente em `src/internal/templates/data/` e rode `npm run build`.
+>
+> **Commit de mudanças em `src/`:** sempre rode `npm run build` antes de commitar, para que `dist/index.cjs` reflita o source. O `dist/` é versionado exatamente porque o `npx` **não** executa build.
 
 ## Licença
 

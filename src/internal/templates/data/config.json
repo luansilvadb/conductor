@@ -4,6 +4,10 @@
   "description": "Single source of truth for all configurable values in the Conductor framework. Every file in the framework MUST resolve values from this config instead of hardcoding them.",
   "version": "1.0",
 
+  "framework": {
+    "version": "1.1"
+  },
+
   "directories": {
     "conductor_root": "conductor",
     "source_code": "src",
@@ -47,6 +51,29 @@
       { "file": "workflow.md", "step": "Workflow Configuration" }
     ],
     "setup_marker": "index.md"
+  },
+
+  "skills": {
+    "names": {
+      "setup": "conductor-setup",
+      "implement": "conductor-implement",
+      "review": "conductor-review",
+      "revert": "conductor-revert",
+      "new_track": "conductor-new-track",
+      "status": "conductor-status"
+    }
+  },
+
+  "protocols": {
+    "subagent_dispatch": {
+      "path": "conductor-setup/assets/subagent-protocol.md"
+    }
+  },
+
+  "i18n": {
+    "default_language": "pt-BR",
+    "template_dir": "i18n",
+    "resolve_order": ["config", "system_locale", "default"]
   },
 
   "thresholds": {
@@ -104,7 +131,13 @@
     }
   },
 
+  "catalogs": {
+    "core": "conductor-setup/assets/catalog.md",
+    "community": "conductor-new-track/assets/catalog.md"
+  },
+
   "commit_conventions": {
+    "new_track_prefix": "conductor(track):",
     "plan_update_prefix": "conductor(plan):",
     "setup_prefix": "chore(conductor):",
     "docs_prefix": "docs(conductor):"

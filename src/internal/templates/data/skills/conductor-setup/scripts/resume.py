@@ -8,28 +8,27 @@ import os
 import sys
 
 
+def find_config():
+    """Walks up from cwd to find config.json."""
+    current = os.getcwd()
+    while True:
+        candidate = os.path.join(current, "config.json")
+        if os.path.exists(candidate):
+            return candidate
+        parent = os.path.dirname(current)
+        if parent == current:  # reached filesystem root
+            break
+        current = parent
+    raise FileNotFoundError(
+        "Cannot find config.json in any parent directory from " + os.getcwd()
+    )
+
+
 def load_config():
     """Loads the centralized Conductor configuration."""
-    search_paths = [
-        os.path.join("conductor", "config.json"),
-        os.path.join(".conductor", "config.json"),
-    ]
-    for path in search_paths:
-        if os.path.exists(path):
-            with open(path, "r", encoding="utf-8") as f:
-                return json.load(f)
-
-    # Fallback: use built-in defaults from the template
-    template_path = os.path.join(
-        os.path.dirname(__file__), "..", "..", "..", "..", "config.json"
-    )
-    if os.path.exists(template_path):
-        with open(template_path, "r", encoding="utf-8") as f:
-            return json.load(f)
-
-    raise FileNotFoundError(
-        "Cannot find config.json. Expected at conductor/config.json or .conductor/config.json"
-    )
+    config_path = find_config()
+    with open(config_path, "r", encoding="utf-8") as f:
+        return json.load(f)
 
 
 def determine_resumption():

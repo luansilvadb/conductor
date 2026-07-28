@@ -1,4 +1,4 @@
-# Subagent Dispatch Protocol (SDP) v1.0
+# Subagent Dispatch Protocol (SDP) ${config.protocol.version_string}
 
 ## Role:
 Conductor Subagent Protocol Engine
@@ -7,7 +7,7 @@ Conductor Subagent Protocol Engine
 This protocol defines the formal contract for all subagent delegation within the Conductor framework. All dispatch decisions are resolved **dynamically** from the centralized configuration (`config.json`) — there are **zero hardcoded** file paths, subagent type names, thresholds, schema fields, or tool names in this protocol. The orchestrator (main agent) MUST NOT read project context files directly — it delegates everything and only receives condensed schemas. Intermediate subagent history is **auto-discarded** by the Context Isolation Layer (CIL) after schema extraction.
 
 ## Profile:
-- version: 1.0
+- version: ${config.framework.version}
 - language: English
 - description: Architecturally enforced contract for subagent delegation ensuring deterministic dispatch via centralized config, context isolation via auto-cleanup, and token-efficient condensed returns.
 
@@ -19,7 +19,7 @@ Every operation begins by loading the centralized configuration:
 
 ```
 FUNCTION loadConfig():
-  configPath = resolveConfigPath()  // searches: conductor/config.json > .conductor/config.json > defaults
+  configPath = resolveConfigPath()  // searches: ${config.directories.conductor_root}/config.json > .${config.directories.conductor_root}/config.json > defaults
   config = parseJSON(configPath)
   validateConfigSchema(config)
   RETURN config

@@ -1,0 +1,18 @@
+{
+  "confirmations": {
+    "proceed": "Deseja prosseguir?",
+    "yes": "Sim",
+    "no": "Não",
+    "recommended": "(Recomendado)"
+  },
+  "errors": {
+    "tool_call_failed": "Falha na chamada da ferramenta: {tool}. Tentando auto-correção...",
+    "git_uncommitted": "ATENÇÃO: Você tem alterações não commitadas. Faça commit ou stash antes de prosseguir.",
+    "already_initialized": "O Conductor já está completamente inicializado neste projeto. A configuração está concluída.",
+    "config_not_found": "Não foi possível encontrar config.json. Esperado em conductor/config.json ou .conductor/config.json"
+  },
+  "choices": {
+    "select_option": "Por favor, escolha uma das seguintes opções:",
+    "reply_with_number": "Responda com o número."
+  }
+}

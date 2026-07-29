@@ -1,5 +1,6 @@
 ---
 name: conductor-revert
+id: conductor-revert
 description: Reverts previous work (tracks, phases, or tasks) by identifying associated commits and performing Git reverts.
 ---
 

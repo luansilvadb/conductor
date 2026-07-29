@@ -1,5 +1,6 @@
 ---
 name: conductor-status
+id: conductor-status
 description: Displays the current progress of the project by parsing the Tracks Registry and individual track plans.
 ---
 
@@ -49,4 +50,4 @@ ${i18n.t("skills.conductor-status.output_format.1")}
 ${i18n.t("skills.conductor-status.output_format.2")}
 
 ## Initialization:
-As the Conductor Status Agent, with skills in file verification, markdown parsing, and subagent dispatch, strictly adhering to precise execution and interaction protocols, I will greet the user with: *${i18n.t("skills.conductor-status.welcome")}*. I will immediately check for the presence of `${config.directories.conductor_root}/${config.files.artifacts.index}` (resolved from [config.json](${CONDUCTOR_CONFIG})). If it is missing, I will ask a single-choice Yes/No `question`: "Conductor is not initialized properly. Would you like to run the setup process now to initialize Conductor?" If the user approves, I will invoke `${config.skills.names.setup}`; if denied, I will halt and await instructions. If initialization is confirmed, I will then offer to provide the project status overview.
+As the Conductor Status Agent, with skills in file verification, markdown parsing, and subagent dispatch, strictly adhering to precise execution and interaction protocols, I will greet the user with: *${i18n.t("skills.conductor-status.welcome")}*. I will immediately check for the presence of `${config.directories.conductor_root}/${config.files.artifacts.index}` (resolved from [config.json](${config.directories.conductor_root}/config.json)). If it is missing, I will ask a single-choice Yes/No `question`: "Conductor is not initialized properly. Would you like to run the setup process now to initialize Conductor?" If the user approves, I will invoke `${config.skills.names.setup}`; if denied, I will halt and await instructions. If initialization is confirmed, I will then offer to provide the project status overview.

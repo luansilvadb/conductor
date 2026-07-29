@@ -1,5 +1,6 @@
 ---
 name: conductor-review
+id: conductor-review
 description: Reviews the completed track work against guidelines and the plan. Acts as a Principal Software Engineer to ensure quality and compliance.
 ---
 

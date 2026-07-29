@@ -3208,6 +3208,7 @@ function createEmptyMeta(content) {
     sourceDir: "",
     subpath: "",
     ext: "",
+    fileName: "",
     tools: void 0
   };
 }
@@ -6856,9 +6857,10 @@ function toMeta(t) {
   meta.sourceDir = t.category;
   meta.subpath = t.subpath;
   meta.ext = t.ext;
+  const fileNameFull = t.sourcePath.split(/[\\/]/).pop() || "";
+  meta.fileName = (0, import_node_path2.parse)(fileNameFull).name;
   if (!meta.id) {
-    const fileName = t.sourcePath.split(/[\\/]/).pop() || "";
-    meta.id = (0, import_node_path2.parse)(fileName).name;
+    meta.id = meta.fileName;
     meta.name = meta.name || meta.id;
   }
   return meta;
@@ -8635,7 +8637,7 @@ var init_flat_strategy = __esm({
         const configBaseDir = descriptor?.configBaseDir ?? "";
         const base = outputDir ?? (configBaseDir ? (0, import_node_path3.join)(workingDir, configBaseDir) : workingDir);
         const targetDir = outputSubdir ? (0, import_node_path3.join)(base, outputSubdir, tmpl.subpath) : (0, import_node_path3.join)(base, tmpl.subpath);
-        const targetPath = (0, import_node_path3.join)(targetDir, `${tmpl.id}${tmpl.ext}`);
+        const targetPath = (0, import_node_path3.join)(targetDir, `${tmpl.fileName}${tmpl.ext}`);
         return [
           this.manager.generate({
             templateName: tmpl.name,
@@ -8753,7 +8755,7 @@ var init_package = __esm({
   "package.json"() {
     package_default = {
       name: "@luansilvadb/conductor",
-      version: "1.3.15",
+      version: "1.3.16",
       description: "Conductor - Spec Driven Development",
       type: "module",
       bin: {

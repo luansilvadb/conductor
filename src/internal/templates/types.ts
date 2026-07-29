@@ -12,6 +12,8 @@ export interface TemplateMeta {
   subpath: string;
   /** Original file extension including the dot (e.g. ".md", ".py") */
   ext: string;
+  /** Original filename without extension (e.g. "SKILL") */
+  fileName: string;
   /**
    * Optional list of tool IDs this template is compatible with.
    * When absent or empty, the template is considered compatible with all tools.
@@ -107,6 +109,7 @@ function createEmptyMeta(content: string): TemplateMeta {
     sourceDir: '',
     subpath: '',
     ext: '',
+    fileName: '',
     tools: undefined,
   };
 }

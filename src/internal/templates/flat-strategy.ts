@@ -42,7 +42,7 @@ export class FlatMarkdownStrategy implements GenerationStrategy {
       ? join(base, outputSubdir, tmpl.subpath)
       : join(base, tmpl.subpath);
 
-    const targetPath = join(targetDir, `${tmpl.id}${tmpl.ext}`);
+    const targetPath = join(targetDir, `${tmpl.fileName}${tmpl.ext}`);
 
     return [
       this.manager.generate({

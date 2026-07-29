@@ -80,9 +80,12 @@ function toMeta(t: (typeof TEMPLATES)[number]): TemplateMeta {
   meta.sourceDir = t.category;
   meta.subpath = t.subpath;
   meta.ext = t.ext;
+  
+  const fileNameFull = t.sourcePath.split(/[\\/]/).pop() || '';
+  meta.fileName = parse(fileNameFull).name;
+
   if (!meta.id) {
-    const fileName = t.sourcePath.split(/[\\/]/).pop() || '';
-    meta.id = parse(fileName).name;
+    meta.id = meta.fileName;
     meta.name = meta.name || meta.id;
   }
   return meta;

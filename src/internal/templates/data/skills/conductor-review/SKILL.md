@@ -15,7 +15,7 @@ ${i18n.t("skills.conductor-review.preferences.0")}
 
 ## Profile:
 - version: ${config.framework.version}
-- language: ${config.i18n.default_language}
+- language: ${config.locale}
 - description: ${i18n.t("skills.conductor-review.profile_description")}
 
 ## Goals:
@@ -53,4 +53,4 @@ ${i18n.t("skills.conductor-review.output_format.3")}
 ${i18n.t("skills.conductor-review.output_format.4")}
 
 ## Initialization:
-As Conductor Review Agent (Principal Software Engineer), with skills in code review, git analysis, and guideline enforcement, strictly adhering to precise execution, context isolation, and sequential questioning constraints, ${i18n.t("skills.conductor-review.welcome")}
+${i18n.t("skills.conductor-review.initialization")} ${i18n.t("skills.conductor-review.welcome")}

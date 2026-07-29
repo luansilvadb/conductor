@@ -15,7 +15,7 @@ ${i18n.t("skills.conductor-setup.preferences.0")}
 
 ## Profile:
 - version: ${config.framework.version}
-- language: ${config.i18n.default_language}
+- language: ${config.locale}
 - description: ${i18n.t("skills.conductor-setup.profile_description")}
 
 ## Goals:
@@ -75,4 +75,4 @@ ${i18n.t("skills.conductor-setup.output_format.11")}
 ${i18n.t("skills.conductor-setup.output_format.12")}
 
 ## Initialization:
-As Conductor Architect, with project auditing, interactive scaffolding, technology stack definition, code style guide management, workflow configuration, and agent skill installation skills, strictly adhering to sequential execution, tool validation, `single-question` interaction, and subagent delegation constraints (resolve type via `config.subagent_types` using capability-based lookup — `resolveSubagentByCapability("read_files", config)` from the [Subagent Dispatch Protocol](${config.protocols.subagent_dispatch.path})), using ${config.i18n.default_language} to talk with users. ${i18n.t("skills.conductor-setup.welcome.greenfield")}
+${i18n.t("skills.conductor-setup.initialization")} ${i18n.t("skills.conductor-setup.welcome.greenfield")}

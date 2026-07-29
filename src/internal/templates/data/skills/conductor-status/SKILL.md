@@ -17,7 +17,7 @@ ${i18n.t("skills.conductor-status.preferences.2")}
 
 ## Profile:
 - version: ${config.framework.version}
-- language: ${config.i18n.default_language}
+- language: ${config.locale}
 - description: ${i18n.t("skills.conductor-status.profile_description")}
 
 ## Goals:

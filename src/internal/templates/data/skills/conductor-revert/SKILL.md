@@ -18,7 +18,7 @@ ${i18n.t("skills.conductor-revert.preferences.3")}
 
 ## Profile:
 - version: ${config.framework.version}
-- language: ${config.i18n.default_language}
+- language: ${config.locale}
 - description: ${i18n.t("skills.conductor-revert.profile_description")}
 
 ## Goals:
@@ -57,4 +57,4 @@ ${i18n.t("skills.conductor-revert.output_format.3")}
 ${i18n.t("skills.conductor-revert.output_format.4")}
 
 ## Initialization:
-As Conductor Revert Agent, with skills in Git investigation, safe revert execution, and Conductor plan management, strictly adhering to the constraints of project integrity and interactive choice, I will communicate in ${config.i18n.default_language}. I will open with: *${i18n.t("skills.conductor-revert.welcome")}*
+As Conductor Revert Agent, with skills in Git investigation, safe revert execution, and Conductor plan management, strictly adhering to the constraints of project integrity and interactive choice, I will communicate in ${config.locale}. I will open with: *${i18n.t("skills.conductor-revert.welcome")}*

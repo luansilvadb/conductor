@@ -82,16 +82,12 @@ function buildI18nMap(locale: string): Map<string, JsonObject> {
       ? relDir.replace(/\//g, '.') + '.' + fileId
       : fileId;
 
-    // Collision guard: if two source files produce the same namespace key,
-    // the first entry wins and a warning is emitted so it's visible at runtime.
     if (map.has(namespace)) {
-      console.warn(
+      throw new Error(
         `[i18n] Namespace collision detected for locale "${locale}": ` +
         `namespace "${namespace}" already registered. ` +
-        `Keeping first entry; skipping "${t.sourcePath}". ` +
-        `Rename the file or reorganise the directory to fix this.`,
+        `Rename the file or reorganise the directory to fix this.`
       );
-      continue;
     }
 
     map.set(namespace, data);
@@ -134,8 +130,21 @@ function resolveI18nKey(key: string, i18nMap: Map<string, JsonObject>): string {
  * Resolve a config path such as "framework.version" or "user_interaction_tools[2]".
  * Uses the bundled config.json imported statically.
  */
-function resolveConfigPath(path: string): string {
-  const value = resolvePath(configData as unknown as JsonValue, path);
+function resolveConfigPath(path: string, baseDir?: string, locale?: string): string {
+  if (path === 'tool_dir') {
+    return baseDir ? baseDir.replace(/\\/g, '/') : '';
+  }
+  if (path === 'locale') {
+    return locale || DEFAULT_LOCALE;
+  }
+
+  let value = resolvePath(configData as unknown as JsonValue, path);
+  
+  if (typeof value === 'string' && value.includes('${config.tool_dir}')) {
+    const replacement = baseDir ? baseDir.replace(/\\/g, '/') : '';
+    value = value.replace(/\$\{config\.tool_dir\}/g, replacement);
+  }
+
   return value !== undefined ? value : `\${config.${path}}`;
 }
 
@@ -156,19 +165,26 @@ function resolveConfigPath(path: string): string {
  *   - `{param}` style (no dollar sign) — runtime parameters resolved by the agent
  *   - Any unrecognised `${...}` pattern — preserved verbatim
  */
-export function resolveContent(content: string, locale: string): string {
+export function resolveContent(content: string, locale: string, baseDir?: string): string {
   const i18nMap = buildI18nMap(locale);
+  const fallbackMap = locale !== DEFAULT_LOCALE ? buildI18nMap(DEFAULT_LOCALE) : undefined;
 
   // Pass 1 — i18n
   const afterI18n = content.replace(
     /\$\{i18n\.t\("([^"]+)"\)\}/g,
-    (_, key: string) => resolveI18nKey(key, i18nMap),
+    (_, key: string) => {
+      let val = resolveI18nKey(key, i18nMap);
+      if (val === `\${i18n.t("${key}")}` && fallbackMap) {
+        val = resolveI18nKey(key, fallbackMap);
+      }
+      return val;
+    }
   );
 
   // Pass 2 — config (covers originals + any introduced by i18n pass)
   const afterConfig = afterI18n.replace(
     /\$\{config\.([^}]+)\}/g,
-    (_, path: string) => resolveConfigPath(path),
+    (_, path: string) => resolveConfigPath(path, baseDir, locale),
   );
 
   return afterConfig;

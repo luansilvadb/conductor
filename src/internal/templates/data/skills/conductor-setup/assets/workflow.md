@@ -15,7 +15,7 @@ ${i18n.t("workflow.preferences.4")}
 
 ## Profile:
 - version: ${config.framework.version}
-- language: ${config.i18n.default_language}
+- language: ${config.locale}
 - description: ${i18n.t("workflow.profile_description")}
 
 ## Goals:

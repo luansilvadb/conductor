@@ -63,10 +63,10 @@ export class EmbeddedTemplateManager implements TemplateManager {
       };
     }
 
-    const locale = req.locale ?? DEFAULT_LOCALE;
-    const content = resolveContent(rawContent, locale);
+    const locale = req.locale || DEFAULT_LOCALE;
+    const finalContent = resolveContent(rawContent, locale, req.baseDir);
 
-    writeFileSync(req.targetPath, content, 'utf-8');
+    writeFileSync(req.targetPath, finalContent, 'utf-8');
     return {
       success: true,
       filePath: req.targetPath,

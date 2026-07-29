@@ -30,6 +30,8 @@ export interface GenerateRequest {
   content: string;
   /** BCP-47 locale override. Defaults to config.i18n.default_language (pt-BR). */
   locale?: string;
+  /** Base output directory (e.g. .trae) */
+  baseDir?: string;
 }
 
 /** Result of a template generation operation */
@@ -46,12 +48,12 @@ export interface GenerationStrategy {
    * @param outputDir When provided, overrides the tool's default base dir
    *                  (used by `generate --output`).
    */
-  generateAll(workingDir: string, force: boolean, outputDir?: string): GenerateResult[];
+  generateAll(workingDir: string, force: boolean, outputDir?: string, locale?: string): GenerateResult[];
   /**
    * @param outputDir When provided, overrides the tool's default base dir
    *                  (used by `generate --output`).
    */
-  generateOne(workingDir: string, tmpl: TemplateMeta, force: boolean, outputDir?: string): GenerateResult[];
+  generateOne(workingDir: string, tmpl: TemplateMeta, force: boolean, outputDir?: string, locale?: string): GenerateResult[];
 }
 
 /** Mapping of frontmatter keys to TemplateMeta setters */
@@ -60,6 +62,13 @@ const FRONTMATTER_SETTERS: Record<string, (meta: TemplateMeta, value: string) =>
   id: (m, v) => (m.id = v),
   category: (m, v) => (m.category = v),
   description: (m, v) => (m.description = v),
+  tags: (m, v) => {
+    m.tags = v
+      .replace(/[\[\]]/g, '')
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+  },
   // Parses simple YAML list syntax: "[cursor, claude-code]" or "cursor, claude-code"
   tools: (m, v) => {
     m.tools = v

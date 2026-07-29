@@ -1,10 +1,13 @@
 {
   "default_locale": "pt-BR",
-  "available": ["pt-BR"],
+  "available": ["pt-BR", "en-US"],
   "fallback_chain": ["pt-BR"],
   "bcp47_map": {
     "pt-BR": "Português Brasileiro",
+    "en-US": "English (US)",
     "Portuguese (Brazilian)": "pt-BR",
-    "Português Brasileiro": "pt-BR"
+    "Português Brasileiro": "pt-BR",
+    "English (US)": "en-US",
+    "English": "en-US"
   }
 }

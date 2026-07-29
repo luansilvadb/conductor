@@ -9,18 +9,25 @@ export class FlatMarkdownStrategy implements GenerationStrategy {
     private manager: EmbeddedTemplateManager,
   ) {}
 
-  generateAll(workingDir: string, force: boolean, outputDir?: string): GenerateResult[] {
+  generateAll(workingDir: string, force: boolean, outputDir?: string, locale?: string): GenerateResult[] {
     const tmpls = this.manager.listAvailable(this.toolKey as AIToolType);
     const results: GenerateResult[] = [];
     for (const t of tmpls) {
-      results.push(...this.generateOne(workingDir, t, force, outputDir));
+      results.push(...this.generateOne(workingDir, t, force, outputDir, locale));
     }
     return results;
   }
 
-  generateOne(workingDir: string, tmpl: TemplateMeta, force: boolean, outputDir?: string): GenerateResult[] {
+  generateOne(workingDir: string, tmpl: TemplateMeta, force: boolean, outputDir?: string, locale?: string): GenerateResult[] {
     const toolType = this.toolKey as AIToolType;
     const descriptor = findDescriptor(toolType);
+
+    if (!descriptor && !outputDir) {
+      return [{
+        success: false,
+        message: 'Cannot generate templates for unknown tool without an explicit --output directory',
+      }];
+    }
 
     // Resolve output subdirectory via descriptor's categoryMapping (if any).
     // Falls back to the source category name unchanged.
@@ -43,6 +50,8 @@ export class FlatMarkdownStrategy implements GenerationStrategy {
         targetPath,
         force,
         content: tmpl.content,
+        locale,
+        baseDir: base,
       }),
     ];
   }

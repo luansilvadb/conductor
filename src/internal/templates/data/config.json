@@ -66,7 +66,7 @@
 
   "protocols": {
     "subagent_dispatch": {
-      "path": "conductor-setup/assets/subagent-protocol.md"
+      "path": "${config.tool_dir}/skills/conductor-setup/assets/subagent-protocol.md"
     }
   },
 
@@ -132,8 +132,8 @@
   },
 
   "catalogs": {
-    "core": "conductor-setup/assets/catalog.md",
-    "community": "conductor-new-track/assets/catalog.md"
+    "core": "${config.tool_dir}/skills/conductor-setup/assets/catalog.md",
+    "community": "${config.tool_dir}/skills/conductor-new-track/assets/catalog.md"
   },
 
   "commit_conventions": {

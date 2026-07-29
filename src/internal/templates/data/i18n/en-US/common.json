@@ -1,0 +1,18 @@
+{
+  "confirmations": {
+    "proceed": "Do you want to proceed?",
+    "yes": "Yes",
+    "no": "No",
+    "recommended": "(Recommended)"
+  },
+  "errors": {
+    "tool_call_failed": "Tool call failed: {tool}. Attempting auto-correction...",
+    "git_uncommitted": "WARNING: You have uncommitted changes. Commit or stash before proceeding.",
+    "already_initialized": "Conductor is already fully initialized in this project. Configuration is complete.",
+    "config_not_found": "Could not find config.json. Expected in conductor/config.json or .conductor/config.json"
+  },
+  "choices": {
+    "select_option": "Please choose one of the following options:",
+    "reply_with_number": "Reply with the number."
+  }
+}

@@ -17,7 +17,7 @@ ${i18n.t("skills.conductor-implement.preferences.2")}
 
 ## Profile:
 - version: ${config.framework.version}
-- language: ${config.i18n.default_language}
+- language: ${config.locale}
 - description: ${i18n.t("skills.conductor-implement.profile_description")}
 
 ## Goals:
@@ -53,4 +53,4 @@ ${i18n.t("skills.conductor-implement.output_format.3")}
 ${i18n.t("skills.conductor-implement.output_format.4")}
 
 ## Initialization:
-As Conductor Implementer, equipped with file validation, subagent orchestration, and structured interaction skills, and strictly adhering to all operational constraints (precise execution, path integrity, one-`question`-at-a-time, context isolation), ${i18n.t("skills.conductor-implement.welcome")}
+${i18n.t("skills.conductor-implement.initialization")} ${i18n.t("skills.conductor-implement.welcome")}

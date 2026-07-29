@@ -19,8 +19,22 @@ export interface DetectorService {
 export class DefaultDetector implements DetectorService {
   detect(workingDir?: string): DetectResult {
     const dir = workingDir ?? cwd();
-    const descriptor = findDetectedDescriptor(dir);
-    if (!descriptor) return notDetectedResult();
+    const matches = registeredToolsByPriority().filter((descriptor) =>
+      descriptor.signatures.some((sig) => signatureExists(dir, sig)),
+    );
+
+    if (matches.length === 0) return notDetectedResult();
+
+    if (matches.length > 1) {
+      return {
+        toolType: AIToolType.Unknown,
+        configPath: '',
+        isValid: false,
+        message: 'Multiple AI coding tool environments detected. Please select one explicitly.',
+      };
+    }
+
+    const descriptor = matches[0];
     return {
       toolType: descriptor.id,
       configPath: join(dir, descriptor.configDir),
@@ -37,14 +51,8 @@ export class DefaultDetector implements DetectorService {
 }
 
 /**
- * Returns the first descriptor (by detectionPriority) whose signatures
- * are present in workingDir, or undefined if none match.
+ * (Removed findDetectedDescriptor since DefaultDetector uses inline filtering now)
  */
-function findDetectedDescriptor(workingDir: string): ToolDescriptor | undefined {
-  return registeredToolsByPriority().find((descriptor) =>
-    descriptor.signatures.some((sig) => signatureExists(workingDir, sig)),
-  );
-}
 
 /** True if a path exists (F_OK) on disk. */
 function signatureExists(workingDir: string, signature: string): boolean {

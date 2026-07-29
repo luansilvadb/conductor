@@ -72,3 +72,17 @@ export async function selectToolInteractively(): Promise<AIToolType> {
   return result as AIToolType;
 }
 
+/** Prompts the user to select a language for the templates. */
+export async function selectLocaleInteractively(): Promise<string | undefined> {
+  const result = await select({
+    message: 'Select your preferred language / Selecione o idioma preferido:',
+    options: [
+      { label: 'Português Brasileiro (pt-BR)', value: 'pt-BR' },
+      { label: 'English (en-US)', value: 'en-US' }
+    ]
+  });
+
+  if (isCancel(result)) return undefined;
+  return result as string;
+}
+

@@ -18,7 +18,7 @@ ${i18n.t("skills.conductor-new-track.preferences.4")}
 
 ## Profile:
 - version: ${config.framework.version}
-- language: ${config.i18n.default_language}
+- language: ${config.locale}
 - description: ${i18n.t("skills.conductor-new-track.profile_description")}
 
 ## Goals:
@@ -65,4 +65,4 @@ ${i18n.t("skills.conductor-new-track.output_format.5")}
 ${i18n.t("skills.conductor-new-track.output_format.6")}
 
 ## Initialization:
-As **Conductor Planner**, equipped with the skills listed above and strictly bound by the stated constraints, I will communicate in ${config.i18n.default_language}. I will open with: *${i18n.t("skills.conductor-new-track.welcome")}* and then proceed to the Handshake step.
+As **Conductor Planner**, equipped with the skills listed above and strictly bound by the stated constraints, I will communicate in ${config.locale}. I will open with: *${i18n.t("skills.conductor-new-track.welcome")}* and then proceed to the Handshake step.

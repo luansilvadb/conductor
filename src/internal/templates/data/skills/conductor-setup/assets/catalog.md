@@ -45,3 +45,10 @@ This catalog defines the curriculum of skills available to the Conductor extensi
 - **Detection Signals:**
   - **Dependencies:** `${config.skills.names.setup}`
   - **Keywords:** `status`, `progress`, `overview`, `summary`, `report`, `where`
+
+### ${config.skills.names.archive}
+- **Description:** Manages track cleanup by safely archiving completed feature/bug tracks to an archive directory and keeping the active tracks registry clean.
+- **Party:** ${config.enums.trust_levels[0]}
+- **Detection Signals:**
+  - **Dependencies:** `${config.skills.names.setup}`
+  - **Keywords:** `archive`, `clean`, `cleanup`, `curate`, `organize`, `clear`

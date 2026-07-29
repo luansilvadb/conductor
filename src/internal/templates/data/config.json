@@ -13,7 +13,8 @@
     "source_code": "src",
     "tracks_dir": "conductor/tracks",
     "styleguides_dir": "conductor/code_styleguides",
-    "skills_dir": "conductor/skills"
+    "skills_dir": "conductor/skills",
+    "archive_dir": "conductor/archive"
   },
 
   "files": {
@@ -60,7 +61,8 @@
       "review": "conductor-review",
       "revert": "conductor-revert",
       "new_track": "conductor-new-track",
-      "status": "conductor-status"
+      "status": "conductor-status",
+      "archive": "conductor-archive"
     }
   },
 
@@ -140,7 +142,8 @@
     "new_track_prefix": "conductor(track):",
     "plan_update_prefix": "conductor(plan):",
     "setup_prefix": "chore(conductor):",
-    "docs_prefix": "docs(conductor):"
+    "docs_prefix": "docs(conductor):",
+    "archive_prefix": "chore(conductor):"
   },
 
   "schemas": {

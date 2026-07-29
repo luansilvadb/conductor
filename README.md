@@ -58,9 +58,10 @@ O Conductor implementa o SDD como um **ciclo de vida de tracks** (unidades lógi
 | `conductor-setup`     | **Architect**                  | Inicializa o projeto, define visão, tech stack, style guides e workflow.                               |
 | `conductor-new-track` | **Planner**                    | Especifica (`spec.md`) e planeja (`plan.md`) uma nova track.                                            |
 | `conductor-implement` | **Implementer**                | Executa o plano seguindo TDD, registra progresso e commits.                                            |
-| `conductor-review`    | **Principal SWE**              | Revisa contra guidelines e plano, aplica fixes, arquiva ou deleta a track.                              |
+| `conductor-review`    | **Principal SWE**              | Revisa contra guidelines e plano, aplica fixes e atualiza a track.                                     |
 | `conductor-status`    | **Reporter**                   | Mostra progresso do projeto (phases, tasks, %, blockers).                                              |
 | `conductor-revert`    | **Git-aware**                  | Reverte tracks/phases/tasks localizando e revertendo commits associados.                               |
+| `conductor-archive`   | **Archivist**                  | Limpa a área de trabalho arquivando tracks finalizadas sob demanda.                                    |
 
 ### Estados de uma tarefa
 
@@ -94,7 +95,8 @@ projeto/
 │   │       ├── spec.md       ← Especificação (o "O Quê")
 │   │       ├── plan.md       ← Plano de implementação (o "Como")
 │   │       └── metadata.json ← ID, tipo, status, timestamps
-│   └── archive/              ← Tracks revisadas e arquivadas
+│   └── archive/              ← Tracks concluídas e arquivadas
+
 └── .agents/                  ← Skills recomendadas e instaladas
     └── skills/
 ```

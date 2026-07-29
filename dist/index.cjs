@@ -5442,7 +5442,7 @@ This protocol defines the formal contract for all subagent delegation within the
 
 ## Profile:
 - version: \${config.framework.version}
-- language: English
+- language: \${config.i18n.default_language}
 - description: Architecturally enforced contract for subagent delegation ensuring deterministic dispatch via centralized config, context isolation via auto-cleanup, and token-efficient condensed returns.
 
 ---
@@ -8086,7 +8086,7 @@ var init_package = __esm({
   "package.json"() {
     package_default = {
       name: "@luansilvadb/conductor",
-      version: "1.3.12",
+      version: "1.3.13",
       description: "Conductor - Spec Driven Development",
       type: "module",
       bin: {

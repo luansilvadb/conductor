@@ -3,19 +3,11 @@ import { join } from 'node:path';
 import { cwd } from 'node:process';
 import {
   AIToolType,
-  type DetectResult,
-  getConfigDir,
-  getSignatureFiles,
-  toolTypeToString,
-} from './types.js';
-
-/** Candidate tools checked during detection (order = priority). */
-const CANDIDATE_TOOLS: readonly AIToolType[] = [
-  AIToolType.Cursor,
-  AIToolType.ClaudeCode,
-  AIToolType.Antigravity,
-  AIToolType.Trae,
-];
+  type ToolDescriptor,
+  findDescriptor,
+  registeredToolsByPriority,
+} from '../tool-registry.js';
+import type { DetectResult } from './types.js';
 
 /** Interface for detecting AI coding environments */
 export interface DetectorService {
@@ -27,23 +19,31 @@ export interface DetectorService {
 export class DefaultDetector implements DetectorService {
   detect(workingDir?: string): DetectResult {
     const dir = workingDir ?? cwd();
-    const tool = findDetectedTool(dir);
-    if (tool === AIToolType.Unknown) return notDetectedResult();
-    return detectedResult(tool, this.getConfigDirPath(tool, dir));
+    const descriptor = findDetectedDescriptor(dir);
+    if (!descriptor) return notDetectedResult();
+    return {
+      toolType: descriptor.id,
+      configPath: join(dir, descriptor.configDir),
+      isValid: true,
+      message: `${descriptor.label} environment detected`,
+    };
   }
 
   getConfigDirPath(tool: AIToolType, workingDir: string): string {
-    const configDir = getConfigDir(tool);
+    const configDir = findDescriptor(tool)?.configDir;
     if (!configDir) return '';
     return join(workingDir, configDir);
   }
 }
 
-/** Return the first candidate tool whose signature exists in workingDir. */
-function findDetectedTool(workingDir: string): AIToolType {
-  return CANDIDATE_TOOLS.find((tool) =>
-    getSignatureFiles(tool).some((sig) => signatureExists(workingDir, sig)),
-  ) ?? AIToolType.Unknown;
+/**
+ * Returns the first descriptor (by detectionPriority) whose signatures
+ * are present in workingDir, or undefined if none match.
+ */
+function findDetectedDescriptor(workingDir: string): ToolDescriptor | undefined {
+  return registeredToolsByPriority().find((descriptor) =>
+    descriptor.signatures.some((sig) => signatureExists(workingDir, sig)),
+  );
 }
 
 /** True if a path exists (F_OK) on disk. */
@@ -56,15 +56,6 @@ function signatureExists(workingDir: string, signature: string): boolean {
   }
 }
 
-function detectedResult(tool: AIToolType, configPath: string): DetectResult {
-  return {
-    toolType: tool,
-    configPath,
-    isValid: true,
-    message: `${toolTypeToString(tool)} environment detected`,
-  };
-}
-
 function notDetectedResult(): DetectResult {
   return {
     toolType: AIToolType.Unknown,
@@ -73,3 +64,4 @@ function notDetectedResult(): DetectResult {
     message: 'no AI coding tool environment detected',
   };
 }
+

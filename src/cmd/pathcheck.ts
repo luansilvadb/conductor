@@ -1,4 +1,4 @@
-import { join } from 'node:path';
+﻿import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { execSync } from 'node:child_process';
 import { existsSync, writeFileSync, mkdirSync } from 'node:fs';
@@ -10,7 +10,7 @@ const PATH_HINT_MARKER_NAME = '.path-hint-shown';
 export function maybePrintPathHint(): void {
   if (isOnPath()) return;
 
-  const binDir = guessInstallDir();
+  const binDir = resolveInstallDir();
   const markerPath = pathHintMarkerPath();
 
   if (markerPath && existsSync(markerPath)) return;
@@ -35,14 +35,37 @@ function isOnPath(): boolean {
   }
 }
 
-function guessInstallDir(): string {
+/**
+ * Locate the real binary directory in this order:
+ * 1. npm global bin directory — most reliable for npm installs
+ * 2. Parent of process.argv[1] — fallback for other install methods
+ * 3. Generic placeholder string
+ *
+ * Using "npm bin -g" instead of deriving from argv[1] avoids the issue where
+ * argv[1] in a bundled CJS file points to the .js inside node_modules,
+ * not the symlink directory that needs to be on PATH.
+ */
+function resolveInstallDir(): string {
+  // Try npm global bin dir first
+  try {
+    const npmBin = execSync('npm bin -g', {
+      encoding: 'utf-8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim();
+    if (npmBin) return npmBin;
+  } catch {
+    // npm not available
+  }
+
+  // Fallback: parent of argv[1]
   try {
     const binPath = process.argv[1];
-    if (!binPath) return '<your Node.js bin directory>';
-    return join(binPath, '..');
+    if (binPath) return join(binPath, '..');
   } catch {
-    return '<your Node.js bin directory>';
+    // ignore
   }
+
+  return '<your Node.js bin directory>';
 }
 
 function pathHintMarkerPath(): string {
@@ -50,7 +73,7 @@ function pathHintMarkerPath(): string {
     ? join(homedir(), 'Library', 'Preferences')
     : join(homedir(), '.config'));
   if (!cfgDir) return '';
-  return join(cfgDir, 'conductor', PATH_HINT_MARKER_NAME);
+  return join(cfgDir, PROGRAM_NAME, PATH_HINT_MARKER_NAME);
 }
 
 const SHELL_RC_FILES: Record<string, string> = {
@@ -79,7 +102,7 @@ function printPathInstructions(binDir: string): void {
 function writeHeader(w: NodeJS.WriteStream, binDir: string): void {
   w.write('\n');
   w.write('──────────────────────────────────────────────────────────────\n');
-  w.write(' conductor is installed but its directory is not on your PATH.\n');
+  w.write(` ${PROGRAM_NAME} is installed but its directory is not on your PATH.\n`);
   w.write('──────────────────────────────────────────────────────────────\n');
   w.write(` Binary location: ${binDir}\n`);
   w.write('\n');

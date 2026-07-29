@@ -1,5 +1,5 @@
-import { Command } from 'commander';
-import { detectedResult, uiRenderer, templateManager } from './root.js';
+﻿import { Command } from 'commander';
+import { getContext } from './root.js';
 
 export function createListCommand(): Command {
   const cmd = new Command('list')
@@ -8,22 +8,26 @@ export function createListCommand(): Command {
     .option('-c, --category <category>', 'Filter by category')
     .option('-q, --quiet', 'Output only template names (for piping)')
     .option('--all', 'List all templates across all categories')
-    .action((options: { category?: string; quiet?: boolean; all?: boolean }) => {
-      const category = options.category ?? '';
+    .action((options) => {
+      const ctx = getContext();
+      const rawCategory = options.category ?? '';
+      const category = rawCategory.toLowerCase().trim();
       const quiet = options.quiet ?? false;
       const listAll = options.all ?? false;
 
       let tmpls = listAll
-        ? templateManager.listAll()
-        : templateManager.listAvailable(detectedResult.toolType);
+        ? ctx.templates.listAll()
+        : ctx.templates.listAvailable(ctx.detected.toolType);
 
       if (category) {
-        tmpls = tmpls.filter((t) => t.category === category);
+        tmpls = tmpls.filter((t) => t.category.toLowerCase().trim() === category);
       }
 
       if (tmpls.length === 0) {
-        uiRenderer.renderWarning(
-          category ? `No templates found in category: ${category}` : 'No templates available',
+        ctx.ui.renderWarning(
+          rawCategory
+            ? `No templates found in category: ${rawCategory}`
+            : 'No templates available',
         );
         return;
       }
@@ -34,7 +38,7 @@ export function createListCommand(): Command {
       }
 
       const rows = tmpls.map((t) => [t.name, t.category, t.description]);
-      uiRenderer.renderTable(['Name', 'Category', 'Description'], rows);
+      ctx.ui.renderTable(['Name', 'Category', 'Description'], rows);
     });
 
   return cmd;

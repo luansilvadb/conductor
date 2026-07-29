@@ -3059,59 +3059,71 @@ var init_esm = __esm({
   }
 });
 
-// src/internal/detector/types.ts
-function toolTypeToString(t) {
-  return TOOL_NAME[t];
+// src/internal/tool-registry.ts
+function findDescriptor(id) {
+  return TOOL_REGISTRY.find((d3) => d3.id === id);
 }
-function getConfigDir(t) {
-  return CONFIG_DIR[t];
+function findDescriptorByFlag(flag) {
+  const lower = flag.toLowerCase();
+  return TOOL_REGISTRY.find((d3) => d3.flags.includes(lower));
 }
-function getSignatureFiles(t) {
-  return SIGNATURE_FILES[t];
+function registeredToolsByPriority() {
+  return [...TOOL_REGISTRY].sort((a3, b3) => a3.detectionPriority - b3.detectionPriority);
 }
 function parseToolFlag(flag) {
-  return TOOL_FLAG_TO_TYPE[flag.toLowerCase()] ?? "unknown" /* Unknown */;
+  return findDescriptorByFlag(flag)?.id ?? "unknown" /* Unknown */;
 }
-var TOOL_NAME, CONFIG_DIR, SIGNATURE_FILES, TOOL_FLAG_TO_TYPE;
-var init_types = __esm({
-  "src/internal/detector/types.ts"() {
+var TOOL_REGISTRY;
+var init_tool_registry = __esm({
+  "src/internal/tool-registry.ts"() {
     "use strict";
-    TOOL_NAME = {
-      ["cursor" /* Cursor */]: "Cursor",
-      ["claude-code" /* ClaudeCode */]: "Claude Code",
-      ["antigravity" /* Antigravity */]: "Antigravity",
-      ["trae" /* Trae */]: "Trae",
-      ["unknown" /* Unknown */]: "Unknown"
-    };
-    CONFIG_DIR = {
-      ["cursor" /* Cursor */]: ".cursor/commands",
-      ["claude-code" /* ClaudeCode */]: ".claude/commands",
-      ["antigravity" /* Antigravity */]: ".agents",
-      ["trae" /* Trae */]: ".trae/commands",
-      ["unknown" /* Unknown */]: ""
-    };
-    SIGNATURE_FILES = {
-      ["cursor" /* Cursor */]: [".cursor", ".cursorrules"],
-      ["claude-code" /* ClaudeCode */]: [".claude", "CLAUDE.md"],
-      ["antigravity" /* Antigravity */]: [".antigravity"],
-      ["trae" /* Trae */]: [".trae"],
-      ["unknown" /* Unknown */]: []
-    };
-    TOOL_FLAG_TO_TYPE = {
-      cursor: "cursor" /* Cursor */,
-      "claude-code": "claude-code" /* ClaudeCode */,
-      claude: "claude-code" /* ClaudeCode */,
-      antigravity: "antigravity" /* Antigravity */,
-      trae: "trae" /* Trae */
-    };
+    TOOL_REGISTRY = [
+      {
+        id: "cursor" /* Cursor */,
+        label: "Cursor",
+        flags: ["cursor"],
+        configDir: ".cursor/commands",
+        configBaseDir: ".cursor",
+        signatures: [".cursor", ".cursorrules"],
+        detectionPriority: 1
+      },
+      {
+        id: "claude-code" /* ClaudeCode */,
+        label: "Claude Code",
+        flags: ["claude-code", "claude"],
+        configDir: ".claude/commands",
+        configBaseDir: ".claude",
+        signatures: [".claude", "CLAUDE.md"],
+        detectionPriority: 2
+      },
+      {
+        id: "antigravity" /* Antigravity */,
+        label: "Antigravity",
+        flags: ["antigravity"],
+        configDir: ".agents",
+        configBaseDir: ".agents",
+        signatures: [".antigravity"],
+        detectionPriority: 3,
+        categoryMapping: { commands: "workflows" }
+      },
+      {
+        id: "trae" /* Trae */,
+        label: "Trae",
+        flags: ["trae"],
+        configDir: ".trae/commands",
+        configBaseDir: ".trae",
+        signatures: [".trae"],
+        detectionPriority: 4
+      }
+    ];
   }
 });
 
 // src/internal/detector/detector.ts
-function findDetectedTool(workingDir) {
-  return CANDIDATE_TOOLS.find(
-    (tool) => getSignatureFiles(tool).some((sig) => signatureExists(workingDir, sig))
-  ) ?? "unknown" /* Unknown */;
+function findDetectedDescriptor(workingDir) {
+  return registeredToolsByPriority().find(
+    (descriptor) => descriptor.signatures.some((sig) => signatureExists(workingDir, sig))
+  );
 }
 function signatureExists(workingDir, signature) {
   try {
@@ -3121,14 +3133,6 @@ function signatureExists(workingDir, signature) {
     return false;
   }
 }
-function detectedResult(tool, configPath) {
-  return {
-    toolType: tool,
-    configPath,
-    isValid: true,
-    message: `${toolTypeToString(tool)} environment detected`
-  };
-}
 function notDetectedResult() {
   return {
     toolType: "unknown" /* Unknown */,
@@ -3137,33 +3141,41 @@ function notDetectedResult() {
     message: "no AI coding tool environment detected"
   };
 }
-var import_node_fs, import_node_path, import_node_process, CANDIDATE_TOOLS, DefaultDetector;
+var import_node_fs, import_node_path, import_node_process, DefaultDetector;
 var init_detector = __esm({
   "src/internal/detector/detector.ts"() {
     "use strict";
     import_node_fs = require("node:fs");
     import_node_path = require("node:path");
     import_node_process = require("node:process");
-    init_types();
-    CANDIDATE_TOOLS = [
-      "cursor" /* Cursor */,
-      "claude-code" /* ClaudeCode */,
-      "antigravity" /* Antigravity */,
-      "trae" /* Trae */
-    ];
+    init_tool_registry();
     DefaultDetector = class {
       detect(workingDir) {
         const dir = workingDir ?? (0, import_node_process.cwd)();
-        const tool = findDetectedTool(dir);
-        if (tool === "unknown" /* Unknown */) return notDetectedResult();
-        return detectedResult(tool, this.getConfigDirPath(tool, dir));
+        const descriptor = findDetectedDescriptor(dir);
+        if (!descriptor) return notDetectedResult();
+        return {
+          toolType: descriptor.id,
+          configPath: (0, import_node_path.join)(dir, descriptor.configDir),
+          isValid: true,
+          message: `${descriptor.label} environment detected`
+        };
       }
       getConfigDirPath(tool, workingDir) {
-        const configDir = getConfigDir(tool);
+        const configDir = findDescriptor(tool)?.configDir;
         if (!configDir) return "";
         return (0, import_node_path.join)(workingDir, configDir);
       }
     };
+  }
+});
+
+// src/internal/detector/types.ts
+var init_types = __esm({
+  "src/internal/detector/types.ts"() {
+    "use strict";
+    init_tool_registry();
+    init_tool_registry();
   }
 });
 
@@ -3189,7 +3201,8 @@ function createEmptyMeta(content) {
     tags: [],
     sourceDir: "",
     subpath: "",
-    ext: ""
+    ext: "",
+    tools: void 0
   };
 }
 function applyFrontmatterLine(meta, line) {
@@ -3210,7 +3223,11 @@ var init_types2 = __esm({
       name: (m2, v2) => m2.name = v2,
       id: (m2, v2) => m2.id = v2,
       category: (m2, v2) => m2.category = v2,
-      description: (m2, v2) => m2.description = v2
+      description: (m2, v2) => m2.description = v2,
+      // Parses simple YAML list syntax: "[cursor, claude-code]" or "cursor, claude-code"
+      tools: (m2, v2) => {
+        m2.tools = v2.replace(/[\[\]]/g, "").split(",").map((s) => s.trim()).filter(Boolean);
+      }
     };
   }
 });
@@ -6129,7 +6146,7 @@ function buildI18nMap(locale) {
   for (const t of TEMPLATES) {
     if (t.category !== "i18n" || t.ext !== ".json") continue;
     if (!t.subpath.startsWith(locale)) continue;
-    const fileName = t.sourcePath.split(/[\\/]/).pop() ?? "";
+    const fileName = t.sourcePath.split(/[/\\]/).pop() ?? "";
     const fileId = fileName.endsWith(".json") ? fileName.slice(0, -5) : fileName;
     let data;
     try {
@@ -6139,6 +6156,12 @@ function buildI18nMap(locale) {
     }
     const relDir = t.subpath.slice(locale.length).replace(/^\//, "");
     const namespace = relDir ? relDir.replace(/\//g, ".") + "." + fileId : fileId;
+    if (map.has(namespace)) {
+      console.warn(
+        `[i18n] Namespace collision detected for locale "${locale}": namespace "${namespace}" already registered. Keeping first entry; skipping "${t.sourcePath}". Rename the file or reorganise the directory to fix this.`
+      );
+      continue;
+    }
     map.set(namespace, data);
   }
   i18nMapCache.set(locale, map);
@@ -6202,6 +6225,7 @@ var init_manager = __esm({
     "use strict";
     import_node_fs2 = require("node:fs");
     import_node_path2 = require("node:path");
+    init_types();
     init_types2();
     init_errors();
     init_embedded();
@@ -6209,8 +6233,12 @@ var init_manager = __esm({
     EmbeddedTemplateManager = class {
       /** @internal Lazy cache — built once on first listAll() call. */
       _allCache = null;
-      listAvailable(_tool) {
-        return this.listAll();
+      listAvailable(tool) {
+        if (tool === "unknown" /* Unknown */) return this.listAll();
+        return this.listAll().filter((t) => {
+          if (!t.tools || t.tools.length === 0) return true;
+          return t.tools.includes(tool);
+        });
       }
       /** Lista todos os templates a partir dos dados embutidos no bundle. */
       listAll() {
@@ -7814,6 +7842,38 @@ var init_renderer = __esm({
   }
 });
 
+// src/internal/context.ts
+function buildContext(toolFlag, workingDir) {
+  const det = new DefaultDetector();
+  const ui = new CharmUIRenderer();
+  const templates = new EmbeddedTemplateManager();
+  let detected;
+  if (toolFlag) {
+    const toolType = parseToolFlag(toolFlag);
+    detected = {
+      toolType,
+      configPath: det.getConfigDirPath(toolType, workingDir),
+      isValid: toolType !== "unknown" /* Unknown */,
+      message: `tool manually specified: ${toolType}`
+    };
+  } else {
+    detected = det.detect(workingDir);
+  }
+  return Object.freeze({ det, ui, templates, detected, workingDir });
+}
+function withDetected(ctx, detected) {
+  return Object.freeze({ ...ctx, detected });
+}
+var init_context = __esm({
+  "src/internal/context.ts"() {
+    "use strict";
+    init_tool_registry();
+    init_detector();
+    init_manager();
+    init_renderer();
+  }
+});
+
 // src/cmd/init.ts
 var init_exports = {};
 __export(init_exports, {
@@ -7823,89 +7883,73 @@ __export(init_exports, {
 });
 function createInitCommand() {
   const cmd = new Command("init").description("Initialize command template directory for detected AI tool").action(async () => {
-    await runInit();
+    await runInit(getContext());
   });
   return cmd;
 }
-async function runInit() {
-  const workingDir = (0, import_node_process5.cwd)();
-  if (!detectedResult2.isValid) {
+async function runInit(ctx) {
+  let detected = ctx.detected;
+  if (!detected.isValid) {
     const tool = await selectToolInteractively();
     if (tool === "unknown" /* Unknown */) {
-      uiRenderer.renderError("No tool selected");
-      return false;
+      ctx.ui.renderError("No tool selected");
+      return null;
     }
-    Object.assign(detectedResult2, {
+    detected = {
       toolType: tool,
-      configPath: det.getConfigDirPath(tool, workingDir),
+      configPath: ctx.det.getConfigDirPath(tool, ctx.workingDir),
       isValid: true,
       message: `tool manually selected: ${tool}`
-    });
+    };
   }
-  const configPath = detectedResult2.configPath;
+  const configPath = detected.configPath;
   if (!configPath) {
-    uiRenderer.renderError("Could not determine config directory");
-    return false;
+    ctx.ui.renderError("Could not determine config directory");
+    return null;
   }
   if ((0, import_node_fs3.existsSync)(configPath)) {
-    uiRenderer.renderWarning(`Directory already exists: ${configPath}`);
-    const confirmed = await uiRenderer.confirm("Do you want to continue anyway?");
+    ctx.ui.renderWarning(`Directory already exists: ${configPath}`);
+    const confirmed = await ctx.ui.confirm("Do you want to continue anyway?");
     if (!confirmed) {
-      uiRenderer.renderWarning("Initialization cancelled");
-      return false;
+      ctx.ui.renderWarning("Initialization cancelled");
+      return null;
     }
   }
   (0, import_node_fs3.mkdirSync)(configPath, { recursive: true });
-  uiRenderer.renderSuccess(
-    `Initialized ${detectedResult2.toolType} command directory at: ${configPath}`
+  ctx.ui.renderSuccess(
+    `Initialized ${detected.toolType} command directory at: ${configPath}`
   );
-  return true;
+  return withDetected(ctx, detected);
 }
 async function selectToolInteractively() {
+  const options = TOOL_REGISTRY.map((d3) => ({ label: d3.label, value: d3.id }));
   const result = await ie({
     message: "Select your AI coding tool:",
-    options: [
-      { label: "Cursor", value: "cursor" },
-      { label: "Claude Code", value: "claude-code" },
-      { label: "Antigravity", value: "antigravity" },
-      { label: "Trae", value: "trae" }
-    ]
+    options
   });
   if (lD(result)) return "unknown" /* Unknown */;
-  return parseToolFlag(result);
+  return result;
 }
-var import_node_process5, import_node_fs3;
+var import_node_fs3;
 var init_init = __esm({
   "src/cmd/init.ts"() {
     "use strict";
     init_esm();
-    import_node_process5 = require("node:process");
     import_node_fs3 = require("node:fs");
     init_dist2();
     init_root();
-    init_types();
+    init_tool_registry();
+    init_context();
   }
 });
 
 // src/internal/templates/flat-strategy.ts
-function outputSubdir(sourceDir, toolType) {
-  if (!sourceDir) return "";
-  if (toolType === "antigravity" /* Antigravity */ && sourceDir === "commands") {
-    return "workflows";
-  }
-  return sourceDir;
-}
-function getBaseDir(configDir, workingDir) {
-  if (!configDir) return workingDir;
-  const base = configDir.replace(/\\/g, "/").replace(/\/commands$/, "");
-  return (0, import_node_path3.join)(workingDir, base);
-}
 var import_node_path3, FlatMarkdownStrategy;
 var init_flat_strategy = __esm({
   "src/internal/templates/flat-strategy.ts"() {
     "use strict";
     import_node_path3 = require("node:path");
-    init_types();
+    init_tool_registry();
     FlatMarkdownStrategy = class {
       constructor(toolKey, manager) {
         this.toolKey = toolKey;
@@ -7923,10 +7967,12 @@ var init_flat_strategy = __esm({
       }
       generateOne(workingDir, tmpl, force, outputDir) {
         const toolType = this.toolKey;
-        const configDir = getConfigDir(toolType);
-        const sub = outputSubdir(tmpl.sourceDir, toolType);
-        const base = outputDir ?? getBaseDir(configDir, workingDir);
-        const targetDir = sub ? (0, import_node_path3.join)(base, sub, tmpl.subpath) : (0, import_node_path3.join)(base, tmpl.subpath);
+        const descriptor = findDescriptor(toolType);
+        const categoryMapping = descriptor?.categoryMapping ?? {};
+        const outputSubdir = categoryMapping[tmpl.sourceDir] ?? tmpl.sourceDir;
+        const configBaseDir = descriptor?.configBaseDir ?? "";
+        const base = outputDir ?? (configBaseDir ? (0, import_node_path3.join)(workingDir, configBaseDir) : workingDir);
+        const targetDir = outputSubdir ? (0, import_node_path3.join)(base, outputSubdir, tmpl.subpath) : (0, import_node_path3.join)(base, tmpl.subpath);
         const targetPath = (0, import_node_path3.join)(targetDir, `${tmpl.id}${tmpl.ext}`);
         return [
           this.manager.generate({
@@ -7949,50 +7995,43 @@ __export(generate_exports, {
 });
 function createGenerateCommand() {
   const cmd = new Command("generate").aliases(["gen", "g"]).description("Generate all command template files (or a specific one with [template-name])").argument("[template-name]", "Template name to generate").option("-f, --force", "Overwrite existing files").option("-a, --all", "Generate all available templates").option("-o, --output <path>", "Custom output directory (overrides detection)").action(async (templateName, options) => {
-    await runGenerate({ templateName, force: options.force, output: options.output });
+    await runGenerate(getContext(), { templateName, force: options.force, output: options.output });
   });
   return cmd;
 }
-async function runGenerate(opts = {}) {
+async function runGenerate(ctx, opts = {}) {
   const force = opts.force ?? false;
   const output = opts.output ?? "";
-  if (!output && !toolFlag) {
+  if (!output && !ctx.detected.isValid) {
     const tool = await selectToolInteractively();
     if (tool === "unknown" /* Unknown */) {
-      uiRenderer.renderError("No tool selected. Use --output or --tool flag.");
+      ctx.ui.renderError("No tool selected. Use --output or --tool flag.");
       return;
     }
-    const workingDir = (0, import_node_process6.cwd)();
-    Object.assign(detectedResult2, {
+    ctx = withDetected(ctx, {
       toolType: tool,
-      configPath: det.getConfigDirPath(tool, workingDir),
+      configPath: ctx.det.getConfigDirPath(tool, ctx.workingDir),
       isValid: true,
       message: `tool manually selected: ${tool}`
     });
   }
-  const targetDir = determineTargetDir(output);
+  const targetDir = output || ctx.detected.configPath;
   if (!targetDir) {
-    uiRenderer.renderError("Could not determine target directory. Use --output or --tool flag.");
+    ctx.ui.renderError("Could not determine target directory. Use --output or --tool flag.");
     return;
   }
   if (opts.templateName) {
-    await generateSingleTemplate(opts.templateName, force, output);
+    await generateSingleTemplate(ctx, opts.templateName, force, output);
     return;
   }
-  await generateAllTemplates(targetDir, force, output);
+  await generateAllTemplates(ctx, targetDir, force, output);
 }
-function determineTargetDir(output) {
-  if (output) return output;
-  if (detectedResult2.isValid && detectedResult2.configPath) return detectedResult2.configPath;
-  return "";
-}
-async function generateAllTemplates(_targetDir, force, output) {
-  const workingDir = (0, import_node_process6.cwd)();
-  const mgr = templateManager;
-  const strategy = new FlatMarkdownStrategy(detectedResult2.toolType, mgr);
-  const results = strategy.generateAll(workingDir, force, output || void 0);
+async function generateAllTemplates(ctx, _targetDir, force, output) {
+  const mgr = ctx.templates;
+  const strategy = new FlatMarkdownStrategy(ctx.detected.toolType, mgr);
+  const results = strategy.generateAll(ctx.workingDir, force, output || void 0);
   if (results.length === 0) {
-    uiRenderer.renderWarning("No templates available");
+    ctx.ui.renderWarning("No templates available");
     return;
   }
   let successCount = 0;
@@ -8000,33 +8039,28 @@ async function generateAllTemplates(_targetDir, force, output) {
   for (const result of results) {
     if (result.success) {
       successCount++;
-      uiRenderer.renderSuccess(`Generated: ${result.filePath}`);
+      ctx.ui.renderSuccess(`Generated: ${result.filePath}`);
     } else {
       failCount++;
-      uiRenderer.renderError(`Failed: ${result.message}`);
+      ctx.ui.renderError(`Failed: ${result.message}`);
     }
   }
-  uiRenderer.renderSuccess(`Generation complete: ${formatCount(successCount, "succeeded")}, ${formatCount(failCount, "failed")}`);
+  ctx.ui.renderSuccess(`Generation complete: ${formatCount(successCount, "succeeded")}, ${formatCount(failCount, "failed")}`);
 }
-async function generateSingleTemplate(name, force, output) {
-  const tmpl = templateManager.getByName(name);
+async function generateSingleTemplate(ctx, name, force, output) {
+  const tmpl = ctx.templates.getByName(name);
   if (!tmpl) {
-    uiRenderer.renderError(`Template not found: ${name}`);
+    ctx.ui.renderError(`Template not found: ${name}`);
     return;
   }
-  await generateOneViaStrategy(tmpl, force, output);
-}
-async function generateOneViaStrategy(tmpl, force, output) {
-  if (!tmpl) return;
-  const workingDir = (0, import_node_process6.cwd)();
-  const mgr = templateManager;
-  const strategy = new FlatMarkdownStrategy(detectedResult2.toolType, mgr);
-  const results = strategy.generateOne(workingDir, tmpl, force, output || void 0);
+  const mgr = ctx.templates;
+  const strategy = new FlatMarkdownStrategy(ctx.detected.toolType, mgr);
+  const results = strategy.generateOne(ctx.workingDir, tmpl, force, output || void 0);
   for (const r2 of results) {
     if (r2.success) {
-      uiRenderer.renderSuccess(`Generated: ${r2.filePath}`);
+      ctx.ui.renderSuccess(`Generated: ${r2.filePath}`);
     } else {
-      uiRenderer.renderError(r2.message);
+      ctx.ui.renderError(r2.message);
     }
   }
 }
@@ -8034,16 +8068,15 @@ function formatCount(count, label) {
   if (count === 1) return `1 ${label.slice(0, -1)}`;
   return `${count} ${label}`;
 }
-var import_node_process6;
 var init_generate = __esm({
   "src/cmd/generate.ts"() {
     "use strict";
     init_esm();
-    import_node_process6 = require("node:process");
     init_flat_strategy();
     init_root();
     init_init();
-    init_types();
+    init_tool_registry();
+    init_context();
   }
 });
 
@@ -8103,56 +8136,42 @@ var init_package = __esm({
 var root_exports = {};
 __export(root_exports, {
   createProgram: () => createProgram,
-  det: () => det,
-  detectedResult: () => detectedResult2,
-  templateManager: () => templateManager,
-  toolFlag: () => toolFlag,
-  uiRenderer: () => uiRenderer
+  getContext: () => getContext
 });
+function getContext() {
+  if (!_ctx) {
+    throw new Error(
+      "ConductorContext is not initialized. Ensure this function is only called from within a command action."
+    );
+  }
+  return _ctx;
+}
 function createProgram() {
   const program2 = new Command();
-  program2.name("Conductor").description(
-    "Conductor Spec Driven Development"
-  ).version(package_default.version, "-v, --version", "Print conductor version and exit").hook("preAction", (thisCommand) => {
-    det = new DefaultDetector();
-    uiRenderer = new CharmUIRenderer();
-    templateManager = new EmbeddedTemplateManager();
-    const workingDir = (0, import_node_process7.cwd)();
+  program2.name("Conductor").description("Conductor Spec Driven Development").version(package_default.version, "-v, --version", "Print conductor version and exit").hook("preAction", (thisCommand) => {
+    const workingDir = (0, import_node_process5.cwd)();
     const globalOpts = thisCommand.opts();
-    toolFlag = globalOpts.tool ?? "";
-    if (toolFlag) {
-      const toolType = parseToolFlag(toolFlag);
-      detectedResult2 = {
-        toolType,
-        configPath: det.getConfigDirPath(toolType, workingDir),
-        isValid: toolType !== "unknown" /* Unknown */,
-        message: `tool manually specified: ${toolType}`
-      };
-    } else {
-      detectedResult2 = det.detect(workingDir);
-    }
+    const toolFlag = globalOpts.tool ?? "";
+    _ctx = buildContext(toolFlag, workingDir);
   }).action(async () => {
-    const ok = await runInit();
-    if (!ok) return;
-    await runGenerate();
+    const ctx = getContext();
+    const resolvedCtx = await runInit(ctx);
+    if (!resolvedCtx) return;
+    await runGenerate(resolvedCtx);
   });
   program2.option("-t, --tool <tool>", "Manually specify tool type (cursor, claude-code, antigravity)");
   return program2;
 }
-var import_node_process7, det, uiRenderer, templateManager, detectedResult2, toolFlag;
+var import_node_process5, _ctx;
 var init_root = __esm({
   "src/cmd/root.ts"() {
     "use strict";
     init_esm();
-    import_node_process7 = require("node:process");
-    init_types();
-    init_detector();
-    init_manager();
-    init_renderer();
+    import_node_process5 = require("node:process");
+    init_context();
     init_init();
     init_generate();
     init_package();
-    toolFlag = "";
   }
 });
 
@@ -8163,16 +8182,18 @@ __export(list_exports, {
 });
 function createListCommand() {
   const cmd = new Command("list").aliases(["ls"]).description("List available command templates").option("-c, --category <category>", "Filter by category").option("-q, --quiet", "Output only template names (for piping)").option("--all", "List all templates across all categories").action((options) => {
-    const category = options.category ?? "";
+    const ctx = getContext();
+    const rawCategory = options.category ?? "";
+    const category = rawCategory.toLowerCase().trim();
     const quiet = options.quiet ?? false;
     const listAll = options.all ?? false;
-    let tmpls = listAll ? templateManager.listAll() : templateManager.listAvailable(detectedResult2.toolType);
+    let tmpls = listAll ? ctx.templates.listAll() : ctx.templates.listAvailable(ctx.detected.toolType);
     if (category) {
-      tmpls = tmpls.filter((t) => t.category === category);
+      tmpls = tmpls.filter((t) => t.category.toLowerCase().trim() === category);
     }
     if (tmpls.length === 0) {
-      uiRenderer.renderWarning(
-        category ? `No templates found in category: ${category}` : "No templates available"
+      ctx.ui.renderWarning(
+        rawCategory ? `No templates found in category: ${rawCategory}` : "No templates available"
       );
       return;
     }
@@ -8181,7 +8202,7 @@ function createListCommand() {
       return;
     }
     const rows = tmpls.map((t) => [t.name, t.category, t.description]);
-    uiRenderer.renderTable(["Name", "Category", "Description"], rows);
+    ctx.ui.renderTable(["Name", "Category", "Description"], rows);
   });
   return cmd;
 }
@@ -8200,97 +8221,139 @@ __export(uninstall_exports, {
 });
 function createUninstallCommand() {
   const cmd = new Command("uninstall").description("Uninstall conductor CLI").action(async () => {
-    const ctx = detectInstallContext();
-    const plan = buildUninstallPlan(ctx);
+    const ui = getContext().ui;
+    const evidence = detectInstall();
+    const plan = buildUninstallPlan(evidence);
     if (plan.steps.length === 0) {
-      uiRenderer.renderWarning("Nothing to uninstall.");
+      ui.renderWarning("Nothing to uninstall.");
       return;
     }
-    uiRenderer.renderWarning(`Uninstall method detected: ${plan.method}`);
-    uiRenderer.renderInfo("The following steps will be performed:");
-    plan.steps.forEach((step, i) => uiRenderer.renderInfo(`  ${i + 1}. ${step.description}`));
-    const confirmed = await uiRenderer.confirm("Do you want to proceed with uninstall?");
+    ui.renderWarning(`Install method: ${plan.method} (confidence: ${plan.confidence})`);
+    ui.renderInfo(`Detection reason: ${plan.reason}`);
+    ui.renderInfo("Steps to perform:");
+    plan.steps.forEach((step, i) => ui.renderInfo(`  ${i + 1}. ${step.description}`));
+    if (plan.confidence === "low") {
+      ui.renderWarning(
+        "Detection confidence is LOW. Please verify the steps above carefully before proceeding."
+      );
+    }
+    const confirmed = await ui.confirm("Do you want to proceed with uninstall?");
     if (!confirmed) {
-      uiRenderer.renderWarning("Uninstall cancelled.");
+      ui.renderWarning("Uninstall cancelled.");
       return;
     }
     for (const step of plan.steps) {
-      uiRenderer.renderInfo(`Executing: ${step.description}...`);
+      ui.renderInfo(`Executing: ${step.description}...`);
       if (step.run()) {
-        uiRenderer.renderSuccess(`Completed: ${step.description}`);
+        ui.renderSuccess(`Completed: ${step.description}`);
       } else {
-        uiRenderer.renderError(`Failed: ${step.description}`);
-        uiRenderer.renderWarning("Continuing with remaining steps...");
+        ui.renderError(`Failed: ${step.description}`);
+        ui.renderWarning("Continuing with remaining steps...");
       }
     }
-    uiRenderer.renderSuccess("Uninstall completed. You may need to close and reopen your terminal.");
+    ui.renderSuccess("Uninstall completed. You may need to close and reopen your terminal.");
   });
   return cmd;
 }
-function detectInstallContext() {
-  const binaryPath = process.argv[1] || "";
-  const resolvedPath = safeResolve(binaryPath);
-  const ctx = { method: "unknown", binaryPath, resolvedPath };
-  const detected = tryDetectNpm(ctx, binaryPath) || tryDetectGoInstall(ctx, binaryPath) || tryDetectHomebrew(ctx);
-  return detected ?? ctx;
+function detectInstall() {
+  const binaryPath = safeResolve(process.argv[1] || "");
+  return tryDetectNpm(binaryPath) ?? tryDetectGoInstall(binaryPath) ?? tryDetectHomebrew() ?? unknownEvidence(binaryPath);
 }
-function safeResolve(path) {
-  try {
-    return (0, import_node_path4.resolve)(path);
-  } catch {
-    return path;
-  }
-}
-function tryDetectNpm(ctx, binaryPath) {
+function tryDetectNpm(binaryPath) {
   try {
     const npmPrefix = (0, import_node_child_process.execSync)("npm prefix -g", { encoding: "utf-8" }).trim();
-    const npmBinPath = (0, import_node_path4.join)(npmPrefix, "node_modules", ".bin", "conductor");
-    if ((0, import_node_fs4.existsSync)(npmBinPath) || binaryPath && binaryPath.includes(npmPrefix)) {
-      return { ...ctx, method: "npm" };
+    const npmBinPath = (0, import_node_path4.join)(npmPrefix, "node_modules", ".bin", PROGRAM_NAME);
+    if (binaryPath.includes(npmPrefix) && (0, import_node_fs4.existsSync)(npmBinPath)) {
+      return {
+        method: "npm",
+        confidence: "high",
+        reason: `Binary path is inside npm global prefix "${npmPrefix}" and ${PROGRAM_NAME} exists in npm bin`,
+        binaryPath: npmBinPath
+      };
+    }
+    if ((0, import_node_fs4.existsSync)(npmBinPath)) {
+      return {
+        method: "npm",
+        confidence: "medium",
+        reason: `"${PROGRAM_NAME}" found in npm global bin at "${npmBinPath}" but process path does not match`,
+        binaryPath: npmBinPath
+      };
     }
   } catch {
   }
   return null;
 }
-function tryDetectGoInstall(ctx, binaryPath) {
+function tryDetectGoInstall(binaryPath) {
   try {
-    const goBin = (0, import_node_child_process.execSync)("go env GOPATH", {
+    const goPath = (0, import_node_child_process.execSync)("go env GOPATH", {
       encoding: "utf-8",
       stdio: ["ignore", "pipe", "ignore"]
     }).trim();
-    if (goBin) {
-      const goBinPath = (0, import_node_path4.join)(goBin, "bin");
-      if (binaryPath && binaryPath.includes(goBinPath)) {
-        return { ...ctx, method: "go-install", goBinPath };
-      }
+    if (!goPath) return null;
+    const goBinDir = (0, import_node_path4.join)(goPath, "bin");
+    const goBinaryPath = (0, import_node_path4.join)(goBinDir, PROGRAM_NAME);
+    if (binaryPath.includes(goBinDir) && (0, import_node_fs4.existsSync)(goBinaryPath)) {
+      return {
+        method: "go-install",
+        confidence: "high",
+        reason: `Binary path is inside GOPATH/bin and ${PROGRAM_NAME} binary exists there`,
+        binaryPath: goBinaryPath
+      };
+    }
+    if ((0, import_node_fs4.existsSync)(goBinaryPath)) {
+      return {
+        method: "go-install",
+        confidence: "medium",
+        reason: `"${PROGRAM_NAME}" found in GOPATH/bin at "${goBinaryPath}" but process path does not match`,
+        binaryPath: goBinaryPath
+      };
     }
   } catch {
   }
   return null;
 }
-function tryDetectHomebrew(ctx) {
+function tryDetectHomebrew() {
   if (process.platform === "win32") return null;
   try {
     (0, import_node_child_process.execSync)(`brew list ${HOMEBREW_FORMULA_NAME} 2>/dev/null`, { stdio: "ignore" });
-    return { ...ctx, method: "homebrew" };
+    return {
+      method: "homebrew",
+      confidence: "high",
+      reason: `"brew list ${HOMEBREW_FORMULA_NAME}" succeeded`,
+      binaryPath: ""
+    };
   } catch {
     return null;
   }
 }
-function buildUninstallPlan(ctx) {
+function unknownEvidence(binaryPath) {
+  const isLikelyConductor = (0, import_node_path4.basename)(binaryPath).toLowerCase().includes(PROGRAM_NAME);
+  return {
+    method: "unknown",
+    confidence: isLikelyConductor ? "medium" : "low",
+    reason: isLikelyConductor ? `No known package manager detected; binary at "${binaryPath}" matches the program name` : `No known package manager detected; binary at "${binaryPath}" does not appear to be ${PROGRAM_NAME}`,
+    binaryPath
+  };
+}
+function buildUninstallPlan(evidence) {
   const steps = [
-    ...STEP_BUILDERS[ctx.method](ctx),
+    ...STEP_BUILDERS[evidence.method](evidence),
     {
       action: "remove-config",
       description: "Remove conductor config directory (if any)",
       run: removeConfigDir
     }
   ];
-  return { method: ctx.method, steps };
+  return {
+    method: evidence.method,
+    confidence: evidence.confidence,
+    reason: evidence.reason,
+    steps
+  };
 }
 function removeConfigDir() {
   try {
-    const cfgDir = process.env.APPDATA ? (0, import_node_path4.join)(process.env.APPDATA, "conductor") : (0, import_node_path4.join)((0, import_node_os2.homedir)(), ".config", "conductor");
+    const cfgDir = process.env.APPDATA ? (0, import_node_path4.join)(process.env.APPDATA, PROGRAM_NAME) : (0, import_node_path4.join)((0, import_node_os2.homedir)(), ".config", PROGRAM_NAME);
     if ((0, import_node_fs4.existsSync)(cfgDir)) removeDirRecursive(cfgDir);
     return true;
   } catch {
@@ -8336,7 +8399,14 @@ function removeBinaryPair(binaryPath) {
     return false;
   }
 }
-var import_node_child_process, import_node_fs4, import_node_path4, import_node_os2, HOMEBREW_FORMULA_NAME, STEP_BUILDERS;
+function safeResolve(path) {
+  try {
+    return (0, import_node_path4.resolve)(path);
+  } catch {
+    return path;
+  }
+}
+var import_node_child_process, import_node_fs4, import_node_path4, import_node_os2, HOMEBREW_FORMULA_NAME, PROGRAM_NAME, STEP_BUILDERS;
 var init_uninstall = __esm({
   "src/cmd/uninstall.ts"() {
     "use strict";
@@ -8347,33 +8417,42 @@ var init_uninstall = __esm({
     import_node_os2 = require("node:os");
     init_root();
     HOMEBREW_FORMULA_NAME = "luansilvadb/tools/conductor";
+    PROGRAM_NAME = "conductor";
     STEP_BUILDERS = {
-      homebrew: () => [{
-        action: "brew-uninstall",
-        description: "Uninstall conductor via Homebrew",
-        run: () => safeExec(`brew uninstall ${HOMEBREW_FORMULA_NAME}`)
-      }],
-      "go-install": (ctx) => {
-        if (!ctx.goBinPath) return [];
-        const binaryPath = (0, import_node_path4.join)(ctx.goBinPath, "conductor");
-        return [{
-          action: "remove-binary",
-          description: `Remove conductor binary from ${ctx.goBinPath}`,
-          run: () => removeBinaryPair(binaryPath)
-        }];
+      homebrew: () => [
+        {
+          action: "brew-uninstall",
+          description: "Uninstall conductor via Homebrew",
+          run: () => safeExec(`brew uninstall ${HOMEBREW_FORMULA_NAME}`)
+        }
+      ],
+      "go-install": (evidence) => {
+        if (!evidence.binaryPath) return [];
+        return [
+          {
+            action: "remove-binary",
+            description: `Remove conductor binary from ${(0, import_node_path4.join)(evidence.binaryPath, "..")}`,
+            run: () => removeBinaryPair(evidence.binaryPath)
+          }
+        ];
       },
-      npm: () => [{
-        action: "npm-uninstall",
-        description: "Uninstall conductor global npm package",
-        run: () => safeExec("npm uninstall -g conductor")
-      }],
-      unknown: (ctx) => {
-        if (!ctx.resolvedPath || !(0, import_node_fs4.existsSync)(ctx.resolvedPath)) return [];
-        return [{
-          action: "remove-binary",
-          description: `Remove binary at ${ctx.resolvedPath}`,
-          run: () => safeUnlink(ctx.resolvedPath)
-        }];
+      npm: () => [
+        {
+          action: "npm-uninstall",
+          description: "Uninstall conductor global npm package",
+          run: () => safeExec("npm uninstall -g conductor")
+        }
+      ],
+      unknown: (evidence) => {
+        if (!evidence.binaryPath || !(0, import_node_fs4.existsSync)(evidence.binaryPath)) return [];
+        if (!(0, import_node_path4.basename)(evidence.binaryPath).toLowerCase().includes(PROGRAM_NAME)) return [];
+        return [
+          {
+            action: "remove-binary",
+            description: `Remove binary at ${evidence.binaryPath}`,
+            run: () => safeUnlink(evidence.binaryPath)
+          }
+        ];
       }
     };
   }
@@ -8386,7 +8465,7 @@ __export(pathcheck_exports, {
 });
 function maybePrintPathHint() {
   if (isOnPath()) return;
-  const binDir = guessInstallDir();
+  const binDir = resolveInstallDir();
   const markerPath = pathHintMarkerPath();
   if (markerPath && (0, import_node_fs5.existsSync)(markerPath)) return;
   printPathInstructions(binDir);
@@ -8396,7 +8475,7 @@ function maybePrintPathHint() {
   }
 }
 function isOnPath() {
-  const cmd = process.platform === "win32" ? `where ${PROGRAM_NAME}` : `which ${PROGRAM_NAME}`;
+  const cmd = process.platform === "win32" ? `where ${PROGRAM_NAME2}` : `which ${PROGRAM_NAME2}`;
   try {
     (0, import_node_child_process2.execSync)(cmd, { stdio: "ignore" });
     return true;
@@ -8404,19 +8483,26 @@ function isOnPath() {
     return false;
   }
 }
-function guessInstallDir() {
+function resolveInstallDir() {
+  try {
+    const npmBin = (0, import_node_child_process2.execSync)("npm bin -g", {
+      encoding: "utf-8",
+      stdio: ["ignore", "pipe", "ignore"]
+    }).trim();
+    if (npmBin) return npmBin;
+  } catch {
+  }
   try {
     const binPath = process.argv[1];
-    if (!binPath) return "<your Node.js bin directory>";
-    return (0, import_node_path5.join)(binPath, "..");
+    if (binPath) return (0, import_node_path5.join)(binPath, "..");
   } catch {
-    return "<your Node.js bin directory>";
   }
+  return "<your Node.js bin directory>";
 }
 function pathHintMarkerPath() {
   const cfgDir = process.env.APPDATA || (process.platform === "darwin" ? (0, import_node_path5.join)((0, import_node_os3.homedir)(), "Library", "Preferences") : (0, import_node_path5.join)((0, import_node_os3.homedir)(), ".config"));
   if (!cfgDir) return "";
-  return (0, import_node_path5.join)(cfgDir, "conductor", PATH_HINT_MARKER_NAME);
+  return (0, import_node_path5.join)(cfgDir, PROGRAM_NAME2, PATH_HINT_MARKER_NAME);
 }
 function printPathInstructions(binDir) {
   const w3 = process.stderr;
@@ -8434,7 +8520,8 @@ function printPathInstructions(binDir) {
 function writeHeader(w3, binDir) {
   w3.write("\n");
   w3.write("\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n");
-  w3.write(" conductor is installed but its directory is not on your PATH.\n");
+  w3.write(` ${PROGRAM_NAME2} is installed but its directory is not on your PATH.
+`);
   w3.write("\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n");
   w3.write(` Binary location: ${binDir}
 `);
@@ -8472,7 +8559,7 @@ function writeUnixInstructions(w3, binDir) {
    source ${rcFile}
 `);
 }
-var import_node_path5, import_node_os3, import_node_child_process2, import_node_fs5, PROGRAM_NAME, PATH_HINT_MARKER_NAME, SHELL_RC_FILES;
+var import_node_path5, import_node_os3, import_node_child_process2, import_node_fs5, PROGRAM_NAME2, PATH_HINT_MARKER_NAME, SHELL_RC_FILES;
 var init_pathcheck = __esm({
   "src/cmd/pathcheck.ts"() {
     "use strict";
@@ -8480,7 +8567,7 @@ var init_pathcheck = __esm({
     import_node_os3 = require("node:os");
     import_node_child_process2 = require("node:child_process");
     import_node_fs5 = require("node:fs");
-    PROGRAM_NAME = "conductor";
+    PROGRAM_NAME2 = "conductor";
     PATH_HINT_MARKER_NAME = ".path-hint-shown";
     SHELL_RC_FILES = {
       zsh: "~/.zshrc",

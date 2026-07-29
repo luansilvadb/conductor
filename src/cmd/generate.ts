@@ -1,10 +1,11 @@
-import { Command } from 'commander';
-import { cwd } from 'node:process';
+﻿import { Command } from 'commander';
 import { EmbeddedTemplateManager } from '../internal/templates/manager.js';
 import { FlatMarkdownStrategy } from '../internal/templates/flat-strategy.js';
-import { detectedResult, det, uiRenderer, templateManager, toolFlag } from './root.js';
+import { getContext } from './root.js';
 import { selectToolInteractively } from './init.js';
-import { AIToolType } from '../internal/detector/types.js';
+import { AIToolType } from '../internal/tool-registry.js';
+import type { ConductorContext } from '../internal/context.js';
+import { withDetected } from '../internal/context.js';
 
 export function createGenerateCommand(): Command {
   const cmd = new Command('generate')
@@ -14,68 +15,59 @@ export function createGenerateCommand(): Command {
     .option('-f, --force', 'Overwrite existing files')
     .option('-a, --all', 'Generate all available templates')
     .option('-o, --output <path>', 'Custom output directory (overrides detection)')
-    .action(async (templateName: string | undefined, options: { force?: boolean; all?: boolean; output?: string }) => {
-      await runGenerate({ templateName, force: options.force, output: options.output });
+    .action(async (templateName, options) => {
+      await runGenerate(getContext(), { templateName, force: options.force, output: options.output });
     });
 
   return cmd;
 }
 
-/** Resolve ferramenta, diretório-alvo e gera templates. */
-export async function runGenerate(opts: {
+export interface GenerateOptions {
   templateName?: string;
   force?: boolean;
   output?: string;
-} = {}): Promise<void> {
+}
+
+/** Resolve tool, target directory, and generate templates. */
+export async function runGenerate(ctx: ConductorContext, opts: GenerateOptions = {}): Promise<void> {
   const force = opts.force ?? false;
   const output = opts.output ?? '';
 
-  if (!output && !toolFlag) {
+  if (!output && !ctx.detected.isValid) {
     const tool = await selectToolInteractively();
     if (tool === AIToolType.Unknown) {
-      uiRenderer.renderError('No tool selected. Use --output or --tool flag.');
+      ctx.ui.renderError('No tool selected. Use --output or --tool flag.');
       return;
     }
-    const workingDir = cwd();
-    Object.assign(detectedResult, {
+    ctx = withDetected(ctx, {
       toolType: tool,
-      configPath: det.getConfigDirPath(tool, workingDir),
+      configPath: ctx.det.getConfigDirPath(tool, ctx.workingDir),
       isValid: true,
       message: `tool manually selected: ${tool}`,
     });
   }
 
-  const targetDir = determineTargetDir(output);
+  const targetDir = output || ctx.detected.configPath;
   if (!targetDir) {
-    uiRenderer.renderError('Could not determine target directory. Use --output or --tool flag.');
+    ctx.ui.renderError('Could not determine target directory. Use --output or --tool flag.');
     return;
   }
 
   if (opts.templateName) {
-    await generateSingleTemplate(opts.templateName, force, output);
+    await generateSingleTemplate(ctx, opts.templateName, force, output);
     return;
   }
 
-  await generateAllTemplates(targetDir, force, output);
+  await generateAllTemplates(ctx, targetDir, force, output);
 }
 
-function determineTargetDir(output: string): string {
-  if (output) return output;
-  if (detectedResult.isValid && detectedResult.configPath) return detectedResult.configPath;
-  return '';
-}
-
-async function generateAllTemplates(_targetDir: string, force: boolean, output: string): Promise<void> {
-  const workingDir = cwd();
-  const mgr = templateManager as EmbeddedTemplateManager;
-
-  const strategy = new FlatMarkdownStrategy(detectedResult.toolType, mgr);
-  // So passa outputDir quando --output foi explicitamente usado;
-  // caso contrario, a estrategia resolve o base via getBaseDir.
-  const results = strategy.generateAll(workingDir, force, output || undefined);
+async function generateAllTemplates(ctx: ConductorContext, _targetDir: string, force: boolean, output: string): Promise<void> {
+  const mgr = ctx.templates as EmbeddedTemplateManager;
+  const strategy = new FlatMarkdownStrategy(ctx.detected.toolType, mgr);
+  const results = strategy.generateAll(ctx.workingDir, force, output || undefined);
 
   if (results.length === 0) {
-    uiRenderer.renderWarning('No templates available');
+    ctx.ui.renderWarning('No templates available');
     return;
   }
 
@@ -85,38 +77,32 @@ async function generateAllTemplates(_targetDir: string, force: boolean, output: 
   for (const result of results) {
     if (result.success) {
       successCount++;
-      uiRenderer.renderSuccess(`Generated: ${result.filePath}`);
+      ctx.ui.renderSuccess(`Generated: ${result.filePath}`);
     } else {
       failCount++;
-      uiRenderer.renderError(`Failed: ${result.message}`);
+      ctx.ui.renderError(`Failed: ${result.message}`);
     }
   }
 
-  uiRenderer.renderSuccess(`Generation complete: ${formatCount(successCount, 'succeeded')}, ${formatCount(failCount, 'failed')}`);
+  ctx.ui.renderSuccess(`Generation complete: ${formatCount(successCount, 'succeeded')}, ${formatCount(failCount, 'failed')}`);
 }
 
-async function generateSingleTemplate(name: string, force: boolean, output: string): Promise<void> {
-  const tmpl = templateManager.getByName(name);
+async function generateSingleTemplate(ctx: ConductorContext, name: string, force: boolean, output: string): Promise<void> {
+  const tmpl = ctx.templates.getByName(name);
   if (!tmpl) {
-    uiRenderer.renderError(`Template not found: ${name}`);
+    ctx.ui.renderError(`Template not found: ${name}`);
     return;
   }
-  await generateOneViaStrategy(tmpl, force, output);
-}
 
-async function generateOneViaStrategy(tmpl: ReturnType<typeof templateManager.getByName>, force: boolean, output: string): Promise<void> {
-  if (!tmpl) return;
-  const workingDir = cwd();
-  const mgr = templateManager as EmbeddedTemplateManager;
-
-  const strategy = new FlatMarkdownStrategy(detectedResult.toolType, mgr);
-  const results = strategy.generateOne(workingDir, tmpl, force, output || undefined);
+  const mgr = ctx.templates as EmbeddedTemplateManager;
+  const strategy = new FlatMarkdownStrategy(ctx.detected.toolType, mgr);
+  const results = strategy.generateOne(ctx.workingDir, tmpl, force, output || undefined);
 
   for (const r of results) {
     if (r.success) {
-      uiRenderer.renderSuccess(`Generated: ${r.filePath}`);
+      ctx.ui.renderSuccess(`Generated: ${r.filePath}`);
     } else {
-      uiRenderer.renderError(r.message);
+      ctx.ui.renderError(r.message);
     }
   }
 }

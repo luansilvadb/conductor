@@ -12,6 +12,12 @@ export interface TemplateMeta {
   subpath: string;
   /** Original file extension including the dot (e.g. ".md", ".py") */
   ext: string;
+  /**
+   * Optional list of tool IDs this template is compatible with.
+   * When absent or empty, the template is considered compatible with all tools.
+   * Example frontmatter: `tools: [cursor, claude-code]`
+   */
+  tools?: string[];
 }
 
 /** Parameters for template generation requests */
@@ -54,6 +60,14 @@ const FRONTMATTER_SETTERS: Record<string, (meta: TemplateMeta, value: string) =>
   id: (m, v) => (m.id = v),
   category: (m, v) => (m.category = v),
   description: (m, v) => (m.description = v),
+  // Parses simple YAML list syntax: "[cursor, claude-code]" or "cursor, claude-code"
+  tools: (m, v) => {
+    m.tools = v
+      .replace(/[\[\]]/g, '')
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+  },
 };
 
 /** Parse YAML frontmatter from template content */
@@ -84,6 +98,7 @@ function createEmptyMeta(content: string): TemplateMeta {
     sourceDir: '',
     subpath: '',
     ext: '',
+    tools: undefined,
   };
 }
 

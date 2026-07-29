@@ -33,8 +33,15 @@ const OUT_FILE = join(ROOT, 'src/internal/templates/embedded.ts');
  * @param {string} category
  * @returns {Entry[]}
  */
-// Extensions that must not be embedded as text strings.
-const BINARY_EXTS = new Set(['.pyc', '.pyo', '.so', '.dll', '.exe', '.bin', '.wasm']);
+// Extensions allowed to be embedded as UTF-8 text strings.
+// Anything NOT in this list is silently skipped to avoid corrupting the bundle
+// with binary data or unexpectedly large files.
+const ALLOWED_TEXT_EXTS = new Set([
+  '.md', '.json', '.ts', '.js', '.mjs', '.cjs',
+  '.py', '.txt', '.yaml', '.yml', '.toml',
+  '.sh', '.bash', '.zsh', '.fish', '.ps1', '.bat', '.cmd',
+  '.html', '.css', '.xml', '.csv',
+]);
 
 function listForCategoryRecursive(dir, category) {
   const result = [];
@@ -53,8 +60,10 @@ function listForCategoryRecursive(dir, category) {
       const full = join(current, entry.name);
       if (entry.isFile()) {
         const ext = extname(entry.name);
-        if (!BINARY_EXTS.has(ext)) {
+        if (ALLOWED_TEXT_EXTS.has(ext)) {
           result.push({ abs: full, category, subpath, ext });
+        } else {
+          console.warn(`[embed-templates] Skipping non-whitelisted extension: ${join(current, entry.name)}`);
         }
         continue;
       }

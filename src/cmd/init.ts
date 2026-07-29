@@ -1,71 +1,74 @@
 import { Command } from 'commander';
-import { cwd } from 'node:process';
 import { existsSync, mkdirSync } from 'node:fs';
 import { select, isCancel } from '@clack/prompts';
-import { detectedResult, det, uiRenderer } from './root.js';
-import { AIToolType, parseToolFlag } from '../internal/detector/types.js';
+import { getContext } from './root.js';
+import { AIToolType, TOOL_REGISTRY } from '../internal/tool-registry.js';
+import type { ConductorContext } from '../internal/context.js';
+import { withDetected } from '../internal/context.js';
 
 export function createInitCommand(): Command {
   const cmd = new Command('init')
     .description('Initialize command template directory for detected AI tool')
     .action(async () => {
-      await runInit();
+      await runInit(getContext());
     });
 
   return cmd;
 }
 
-/** Resolve a ferramenta (detecta ou pergunta) e cria o diretório de configuração. */
-export async function runInit(): Promise<boolean> {
-  const workingDir = cwd();
+/**
+ * Resolves the target tool (auto-detected or interactively selected),
+ * creates the config directory, and returns an updated context.
+ * Returns null if the user cancelled or an error occurred.
+ */
+export async function runInit(ctx: ConductorContext): Promise<ConductorContext | null> {
+  let detected = ctx.detected;
 
-  if (!detectedResult.isValid) {
+  if (!detected.isValid) {
     const tool = await selectToolInteractively();
     if (tool === AIToolType.Unknown) {
-      uiRenderer.renderError('No tool selected');
-      return false;
+      ctx.ui.renderError('No tool selected');
+      return null;
     }
-    Object.assign(detectedResult, {
+    detected = {
       toolType: tool,
-      configPath: det.getConfigDirPath(tool, workingDir),
+      configPath: ctx.det.getConfigDirPath(tool, ctx.workingDir),
       isValid: true,
       message: `tool manually selected: ${tool}`,
-    });
+    };
   }
 
-  const configPath = detectedResult.configPath;
+  const configPath = detected.configPath;
   if (!configPath) {
-    uiRenderer.renderError('Could not determine config directory');
-    return false;
+    ctx.ui.renderError('Could not determine config directory');
+    return null;
   }
 
   if (existsSync(configPath)) {
-    uiRenderer.renderWarning(`Directory already exists: ${configPath}`);
-    const confirmed = await uiRenderer.confirm('Do you want to continue anyway?');
+    ctx.ui.renderWarning(`Directory already exists: ${configPath}`);
+    const confirmed = await ctx.ui.confirm('Do you want to continue anyway?');
     if (!confirmed) {
-      uiRenderer.renderWarning('Initialization cancelled');
-      return false;
+      ctx.ui.renderWarning('Initialization cancelled');
+      return null;
     }
   }
 
   mkdirSync(configPath, { recursive: true });
-  uiRenderer.renderSuccess(
-    `Initialized ${detectedResult.toolType} command directory at: ${configPath}`,
+  ctx.ui.renderSuccess(
+    `Initialized ${detected.toolType} command directory at: ${configPath}`,
   );
-  return true;
+  return withDetected(ctx, detected);
 }
 
+/** Build the tool selection list from TOOL_REGISTRY — stays in sync automatically. */
 export async function selectToolInteractively(): Promise<AIToolType> {
+  const options = TOOL_REGISTRY.map((d) => ({ label: d.label, value: d.id }));
   const result = await select({
     message: 'Select your AI coding tool:',
-    options: [
-      { label: 'Cursor', value: 'cursor' },
-      { label: 'Claude Code', value: 'claude-code' },
-      { label: 'Antigravity', value: 'antigravity' },
-      { label: 'Trae', value: 'trae' },
-    ],
+    options,
   });
 
   if (isCancel(result)) return AIToolType.Unknown;
-  return parseToolFlag(result as string);
+  return result as AIToolType;
 }
+

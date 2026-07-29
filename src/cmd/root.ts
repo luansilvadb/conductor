@@ -1,57 +1,49 @@
 import { Command } from 'commander';
 import { cwd } from 'node:process';
-import { AIToolType, parseToolFlag, type DetectResult } from '../internal/detector/types.js';
-import { DefaultDetector } from '../internal/detector/detector.js';
-import { EmbeddedTemplateManager } from '../internal/templates/manager.js';
-import { CharmUIRenderer } from '../internal/ui/renderer.js';
+import { buildContext, type ConductorContext } from '../internal/context.js';
 import { runInit } from './init.js';
 import { runGenerate } from './generate.js';
 import pkg from '../../package.json' with { type: 'json' };
 
-// Global state shared across commands
-export let det: DefaultDetector;
-export let uiRenderer: CharmUIRenderer;
-export let templateManager: EmbeddedTemplateManager;
-export let detectedResult: DetectResult;
-export let toolFlag = '';
+/** Module-private context — set by preAction, read via getContext(). */
+let _ctx: ConductorContext | undefined;
+
+/**
+ * Returns the current invocation context.
+ * Throws a descriptive error if called outside a command action (i.e. before preAction ran).
+ */
+export function getContext(): ConductorContext {
+  if (!_ctx) {
+    throw new Error(
+      'ConductorContext is not initialized. ' +
+        'Ensure this function is only called from within a command action.',
+    );
+  }
+  return _ctx;
+}
 
 export function createProgram(): Command {
   const program = new Command();
   program
     .name('Conductor')
-    .description(
-      'Conductor Spec Driven Development',
-    )
+    .description('Conductor Spec Driven Development')
     .version(pkg.version, '-v, --version', 'Print conductor version and exit')
     .hook('preAction', (thisCommand: Command) => {
-      det = new DefaultDetector();
-      uiRenderer = new CharmUIRenderer();
-      templateManager = new EmbeddedTemplateManager();
-
       const workingDir = cwd();
       const globalOpts = thisCommand.opts();
-      toolFlag = globalOpts.tool ?? '';
-
-      if (toolFlag) {
-        const toolType = parseToolFlag(toolFlag);
-        detectedResult = {
-          toolType,
-          configPath: det.getConfigDirPath(toolType, workingDir),
-          isValid: toolType !== AIToolType.Unknown,
-          message: `tool manually specified: ${toolType}`,
-        };
-      } else {
-        detectedResult = det.detect(workingDir);
-      }
+      const toolFlag: string = globalOpts.tool ?? '';
+      _ctx = buildContext(toolFlag, workingDir);
     })
     .action(async () => {
-      // Fluxo padrão (sem subcomando): inicializa + gera tudo
-      const ok = await runInit();
-      if (!ok) return;
-      await runGenerate();
+      // Default flow (no subcommand): init then generate
+      const ctx = getContext();
+      const resolvedCtx = await runInit(ctx);
+      if (!resolvedCtx) return;
+      await runGenerate(resolvedCtx);
     });
 
   program.option('-t, --tool <tool>', 'Manually specify tool type (cursor, claude-code, antigravity)');
 
   return program;
 }
+

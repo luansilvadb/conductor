@@ -17,8 +17,14 @@ export class EmbeddedTemplateManager implements TemplateManager {
   /** @internal Lazy cache — built once on first listAll() call. */
   private _allCache: TemplateMeta[] | null = null;
 
-  listAvailable(_tool: AIToolType): TemplateMeta[] {
-    return this.listAll();
+  listAvailable(tool: AIToolType): TemplateMeta[] {
+    // Unknown tool or no filter — return everything
+    if (tool === AIToolType.Unknown) return this.listAll();
+    return this.listAll().filter((t) => {
+      // No tools field (or empty) means compatible with all tools
+      if (!t.tools || t.tools.length === 0) return true;
+      return t.tools.includes(tool);
+    });
   }
 
   /** Lista todos os templates a partir dos dados embutidos no bundle. */

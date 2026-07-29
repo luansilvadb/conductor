@@ -66,7 +66,7 @@ function buildI18nMap(locale: string): Map<string, JsonObject> {
     if (t.category !== 'i18n' || t.ext !== '.json') continue;
     if (!t.subpath.startsWith(locale)) continue;
 
-    const fileName = t.sourcePath.split(/[\\/]/).pop() ?? '';
+    const fileName = t.sourcePath.split(/[/\\]/).pop() ?? '';
     const fileId = fileName.endsWith('.json') ? fileName.slice(0, -5) : fileName;
 
     let data: JsonObject;
@@ -81,6 +81,18 @@ function buildI18nMap(locale: string): Map<string, JsonObject> {
     const namespace = relDir
       ? relDir.replace(/\//g, '.') + '.' + fileId
       : fileId;
+
+    // Collision guard: if two source files produce the same namespace key,
+    // the first entry wins and a warning is emitted so it's visible at runtime.
+    if (map.has(namespace)) {
+      console.warn(
+        `[i18n] Namespace collision detected for locale "${locale}": ` +
+        `namespace "${namespace}" already registered. ` +
+        `Keeping first entry; skipping "${t.sourcePath}". ` +
+        `Rename the file or reorganise the directory to fix this.`,
+      );
+      continue;
+    }
 
     map.set(namespace, data);
   }

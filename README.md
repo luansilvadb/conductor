@@ -1,6 +1,6 @@
 # Conductor
 
-inspired by Google Conductor
+inspired by https://github.com/gemini-cli-extensions/conductor
 
 The ultimate framework for working with AI in code (Cursor, Claude Code, Antigravity, Trae).
 Stop debugging hallucinations. Force the AI to plan, execute, and test with discipline.

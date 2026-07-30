@@ -5,3 +5,5 @@ node_modules/
 .vscode/
 .idea/
 src/internal/templates/embedded.ts
+__pycache__/
+*.pyc

@@ -1,7 +1,7 @@
 ---
 name: conductor-implement
 id: conductor-implement
-description: Executes the tasks defined in the specified track's plan. Use this to start or continue working on a feature, bug fix, or chore.
+description: ${i18n.t("skills.conductor-implement.description_short")}
 ---
 
 ## Role:
@@ -32,6 +32,7 @@ ${i18n.t("skills.conductor-implement.constraints.1")}
 ${i18n.t("skills.conductor-implement.constraints.2")}
 ${i18n.t("skills.conductor-implement.constraints.3")}
 ${i18n.t("skills.conductor-implement.constraints.4")}
+${i18n.t("skills.conductor-implement.constraints.5")}
 
 ## Skills:
 ${i18n.t("skills.conductor-implement.skills.0")}
@@ -51,6 +52,7 @@ ${i18n.t("skills.conductor-implement.output_format.1")}
 ${i18n.t("skills.conductor-implement.output_format.2")}
 ${i18n.t("skills.conductor-implement.output_format.3")}
 ${i18n.t("skills.conductor-implement.output_format.4")}
+- **Completion**: Close the interaction by reporting to the user: *${i18n.t("skills.conductor-implement.completion")}*
 
 ## Initialization:
 ${i18n.t("skills.conductor-implement.initialization")} ${i18n.t("skills.conductor-implement.welcome")}

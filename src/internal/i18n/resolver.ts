@@ -153,13 +153,22 @@ function resolveConfigPath(path: string, baseDir?: string, locale?: string): str
 // ---------------------------------------------------------------------------
 
 /**
+ * Maximum i18n expansion rounds. An i18n value may reference another i18n key
+ * (e.g. a skill reusing `common.confirmations.yes`), so a single pass is not
+ * enough: `String.replace` never rescans the text it just inserted. The cap
+ * bounds pathological or cyclic references — on reaching it, whatever
+ * placeholders remain are left verbatim, matching the not-found behaviour.
+ */
+const MAX_I18N_DEPTH = 8;
+
+/**
  * Resolve all `${i18n.t("...")}` and `${config.*}` placeholders in `content`.
  *
- * Two-pass approach (order matters):
- *   Pass 1 — i18n: i18n values themselves may contain `${config.*}` references,
- *             so they are expanded first.
- *   Pass 2 — config: handles both original placeholders and those introduced by
- *             i18n expansion in pass 1.
+ * Two-phase approach (order matters):
+ *   Phase 1 — i18n: repeated until the text stops changing (see MAX_I18N_DEPTH),
+ *             so i18n values may reference other i18n keys.
+ *   Phase 2 — config: handles both original placeholders and those introduced by
+ *             the i18n phase.
  *
  * Placeholders NOT touched:
  *   - `{param}` style (no dollar sign) — runtime parameters resolved by the agent
@@ -169,17 +178,23 @@ export function resolveContent(content: string, locale: string, baseDir?: string
   const i18nMap = buildI18nMap(locale);
   const fallbackMap = locale !== DEFAULT_LOCALE ? buildI18nMap(DEFAULT_LOCALE) : undefined;
 
-  // Pass 1 — i18n
-  const afterI18n = content.replace(
-    /\$\{i18n\.t\("([^"]+)"\)\}/g,
-    (_, key: string) => {
-      let val = resolveI18nKey(key, i18nMap);
-      if (val === `\${i18n.t("${key}")}` && fallbackMap) {
-        val = resolveI18nKey(key, fallbackMap);
+  // Phase 1 — i18n, iterated to a fixpoint so nested keys expand too
+  let afterI18n = content;
+  for (let round = 0; round < MAX_I18N_DEPTH; round++) {
+    const next = afterI18n.replace(
+      /\$\{i18n\.t\("([^"]+)"\)\}/g,
+      (_, key: string) => {
+        let val = resolveI18nKey(key, i18nMap);
+        if (val === `\${i18n.t("${key}")}` && fallbackMap) {
+          val = resolveI18nKey(key, fallbackMap);
+        }
+        return val;
       }
-      return val;
-    }
-  );
+    );
+    // Stable output means every remaining placeholder is unresolvable — stop.
+    if (next === afterI18n) break;
+    afterI18n = next;
+  }
 
   // Pass 2 — config (covers originals + any introduced by i18n pass)
   const afterConfig = afterI18n.replace(

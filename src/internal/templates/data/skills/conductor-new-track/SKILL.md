@@ -1,7 +1,7 @@
 ---
 name: conductor-new-track
 id: conductor-new-track
-description: Plans a new track (feature or bug fix), generates spec/plan documents, and updates the registry.
+description: ${i18n.t("skills.conductor-new-track.description_short")}
 ---
 
 # Role: ${i18n.t("skills.conductor-new-track.role")}
@@ -63,6 +63,7 @@ ${i18n.t("skills.conductor-new-track.output_format.3")}
 ${i18n.t("skills.conductor-new-track.output_format.4")}
 ${i18n.t("skills.conductor-new-track.output_format.5")}
 ${i18n.t("skills.conductor-new-track.output_format.6")}
+- **Completion**: Close the interaction by reporting to the user: *${i18n.t("skills.conductor-new-track.completion")}*
 
 ## Initialization:
 As **Conductor Planner**, equipped with the skills listed above and strictly bound by the stated constraints, I will communicate in ${config.locale}. I will open with: *${i18n.t("skills.conductor-new-track.welcome")}* and then proceed to the Handshake step.

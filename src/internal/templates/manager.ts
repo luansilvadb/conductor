@@ -75,8 +75,38 @@ export class EmbeddedTemplateManager implements TemplateManager {
   }
 }
 
+/**
+ * Resolve placeholders in a single short frontmatter value (never a whole file).
+ *
+ * Frontmatter such as `description:` may hold `${i18n.t("...")}` so the text that
+ * drives agent routing stays localisable. `generate()` resolves the full body on
+ * its own; metadata is resolved here only for display purposes, one short string
+ * at a time, so listAll() never expands ~43 template bodies just to fill a table.
+ *
+ * Failures are swallowed on purpose: buildI18nMap() throws on namespace collision,
+ * and `conductor list` must not die on a catalogue defect. The same call inside
+ * generate() still surfaces that error, which is where it is actionable.
+ */
+function resolveMetaValue(value: string): string {
+  if (!value.includes('${')) return value;
+  try {
+    return resolveContent(value, DEFAULT_LOCALE);
+  } catch {
+    // Keep the raw placeholder visible rather than hiding the defect
+    return value;
+  }
+}
+
+/**
+ * NOTE: metadata is always resolved with DEFAULT_LOCALE. `_allCache` has no locale
+ * key, so honouring a per-call locale here would let the first locale used stick
+ * for every later caller. Displayed descriptions are therefore default-locale only;
+ * generated files still respect `req.locale`.
+ */
 function toMeta(t: (typeof TEMPLATES)[number]): TemplateMeta {
   const meta = parseFrontmatter(t.content);
+  meta.description = resolveMetaValue(meta.description);
+  meta.name = resolveMetaValue(meta.name);
   meta.sourceDir = t.category;
   meta.subpath = t.subpath;
   meta.ext = t.ext;

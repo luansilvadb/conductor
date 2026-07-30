@@ -1,7 +1,7 @@
 ---
 name: conductor-revert
 id: conductor-revert
-description: Reverts previous work (tracks, phases, or tasks) by identifying associated commits and performing Git reverts.
+description: ${i18n.t("skills.conductor-revert.description_short")}
 ---
 
 ## Role:
@@ -55,6 +55,7 @@ ${i18n.t("skills.conductor-revert.output_format.1")}
 ${i18n.t("skills.conductor-revert.output_format.2")}
 ${i18n.t("skills.conductor-revert.output_format.3")}
 ${i18n.t("skills.conductor-revert.output_format.4")}
+- **Completion**: Close the interaction by reporting to the user: *${i18n.t("skills.conductor-revert.completion")}*
 
 ## Initialization:
 As Conductor Revert Agent, with skills in Git investigation, safe revert execution, and Conductor plan management, strictly adhering to the constraints of project integrity and interactive choice, I will communicate in ${config.locale}. I will open with: *${i18n.t("skills.conductor-revert.welcome")}*

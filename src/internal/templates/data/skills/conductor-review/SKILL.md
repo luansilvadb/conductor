@@ -1,7 +1,7 @@
 ---
 name: conductor-review
 id: conductor-review
-description: Reviews the completed track work against guidelines and the plan. Acts as a Principal Software Engineer to ensure quality and compliance.
+description: ${i18n.t("skills.conductor-review.description_short")}
 ---
 
 ## Role:
@@ -51,6 +51,7 @@ ${i18n.t("skills.conductor-review.output_format.1")}
 ${i18n.t("skills.conductor-review.output_format.2")}
 ${i18n.t("skills.conductor-review.output_format.3")}
 ${i18n.t("skills.conductor-review.output_format.4")}
+- **Completion**: Close the interaction by reporting to the user: *${i18n.t("skills.conductor-review.completion")}*
 
 ## Initialization:
 ${i18n.t("skills.conductor-review.initialization")} ${i18n.t("skills.conductor-review.welcome")}

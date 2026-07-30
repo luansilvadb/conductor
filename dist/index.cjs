@@ -3345,7 +3345,7 @@ var init_embedded = __esm({
   },
 
   "i18n": {
-    "default_language": "pt-BR",
+    "default_language": "\${config.locale}",
     "template_dir": "i18n",
     "resolve_order": ["config", "system_locale", "default"]
   },
@@ -6319,7 +6319,7 @@ var init_config = __esm({
         }
       },
       i18n: {
-        default_language: "pt-BR",
+        default_language: "${config.locale}",
         template_dir: "i18n",
         resolve_order: ["config", "system_locale", "default"]
       },

@@ -8514,7 +8514,7 @@ var init_package = __esm({
   "package.json"() {
     package_default = {
       name: "@luansilvadb/conductor",
-      version: "1.3.20",
+      version: "1.3.21",
       description: "Conductor - Spec Driven Development",
       type: "module",
       bin: {

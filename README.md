@@ -1,81 +1,74 @@
 # Conductor
 
-O framework definitivo para trabalhar com IA em código (Cursor, Claude Code, Antigravity, Trae).
-Pare de debugar alucinações. Force a IA a planejar, executar e testar com disciplina.
+The ultimate framework for working with AI in code (Cursor, Claude Code, Antigravity, Trae).
+Stop debugging hallucinations. Force the AI to plan, execute, and test with discipline.
 
-## Comece em 1 Comando
+## Start in 1 Command
 
-Na raiz do seu projeto, rode (requer Node 20.11+):
+At the root of your project, run (requires Node 20.11+):
 
 ```bash
-npx github:luansilvadb/conductor
+npx github:luansilvadb/conductor generate
 ```
 
-> **Dica:** adicione no seu `~/.zshrc` ou `~/.bashrc`:
-> `alias conductor="npx github:luansilvadb/conductor"`
+## How to Use (The Daily Flow)
 
-Ele detecta sua ferramenta de IA e instala as **Skills** (comandos que sua IA entende) automaticamente.
+Open your AI tool's chat and invoke the skills in the order below. All history, rules, and decisions will be saved in your project's `conductor/` folder.
 
----
+### 1. Initialize the project (Only the 1st time)
+> **You:** "Run `conductor-setup` to create a todo list app in React."
 
-## Como Usar (O Fluxo Diário)
+The AI will analyze the idea and record the vision, rules (UX, tests), and the tech stack in the Conductor directory.
 
-Abra o chat da sua ferramenta de IA e invoque as skills na ordem abaixo. Todo o histórico, regras e decisões ficarão salvos na pasta `conductor/` do seu projeto.
+### 2. Plan a task
+> **You:** "Run `conductor-new-track` for the login feature."
 
-### 1. Iniciar o projeto (Apenas a 1ª vez)
-> **Você:** "Execute o `conductor-setup` para criar um app de todo list em React."
+Zero code is generated here. The AI will only create a specification (`spec.md`) and a step-by-step action plan (`plan.md`).
 
-A IA vai analisar a ideia e registrar a visão, as regras (UX, testes) e a stack tecnológica no diretório do Conductor.
+### 3. Write the code
+> **You:** "Run `conductor-implement`."
 
-### 2. Planejar uma tarefa
-> **Você:** "Execute o `conductor-new-track` para a funcionalidade de login."
+Now we're talking. The AI will read the plan it just made, write code following tests (TDD), check off what it finished (`[x]`) in the document, and commit to Git maintaining traceability.
 
-Zero código gerado aqui. A IA vai apenas criar uma especificação (`spec.md`) e um plano de ação passo a passo (`plan.md`).
+### 4. Review and Finalize
+> **You:** "Run `conductor-review`."
 
-### 3. Escrever o código
-> **Você:** "Execute o `conductor-implement`."
-
-Agora sim. A IA vai ler o plano que acabou de fazer, programar seguindo testes (TDD), marcar o que terminou (`[x]`) no documento e comitar no Git mantendo a rastreabilidade.
-
-### 4. Revisar e Finalizar
-> **Você:** "Execute o `conductor-review`."
-
-A IA assume o papel de um tech lead: revisa o próprio código contra as regras iniciais do projeto, garante a qualidade e encerra a track.
+The AI takes on the role of a tech lead: it reviews its own code against the project's initial rules, ensures quality, and closes the track.
 
 ---
 
-## Outras Skills Úteis (Peça à IA)
+## Other Useful Skills (Ask the AI)
 
-- **`conductor-status`**: Mostra o que já foi feito, % de conclusão, o que falta e bloqueios.
-- **`conductor-revert`**: A IA fez bagunça? Invoque essa skill e ela desfaz com precisão (usando git notes) todos os commits e mudanças apenas da track atual.
-- **`conductor-archive`**: Limpa a área de trabalho arquivando tarefas já finalizadas.
+- **`conductor-status`**: Shows what has already been done, completion %, what is missing, and blockers.
+- **`conductor-revert`**: Did the AI mess up? Invoke this skill and it accurately undoes (using git notes) all commits and changes from the current track only.
+- **`conductor-archive`**: Cleans up the workspace by archiving finished tasks.
 
 ---
 
-## CLI (Uso Manual no Terminal)
+## CLI (Manual Terminal Usage)
 
-Se quiser mexer nas configurações via terminal ao invés de usar o assistente `npx`:
+If you want to tweak configurations via terminal instead of using the `npx` wizard:
 
 ```bash
-conductor                # Inicia o modo assistente interativo
-conductor generate       # Atualiza as skills se você mudar de IDE
-conductor --tool trae    # Força a instalação para o Trae (ou cursor, claude-code)
-conductor list           # Lista as skills instaladas
-conductor uninstall      # Remove o framework do projeto
+conductor                # Starts the interactive wizard mode
+conductor generate       # Updates skills if you switch IDEs
+conductor --tool trae    # Forces installation for Trae (or cursor, claude-code)
+conductor list           # Lists installed skills
+conductor uninstall      # Removes the framework from the project
 ```
 
 ---
 
-## Contribuindo (Dev)
+## Contributing (Dev)
 
-Para mexer no código-fonte do próprio Conductor:
+To tinker with Conductor's own source code:
 
 ```bash
 git clone https://github.com/luansilvadb/conductor.git
 cd conductor
 npm install
-npm run build      # Gera dist/index.cjs (single-file bundle)
-npm link           # Disponibiliza `conductor` globalmente para testes
+npm run build      # Generates dist/index.cjs (single-file bundle)
+npm link           # Makes `conductor` available globally for testing
 ```
 
-Licença MIT.
+MIT License.

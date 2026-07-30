@@ -42,15 +42,16 @@ export async function runGenerate(ctx: ConductorContext, opts: GenerateOptions =
       return;
     }
 
-    if (!opts.locale) {
-      opts.locale = await selectLocaleInteractively();
-    }
     ctx = withDetected(ctx, {
       toolType: tool,
       configPath: ctx.det.getConfigDirPath(tool, ctx.workingDir),
       isValid: true,
       message: `tool manually selected: ${tool}`,
     });
+  }
+
+  if (!opts.locale) {
+    opts.locale = await selectLocaleInteractively();
   }
 
   const targetDir = output || ctx.detected.configPath;

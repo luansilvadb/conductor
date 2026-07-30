@@ -8675,15 +8675,15 @@ async function runGenerate(ctx, opts = {}) {
       ctx.ui.renderError("No tool selected. Use --output or --tool flag.");
       return;
     }
-    if (!opts.locale) {
-      opts.locale = await selectLocaleInteractively();
-    }
     ctx = withDetected(ctx, {
       toolType: tool,
       configPath: ctx.det.getConfigDirPath(tool, ctx.workingDir),
       isValid: true,
       message: `tool manually selected: ${tool}`
     });
+  }
+  if (!opts.locale) {
+    opts.locale = await selectLocaleInteractively();
   }
   const targetDir = output || ctx.detected.configPath;
   if (!targetDir) {
@@ -8756,7 +8756,7 @@ var init_package = __esm({
   "package.json"() {
     package_default = {
       name: "@luansilvadb/conductor",
-      version: "1.3.18",
+      version: "1.3.19",
       description: "Conductor - Spec Driven Development",
       type: "module",
       bin: {
@@ -8779,7 +8779,9 @@ var init_package = __esm({
         prepublishOnly: "npm run build",
         start: "node dist/index.cjs"
       },
-      dependencies: {},
+      dependencies: {
+        "@luansilvadb/conductor": "^1.3.18"
+      },
       devDependencies: {
         "@clack/prompts": "^0.7.0",
         "@types/node": "^20.11.0",

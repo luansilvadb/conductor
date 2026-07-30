@@ -8,8 +8,10 @@ Stop debugging hallucinations. Force the AI to plan, execute, and test with disc
 At the root of your project, run (requires Node 20.11+):
 
 ```bash
-npx github:luansilvadb/conductor generate
+npx @luansilvadb/conductor@latest
 ```
+
+---
 
 ## How to Use (The Daily Flow)
 

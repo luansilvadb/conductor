@@ -27,6 +27,7 @@ ${i18n.t("skills.conductor-setup.goals.4")}
 ${i18n.t("skills.conductor-setup.goals.5")}
 ${i18n.t("skills.conductor-setup.goals.6")}
 ${i18n.t("skills.conductor-setup.goals.7")}
+${i18n.t("skills.conductor-setup.goals.8")}
 
 ## Constraints:
 ${i18n.t("skills.conductor-setup.constraints.0")}
@@ -73,6 +74,7 @@ ${i18n.t("skills.conductor-setup.output_format.9")}
 ${i18n.t("skills.conductor-setup.output_format.10")}
 ${i18n.t("skills.conductor-setup.output_format.11")}
 ${i18n.t("skills.conductor-setup.output_format.12")}
+${i18n.t("skills.conductor-setup.output_format.13")}
 
 ### Style Guide Recommendation — required wording
 When presenting style guide options, open with: *${i18n.t("skills.conductor-setup.style_guide.recommendation")}* — `{stack}` MUST be replaced by the technology stack confirmed in the Technology Stack step. Justify the top recommendation with: *${i18n.t("skills.conductor-setup.style_guide.reason")}*
@@ -83,6 +85,7 @@ On completion, report EXACTLY this structure, one line per generated artifact:
 - Open with: *${i18n.t("skills.conductor-setup.completion.summary")}*
 - `${config.files.artifacts.product}` — ${i18n.t("skills.conductor-setup.completion.product_file")} (`{vision}` = the product vision confirmed by the user)
 - `${config.files.artifacts.tech_stack}` — ${i18n.t("skills.conductor-setup.completion.tech_stack_file")} (`{stack}` = the confirmed technology stack)
+- `${config.files.artifacts.decisions}` — ${i18n.t("skills.conductor-setup.completion.decisions_file")}
 - `${config.files.artifacts.workflow}` — ${i18n.t("skills.conductor-setup.completion.workflow_file")} (`{coverage}` = `config.thresholds.coverage_min_percent`)
 - `${config.directories.styleguides_dir}` — ${i18n.t("skills.conductor-setup.completion.styleguides_dir")} (`{languages}` = the languages whose style guides were installed)
 - Close by asking: *${i18n.t("skills.conductor-setup.completion.next_action")}* If the user agrees, hand off to `${config.skills.names.new_track}`.

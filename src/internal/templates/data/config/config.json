@@ -22,6 +22,7 @@
       "product": "product.md",
       "product_guidelines": "product-guidelines.md",
       "tech_stack": "tech-stack.md",
+      "decisions": "decisions.md",
       "workflow": "workflow.md",
       "plan": "plan.md",
       "spec": "spec.md",
@@ -33,6 +34,7 @@
       "product.md",
       "product-guidelines.md",
       "tech-stack.md",
+      "decisions.md",
       "workflow.md",
       "plan.md",
       "spec.md",
@@ -48,6 +50,7 @@
       { "file": "product.md", "step": "Product Definition" },
       { "file": "product-guidelines.md", "step": "Product Guidelines" },
       { "file": "tech-stack.md", "step": "Technology Stack" },
+      { "file": "decisions.md", "step": "Architecture Decisions" },
       { "file": "code_styleguides", "step": "Code Style Guides", "is_directory": true },
       { "file": "workflow.md", "step": "Workflow Configuration" }
     ],
@@ -103,13 +106,13 @@
 
   "subagent_types": {
     "search": {
-      "id": "search",
+      "id": "Explore",
       "capabilities": ["read_files", "search_codebase", "glob", "grep"],
       "description": "Read-only retrieval subagent for exploring codebases and reading files",
       "write_forbidden": true
     },
     "general_purpose_task": {
-      "id": "general_purpose_task",
+      "id": "general-purpose",
       "capabilities": ["read_files", "write_files", "run_commands", "analysis"],
       "description": "Multi-purpose subagent for analysis, code generation, and verification",
       "write_forbidden": false
@@ -122,7 +125,7 @@
 
   "enums": {
     "track_types": ["MVP", "Feature", "Bug", "Chore", "Spike", "Epic", "Hotfix"],
-    "finding_categories": ["plan_compliance", "style", "security", "correctness", "coverage", "performance", "accessibility", "i18n"],
+    "finding_categories": ["plan_compliance", "style", "security", "correctness", "coverage", "performance", "accessibility", "i18n", "decision_conflict"],
     "finding_severities": ["high", "medium", "low"],
     "trust_levels": ["1p", "3p", "1p-verified", "community-audited"],
     "task_statuses": {

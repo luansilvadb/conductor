@@ -29,6 +29,25 @@ export class FlatMarkdownStrategy implements GenerationStrategy {
       }];
     }
 
+    // The "config" category is project-root data (conductor/config.json), not
+    // tool-specific — every generated skill references it at a fixed path
+    // regardless of which AI tool is targeted. It bypasses configBaseDir/categoryMapping.
+    if (tmpl.sourceDir === 'config') {
+      const base = outputDir ?? join(workingDir, 'conductor');
+      const targetDir = join(base, tmpl.subpath);
+      const targetPath = join(targetDir, `${tmpl.fileName}${tmpl.ext}`);
+      return [
+        this.manager.generate({
+          templateName: tmpl.name,
+          targetPath,
+          force,
+          content: tmpl.content,
+          locale,
+          baseDir: base,
+        }),
+      ];
+    }
+
     // Resolve output subdirectory via descriptor's categoryMapping (if any).
     // Falls back to the source category name unchanged.
     const categoryMapping = descriptor?.categoryMapping ?? {};

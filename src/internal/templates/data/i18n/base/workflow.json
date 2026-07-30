@@ -14,7 +14,7 @@
     "Complete tasks sequentially from plan.md, marking progress, writing failing tests first, implementing minimally, and ensuring all quality gates pass before marking a task done.",
     "At phase completions, trigger automated coverage verification, test suite execution with proactive debugging, generate a manual verification plan, and checkpoint the phase with auditable git notes.",
     "Maintain absolute consistency between plan state and git history, using git notes to attach detailed task summaries and verification reports.",
-    "Never deviate from the defined tech stack without first updating tech-stack.md with a dated note."
+    "Never deviate from the defined tech stack without first appending a dated note to tech-stack.md (append-only — never overwrite or remove prior entries) and, when the deviation reflects a deliberate architectural trade-off, also appending an entry to the decisions file (resolve path via `config.files.artifacts.decisions`)."
   ],
   "constraints": [
     "Always follow the Standard Task Workflow in order: select task → mark in progress → write failing tests → implement to pass → refactor → verify coverage → document deviations in tech-stack.md → commit → attach task summary via git notes → update plan.md with commit SHA.",
@@ -44,7 +44,7 @@
     "Describe the Green phase: implement code, run tests, confirm pass.",
     "Refactor if needed, retest.",
     "Run coverage and linting, report results.",
-    "If tech-stack deviation needed, stop, update tech-stack.md, then resume.",
+    "If tech-stack deviation needed, stop, append a dated note to tech-stack.md, then resume. If the deviation is a deliberate architectural trade-off (not a stopgap), also append an entry to the decisions file (resolve path via `config.files.artifacts.decisions`).",
     "Commit implementation with conventional message.",
     "Attach task summary as git note.",
     "Update plan.md with completion SHA and commit the plan change.",

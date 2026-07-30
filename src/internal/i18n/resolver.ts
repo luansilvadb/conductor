@@ -1,5 +1,5 @@
 import { TEMPLATES } from '../templates/embedded.js';
-import configData from '../templates/data/config.json' with { type: 'json' };
+import configData from '../templates/data/config/config.json' with { type: 'json' };
 
 /** Default locale derived from the bundled config. All code should use this constant. */
 export const DEFAULT_LOCALE: string =
@@ -51,10 +51,20 @@ const i18nMapCache = new Map<string, Map<string, JsonObject>>();
 /**
  * Build a namespace→JsonObject map from all i18n TEMPLATES for the given locale.
  *
+ * Two kinds of subpath root are recognised:
+ *   - "base"   : locale-agnostic content (skill/agent instructions — prose meant
+ *                for the LLM, not the end user). Always merged in regardless of
+ *                which locale was requested, since an LLM reads English prompts
+ *                fine and is separately told to *reply* to the user in
+ *                `${config.locale}`. This is the bulk of the content and needs
+ *                exactly one copy, ever.
+ *   - <locale> : real user-facing strings that must render in the exact target
+ *                language (e.g. "common" — confirmations/errors/choices).
+ *
  * Namespace derivation rules (TEMPLATES with category === 'i18n', ext === '.json'):
- *   subpath "pt-BR"         + fileId "constitution" → namespace "constitution"
- *   subpath "pt-BR"         + fileId "common"       → namespace "common"
- *   subpath "pt-BR/skills"  + fileId "conductor-setup" → namespace "skills.conductor-setup"
+ *   subpath "pt-BR"        + fileId "common"       → namespace "common"
+ *   subpath "base"         + fileId "constitution" → namespace "constitution"
+ *   subpath "base/skills"  + fileId "conductor-setup" → namespace "skills.conductor-setup"
  */
 function buildI18nMap(locale: string): Map<string, JsonObject> {
   const cached = i18nMapCache.get(locale);
@@ -64,7 +74,9 @@ function buildI18nMap(locale: string): Map<string, JsonObject> {
 
   for (const t of TEMPLATES) {
     if (t.category !== 'i18n' || t.ext !== '.json') continue;
-    if (!t.subpath.startsWith(locale)) continue;
+
+    const root = t.subpath.split('/')[0];
+    if (root !== 'base' && root !== locale) continue;
 
     const fileName = t.sourcePath.split(/[/\\]/).pop() ?? '';
     const fileId = fileName.endsWith('.json') ? fileName.slice(0, -5) : fileName;
@@ -76,8 +88,8 @@ function buildI18nMap(locale: string): Map<string, JsonObject> {
       continue;
     }
 
-    // Strip the locale prefix from subpath to get the relative directory
-    const relDir = t.subpath.slice(locale.length).replace(/^\//, '');
+    // Strip the root segment (locale or "base") from subpath to get the relative directory
+    const relDir = t.subpath.slice(root.length).replace(/^\//, '');
     const namespace = relDir
       ? relDir.replace(/\//g, '.') + '.' + fileId
       : fileId;

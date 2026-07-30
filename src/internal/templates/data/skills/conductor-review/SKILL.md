@@ -41,6 +41,7 @@ ${i18n.t("skills.conductor-review.skills.3")}
 ${i18n.t("skills.conductor-review.skills.4")}
 ${i18n.t("skills.conductor-review.skills.5")}
 ${i18n.t("skills.conductor-review.skills.6")}
+${i18n.t("skills.conductor-review.skills.7")}
 
 ## Examples:
 ${i18n.t("skills.conductor-review.examples.0")}

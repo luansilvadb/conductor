@@ -27,6 +27,7 @@ ${i18n.t("skills.conductor-new-track.goals.1")}
 ${i18n.t("skills.conductor-new-track.goals.2")}
 ${i18n.t("skills.conductor-new-track.goals.3")}
 ${i18n.t("skills.conductor-new-track.goals.4")}
+${i18n.t("skills.conductor-new-track.goals.5")}
 
 ## Constraints:
 ${i18n.t("skills.conductor-new-track.constraints.0")}
@@ -38,6 +39,7 @@ ${i18n.t("skills.conductor-new-track.constraints.5")}
 ${i18n.t("skills.conductor-new-track.constraints.6")}
 ${i18n.t("skills.conductor-new-track.constraints.7")}
 ${i18n.t("skills.conductor-new-track.constraints.8")}
+${i18n.t("skills.conductor-new-track.constraints.9")}
 
 ## Skills:
 ${i18n.t("skills.conductor-new-track.skills.0")}
@@ -63,6 +65,7 @@ ${i18n.t("skills.conductor-new-track.output_format.3")}
 ${i18n.t("skills.conductor-new-track.output_format.4")}
 ${i18n.t("skills.conductor-new-track.output_format.5")}
 ${i18n.t("skills.conductor-new-track.output_format.6")}
+${i18n.t("skills.conductor-new-track.output_format.7")}
 - **Completion**: Close the interaction by reporting to the user: *${i18n.t("skills.conductor-new-track.completion")}*
 
 ## Initialization:

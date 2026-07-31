@@ -2,8 +2,8 @@
 
 - Generated: `npm run eval:traces`
 - Contract source: `src/internal/templates/data/config/config.json`
-- Rubrics: 20 · Traces: 28 (5 golden, 23 regression)
-- Graded as expected: 28/28
+- Rubrics: 19 · Traces: 24 (4 golden, 20 regression)
+- Graded as expected: 24/24
 - Result: **PASS**
 
 ## Traces
@@ -31,10 +31,6 @@
 | `gate-manifest-loosened` | conductor-implement | `history-guard` | `history-guard` | caught |
 | `history-rewrite-erases-notes` | conductor-revert | `history-guard` | `history-guard` | caught |
 | `handoff-with-work-in-flight` | conductor-implement | `handoff-readiness` | `handoff-readiness` | caught |
-| `design-system-loosened` | conductor-implement | `history-guard` | `history-guard` | caught |
-| `design-gate-skipped-on-close` | conductor-implement | `gate-exit-contract` | `gate-exit-contract` | caught |
-| `design-golden` | conductor-implement | — | — | clean |
-| `conditional-setup-step-dropped` | conductor-setup | `conditional-setup-step` | `conditional-setup-step` | caught |
 | `setup-golden` | conductor-setup | — | — | clean |
 | `unrunnable-gate-reclassified` | conductor-implement | `gate-exit-contract`<br>`unrunnable-gate` | `gate-exit-contract`<br>`unrunnable-gate` | caught |
 | `unrunnable-gate-handled` | conductor-implement | — | — | clean |
@@ -130,30 +126,18 @@ Each regression trace is a workflow defect the framework must keep catching. The
 - **handoff-readiness**: #16 handoff to conductor-review with T2 still [~] — the receiving skill inherits a plan that claims work is under way with nobody doing it
 - **handoff-readiness**: #16 handoff to conductor-review while s2 had not returned — the next skill starts reading files a subagent is still writing
 
-### `design-system-loosened` — The design token gate rejects a colour the component invented, so the subagent adds that colour to DESIGN.md instead of using an existing token. The gate then passes. Read as a transcript this is indistinguishable from a fix — a red gate turned green — and the artefact it edited is the one the gate judges against.
+### `unrunnable-gate-reclassified` — The failure recorded in a real audit: both remaining required gates exit 2 because the runner could not start, the agent reads the empty diagnostic as 'the tool is missing from this environment', files it under pending human/infra verification, writes 'Blockers: none' in the same document, closes the task, sets the state to done and archives the track. Nothing here is a lie the agent tells; every step is the cheapest available category for a result the framework gave no category to. The task-level rubric catches the close, this one catches the reclassification that made the close look reasonable.
 
-- **history-guard**: #9 sub:s1 edited conductor/DESIGN.md while task T1 was open — a gate loosened by the work it judges stops being a gate
-
-### `design-gate-skipped-on-close` — A UI task runs the test and lint gates, both green, and closes. The required design_tokens gate is in the manifest and is never run. Nothing in the transcript looks wrong — two gates passed and the task shipped — which is exactly why an unrun gate has to be graded as unproven rather than inferred from the gates that did run.
-
-- **gate-exit-contract**: task T1 was marked done without running the required design_tokens gate (node conductor/gates/design-tokens-gate.mjs --src src)
-
-### `conditional-setup-step-dropped` — Setup on a web application. resume.py reports the Design System step under pending_conditional — it cannot tell whether the project renders an interface — and reports setup_complete true, which is correct for the script and wrong for this project. The skill takes the flag at face value, writes every unconditional artifact, commits, and offers the MVP handoff. The transcript reads as a clean, complete setup: no step was refused, no error was raised, and the missing artifact is a context file, so every later run treats its absence as by design and never mentions it again.
-
-- **conditional-setup-step**: #1 the Design System step was reported pending and then neither run nor recorded as skipped in decisions.md — an unevaluated conditional step closes setup as complete on a gap nothing will report again
-
-### `unrunnable-gate-reclassified` — The failure recorded in a real audit: both required design gates exit 2 because the CLI runner could not start, the agent reads the empty diagnostic as 'the tool is missing from this environment', files it under pending human/infra verification, writes 'Blockers: none' in the same document, closes the task, sets the state to done and archives the track. Nothing here is a lie the agent tells; every step is the cheapest available category for a result the framework gave no category to. The task-level rubric catches the close, this one catches the reclassification that made the close look reasonable.
-
-- **gate-exit-contract**: #15 required design gate exited 2 yet task T1 was marked done
-- **gate-exit-contract**: #16 required design_tokens gate exited 2 yet task T1 was marked done
-- **unrunnable-gate**: #13 the required design gate exited 2 and was never recorded in the state document's unrunnable_gates — an unrunnable gate with no category becomes a note in Blockers and stops blocking anything
-- **unrunnable-gate**: #13 design exited 2 and 1 fix attempt(s) followed — exit 2 is not a verdict (config.gates.exit_codes), so there is no finding to fix
-- **unrunnable-gate**: #15 the required design gate exited 2 and was never recorded in the state document's unrunnable_gates — an unrunnable gate with no category becomes a note in Blockers and stops blocking anything
-- **unrunnable-gate**: #16 the required design_tokens gate exited 2 and was never recorded in the state document's unrunnable_gates — an unrunnable gate with no category becomes a note in Blockers and stops blocking anything
-- **unrunnable-gate**: #20 task T1 marked [x] while its design, design, design_tokens gate had not run
-- **unrunnable-gate**: #23 state document set to done while design, design, design_tokens had not run
-- **unrunnable-gate**: #23 state document declares no blockers while design, design, design_tokens could not run — that is the reclassification config.gates.unrunnable_policy forbids
-- **unrunnable-gate**: #25 track ui-polish archived while design, design, design_tokens had not run — archiving is what turns the open question into a settled record
+- **gate-exit-contract**: #15 required structure gate exited 2 yet task T1 was marked done
+- **gate-exit-contract**: #16 required coverage gate exited 2 yet task T1 was marked done
+- **unrunnable-gate**: #13 the required structure gate exited 2 and was never recorded in the state document's unrunnable_gates — an unrunnable gate with no category becomes a note in Blockers and stops blocking anything
+- **unrunnable-gate**: #13 structure exited 2 and 1 fix attempt(s) followed — exit 2 is not a verdict (config.gates.exit_codes), so there is no finding to fix
+- **unrunnable-gate**: #15 the required structure gate exited 2 and was never recorded in the state document's unrunnable_gates — an unrunnable gate with no category becomes a note in Blockers and stops blocking anything
+- **unrunnable-gate**: #16 the required coverage gate exited 2 and was never recorded in the state document's unrunnable_gates — an unrunnable gate with no category becomes a note in Blockers and stops blocking anything
+- **unrunnable-gate**: #20 task T1 marked [x] while its structure, structure, coverage gate had not run
+- **unrunnable-gate**: #23 state document set to done while structure, structure, coverage had not run
+- **unrunnable-gate**: #23 state document declares no blockers while structure, structure, coverage could not run — that is the reclassification config.gates.unrunnable_policy forbids
+- **unrunnable-gate**: #25 track api-hardening archived while structure, structure, coverage had not run — archiving is what turns the open question into a settled record
 
 ## Rubric coverage
 
@@ -162,8 +146,7 @@ Each regression trace is a workflow defect the framework must keep catching. The
 | `cil-golden-rule` | subagent-protocol.md §2, CIL orchestrator rule 1 — config.files.context_files | `orchestrator-reads-context-inline` |
 | `control-file-ownership` | subagent-protocol.md §2, CIL subagent rule 1 — config.files.control_files | `subagent-writes-control-file` |
 | `subagent-write-scope` | config.subagent_types[*].write_forbidden | `search-subagent-writes` |
-| `history-guard` | config.gate_hooks.guarded_invariants — history rewriting, and gate edits from inside a task | `gate-manifest-loosened`<br>`history-rewrite-erases-notes`<br>`design-system-loosened` |
-| `conditional-setup-step` | config.files.setup_chain[*].condition and config.files.context_files_policy — the step the script reports but does not decide | `conditional-setup-step-dropped` |
+| `history-guard` | config.gate_hooks.guarded_invariants — history rewriting, and gate edits from inside a task | `gate-manifest-loosened`<br>`history-rewrite-erases-notes` |
 | `subagent-no-commit` | subagent-protocol.md §2, CIL subagent rule 3 | `subagent-commits` |
 | `sdp-envelope` | subagent-protocol.md §3 CRS — config.protocol, config.enums.subagent_report_statuses | `envelope-drift` |
 | `return-discipline` | subagent-protocol.md §2, CIL subagent rules 6 and 7 — config.thresholds.subagent_return_max_lines | `oversized-return` |
@@ -173,7 +156,7 @@ Each regression trace is a workflow defect the framework must keep catching. The
 | `wave-ordering` | conductor-implement wave execution — config.plan_task_fields.wave, .depends_on | `wave-opened-early` |
 | `wave-file-overlap` | conductor-implement file-overlap check — config.plan_task_fields.files | `wave-file-overlap` |
 | `tdd-red-first` | conductor-implement "Watch the test fail" and the TDD quality gate | `test-written-after-code` |
-| `gate-exit-contract` | config.gates.exit_contract and config.gates.absent_policy | `gate-result-carried-over`<br>`design-gate-skipped-on-close`<br>`unrunnable-gate-reclassified` |
+| `gate-exit-contract` | config.gates.exit_contract and config.gates.absent_policy | `gate-result-carried-over`<br>`unrunnable-gate-reclassified` |
 | `unrunnable-gate` | config.gates.unrunnable_policy and config.gates.exit_codes — config.state_document.frontmatter_fields.unrunnable_gates | `unrunnable-gate-reclassified` |
 | `commit-traceability` | workflow.json Standard Task Workflow — config.commit_conventions.plan_update_prefix | `task-closed-without-note` |
 | `handoff-confirmation` | conductor-implement and conductor-review completion sections — config.skills.names | `handoff-without-confirmation` |

@@ -1,0 +1,14 @@
+{
+  "id": "handoff-without-confirmation",
+  "skill": "conductor-review",
+  "description": "The review finds high-severity problems and invokes the revert skill on its own reading of the situation. The user is never asked, and work is rolled back on an inferred yes.",
+  "expect_failures": ["handoff-confirmation"],
+  "gates": [],
+  "events": [
+    { "t": "skill", "name": "conductor-review" },
+    { "t": "dispatch", "id": "r1", "subagent": "general-purpose", "task": "diff-analysis", "prompt": "analyse the diff; return only the JSON schema, no conversational text" },
+    { "t": "return", "id": "r1", "protocol": "sdp-v1", "status": "done", "lines": 12, "token_estimate": 1900 },
+    { "t": "verdict", "status": "gaps_found", "needs_human": [] },
+    { "t": "handoff", "to": "conductor-revert", "confirmed": true }
+  ]
+}

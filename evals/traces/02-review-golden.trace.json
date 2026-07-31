@@ -1,0 +1,24 @@
+{
+  "id": "review-golden",
+  "skill": "conductor-review",
+  "description": "Review run in the implementing session: every analysis dispatched to fresh subagents, gates executed fresh, empty human-verification list earning the pass verdict, confirmed handoff to the next track.",
+  "expect_failures": [],
+  "gates": [],
+  "events": [
+    { "t": "skill", "name": "conductor-review" },
+    { "t": "dispatch", "id": "r1", "subagent": "Explore", "task": "scope", "prompt": "parse tracks registry, return the in-progress track; return only the JSON schema, no conversational text" },
+    { "t": "return", "id": "r1", "protocol": "sdp-v1", "status": "done", "lines": 6, "token_estimate": 410 },
+    { "t": "ask", "about": "scope", "question": "Review track auth?", "answer": "yes" },
+
+    { "t": "dispatch", "id": "r2", "subagent": "Explore", "task": "rules", "prompt": "load the judgement layer of the styleguides and the decisions file; return only the JSON schema, no conversational text" },
+    { "t": "dispatch", "id": "r3", "subagent": "general-purpose", "task": "diff-analysis", "prompt": "analyse the diff for plan compliance, correctness and security; return only the JSON schema, no conversational text" },
+    { "t": "dispatch", "id": "r4", "subagent": "general-purpose", "task": "gates", "prompt": "execute every required gate in the manifest and report gate_execution; return only the JSON schema, no conversational text" },
+    { "t": "return", "id": "r2", "protocol": "sdp-v1", "status": "done", "lines": 11, "token_estimate": 730 },
+    { "t": "return", "id": "r3", "protocol": "sdp-v1", "status": "done_with_concerns", "lines": 14, "token_estimate": 2100 },
+    { "t": "return", "id": "r4", "protocol": "sdp-v1", "status": "done", "lines": 13, "token_estimate": 980 },
+
+    { "t": "verdict", "status": "passed", "needs_human": [] },
+    { "t": "ask", "about": "conductor-new-track", "question": "Plan the next track?", "answer": "yes" },
+    { "t": "handoff", "to": "conductor-new-track", "confirmed": true }
+  ]
+}

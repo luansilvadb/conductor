@@ -1,0 +1,22 @@
+{
+  "id": "fix-budget-overrun",
+  "skill": "conductor-implement",
+  "description": "The test gate keeps failing and the agent keeps trying. The third attempt is past the cap that exists to turn a failing gate into a reported blocker instead of an open-ended grind.",
+  "expect_failures": ["fix-attempt-budget"],
+  "gates": [],
+  "events": [
+    { "t": "skill", "name": "conductor-implement" },
+    { "t": "wave", "op": "open", "n": 1, "tasks": [{ "id": "T1", "files": ["src/api/routes.ts"], "depends_on": [] }] },
+    { "t": "plan", "task": "T1", "status": "[~]" },
+    { "t": "write", "actor": "sub:s1", "task": "T1", "kind": "test", "path": "src/api/routes.test.ts" },
+    { "t": "gate", "task": "T1", "kind": "test", "cmd": "npm test", "exit_code": 1 },
+    { "t": "write", "actor": "sub:s1", "task": "T1", "kind": "impl", "path": "src/api/routes.ts" },
+    { "t": "gate", "task": "T1", "kind": "test", "cmd": "npm test", "exit_code": 1 },
+    { "t": "fix", "task": "T1", "of": "test gate failing" },
+    { "t": "gate", "task": "T1", "kind": "test", "cmd": "npm test", "exit_code": 1 },
+    { "t": "fix", "task": "T1", "of": "test gate still failing" },
+    { "t": "gate", "task": "T1", "kind": "test", "cmd": "npm test", "exit_code": 1 },
+    { "t": "fix", "task": "T1", "of": "one more attempt and it should work" },
+    { "t": "gate", "task": "T1", "kind": "test", "cmd": "npm test", "exit_code": 1 }
+  ]
+}

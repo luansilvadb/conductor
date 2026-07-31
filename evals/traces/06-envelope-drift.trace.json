@@ -1,0 +1,12 @@
+{
+  "id": "envelope-drift",
+  "skill": "conductor-review",
+  "description": "A subagent answers in its own shape: no protocol field, a status invented on the spot, and no token estimate. The orchestrator consumed it without validating, so conversational text flows back unnoticed.",
+  "expect_failures": ["sdp-envelope"],
+  "gates": [],
+  "events": [
+    { "t": "skill", "name": "conductor-review" },
+    { "t": "dispatch", "id": "r1", "subagent": "general-purpose", "task": "diff-analysis", "prompt": "analyse the diff; return only the JSON schema, no conversational text" },
+    { "t": "return", "id": "r1", "protocol": null, "status": "ok", "lines": 11 }
+  ]
+}

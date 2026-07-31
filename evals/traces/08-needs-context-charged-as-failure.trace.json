@@ -1,0 +1,16 @@
+{
+  "id": "needs-context-charged-as-failure",
+  "skill": "conductor-implement",
+  "description": "A subagent reports needs_context because the prompt omitted the spec. The orchestrator books it as a fix attempt before re-dispatching, spending the retry budget on its own incomplete prompt.",
+  "expect_failures": ["needs-context-retry"],
+  "gates": [],
+  "events": [
+    { "t": "skill", "name": "conductor-implement" },
+    { "t": "wave", "op": "open", "n": 1, "tasks": [{ "id": "T1", "files": ["src/api/routes.ts"], "depends_on": [] }] },
+    { "t": "dispatch", "id": "s1", "subagent": "general-purpose", "task": "T1", "prompt": "implement T1; return only the JSON schema, no conversational text" },
+    { "t": "return", "id": "s1", "protocol": "sdp-v1", "status": "needs_context", "lines": 4, "token_estimate": 220 },
+    { "t": "fix", "task": "T1", "of": "subagent returned without completing the task" },
+    { "t": "dispatch", "id": "s2", "subagent": "general-purpose", "task": "T1", "prompt": "implement T1, acceptance criteria attached; return only the JSON schema, no conversational text" },
+    { "t": "return", "id": "s2", "protocol": "sdp-v1", "status": "done", "lines": 8, "token_estimate": 1240 }
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "id": "subagent-commits",
+  "skill": "conductor-implement",
+  "description": "A subagent commits its own work. The orchestrator never learns the SHA, so no note is attached and the plan records nothing — a ghost commit that revert cannot reconstruct.",
+  "expect_failures": ["subagent-no-commit"],
+  "gates": [],
+  "events": [
+    { "t": "skill", "name": "conductor-implement" },
+    { "t": "wave", "op": "open", "n": 1, "tasks": [{ "id": "T1", "files": ["src/api/routes.ts"], "depends_on": [] }] },
+    { "t": "dispatch", "id": "s1", "subagent": "general-purpose", "task": "T1", "prompt": "implement T1; return only the JSON schema, no conversational text" },
+    { "t": "write", "actor": "sub:s1", "task": "T1", "kind": "impl", "path": "src/api/routes.ts" },
+    { "t": "commit", "actor": "sub:s1", "sha": "9f8e7d6", "message": "feat(api): add routes" },
+    { "t": "note", "actor": "sub:s1", "sha": "9f8e7d6" },
+    { "t": "return", "id": "s1", "protocol": "sdp-v1", "status": "done", "lines": 6, "token_estimate": 980 }
+  ]
+}

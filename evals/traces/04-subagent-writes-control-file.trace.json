@@ -1,0 +1,16 @@
+{
+  "id": "subagent-writes-control-file",
+  "skill": "conductor-implement",
+  "description": "An implementation subagent ticks its own checkbox in plan.md and updates state.md, racing the orchestrator that owns both files.",
+  "expect_failures": ["control-file-ownership"],
+  "gates": [],
+  "events": [
+    { "t": "skill", "name": "conductor-implement" },
+    { "t": "wave", "op": "open", "n": 1, "tasks": [{ "id": "T1", "files": ["src/api/routes.ts"], "depends_on": [] }] },
+    { "t": "dispatch", "id": "s1", "subagent": "general-purpose", "task": "T1", "prompt": "implement T1; return only the JSON schema, no conversational text" },
+    { "t": "write", "actor": "sub:s1", "task": "T1", "kind": "impl", "path": "src/api/routes.ts" },
+    { "t": "write", "actor": "sub:s1", "task": "T1", "path": "conductor/tracks/auth/plan.md" },
+    { "t": "write", "actor": "sub:s1", "task": "T1", "path": "conductor/state.md" },
+    { "t": "return", "id": "s1", "protocol": "sdp-v1", "status": "done", "lines": 7, "token_estimate": 1100 }
+  ]
+}

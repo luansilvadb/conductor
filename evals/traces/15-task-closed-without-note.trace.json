@@ -1,0 +1,22 @@
+{
+  "id": "task-closed-without-note",
+  "skill": "conductor-implement",
+  "description": "The task closes with a commit but no git note, and the plan update rides along in the feature commit instead of its own prefixed one. Nothing is visibly broken until revert has to reconstruct the track.",
+  "expect_failures": ["commit-traceability"],
+  "gates": [
+    { "kind": "test", "cmd": "npm test", "required": true }
+  ],
+  "events": [
+    { "t": "skill", "name": "conductor-implement" },
+    { "t": "wave", "op": "open", "n": 1, "tasks": [{ "id": "T1", "files": ["src/api/routes.ts"], "depends_on": [] }] },
+    { "t": "plan", "task": "T1", "status": "[~]" },
+    { "t": "dispatch", "id": "s1", "subagent": "general-purpose", "task": "T1", "prompt": "implement T1; return only the JSON schema, no conversational text" },
+    { "t": "write", "actor": "sub:s1", "task": "T1", "kind": "test", "path": "src/api/routes.test.ts" },
+    { "t": "gate", "task": "T1", "kind": "test", "cmd": "npm test", "exit_code": 1 },
+    { "t": "write", "actor": "sub:s1", "task": "T1", "kind": "impl", "path": "src/api/routes.ts" },
+    { "t": "gate", "task": "T1", "kind": "test", "cmd": "npm test", "exit_code": 0 },
+    { "t": "return", "id": "s1", "protocol": "sdp-v1", "status": "done", "lines": 8, "token_estimate": 1180 },
+    { "t": "commit", "actor": "orchestrator", "sha": "5e6f7a8", "message": "feat(api): add routes and mark task complete" },
+    { "t": "plan", "task": "T1", "status": "[x]", "sha": "5e6f7a8" }
+  ]
+}

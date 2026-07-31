@@ -1,0 +1,30 @@
+{
+  "id": "parallel-cap-exceeded",
+  "skill": "conductor-implement",
+  "description": "A six-task wave is dispatched in one go. Nothing in the transcript looks wrong; the cost shows up as subagent timeouts and interleaved writes under load.",
+  "expect_failures": ["parallel-cap"],
+  "gates": [],
+  "events": [
+    { "t": "skill", "name": "conductor-implement" },
+    { "t": "wave", "op": "open", "n": 1, "tasks": [
+      { "id": "T1", "files": ["src/a.ts"], "depends_on": [] },
+      { "id": "T2", "files": ["src/b.ts"], "depends_on": [] },
+      { "id": "T3", "files": ["src/c.ts"], "depends_on": [] },
+      { "id": "T4", "files": ["src/d.ts"], "depends_on": [] },
+      { "id": "T5", "files": ["src/e.ts"], "depends_on": [] },
+      { "id": "T6", "files": ["src/f.ts"], "depends_on": [] }
+    ] },
+    { "t": "dispatch", "id": "s1", "subagent": "general-purpose", "task": "T1", "prompt": "implement T1; return only the JSON schema, no conversational text" },
+    { "t": "dispatch", "id": "s2", "subagent": "general-purpose", "task": "T2", "prompt": "implement T2; return only the JSON schema, no conversational text" },
+    { "t": "dispatch", "id": "s3", "subagent": "general-purpose", "task": "T3", "prompt": "implement T3; return only the JSON schema, no conversational text" },
+    { "t": "dispatch", "id": "s4", "subagent": "general-purpose", "task": "T4", "prompt": "implement T4; return only the JSON schema, no conversational text" },
+    { "t": "dispatch", "id": "s5", "subagent": "general-purpose", "task": "T5", "prompt": "implement T5; return only the JSON schema, no conversational text" },
+    { "t": "dispatch", "id": "s6", "subagent": "general-purpose", "task": "T6", "prompt": "implement T6; return only the JSON schema, no conversational text" },
+    { "t": "return", "id": "s1", "protocol": "sdp-v1", "status": "done", "lines": 6, "token_estimate": 900 },
+    { "t": "return", "id": "s2", "protocol": "sdp-v1", "status": "done", "lines": 6, "token_estimate": 910 },
+    { "t": "return", "id": "s3", "protocol": "sdp-v1", "status": "done", "lines": 6, "token_estimate": 880 },
+    { "t": "return", "id": "s4", "protocol": "sdp-v1", "status": "done", "lines": 6, "token_estimate": 940 },
+    { "t": "return", "id": "s5", "protocol": "sdp-v1", "status": "done", "lines": 6, "token_estimate": 870 },
+    { "t": "return", "id": "s6", "protocol": "sdp-v1", "status": "done", "lines": 6, "token_estimate": 920 }
+  ]
+}

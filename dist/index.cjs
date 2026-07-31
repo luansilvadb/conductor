@@ -8492,8 +8492,9 @@ var init_package = __esm({
         embed: "node scripts/embed-templates.mjs",
         clean: "node scripts/clean-dist.mjs",
         "check:i18n": "node scripts/check-i18n-coverage.mjs",
+        "eval:traces": "node scripts/eval-traces.mjs",
         typecheck: "tsc -p tsconfig.json",
-        build: "npm run clean && npm run check:i18n && npm run embed && npm run typecheck && npm run bundle",
+        build: "npm run clean && npm run check:i18n && npm run eval:traces && npm run embed && npm run typecheck && npm run bundle",
         bundle: "esbuild src/index.ts --bundle --platform=node --format=cjs --outfile=dist/index.cjs --sourcemap --allow-overwrite",
         prepublishOnly: "npm run build",
         start: "node dist/index.cjs"

@@ -1,0 +1,20 @@
+{
+  "id": "wave-file-overlap",
+  "skill": "conductor-implement",
+  "description": "Two tasks in the same wave both touch src/api/routes.ts and are dispatched in parallel anyway. Both subagents report success and only the last write survives.",
+  "expect_failures": ["wave-file-overlap"],
+  "gates": [],
+  "events": [
+    { "t": "skill", "name": "conductor-implement" },
+    { "t": "wave", "op": "open", "n": 1, "tasks": [
+      { "id": "T1", "files": ["src/api/routes.ts", "src/api/handlers.ts"], "depends_on": [] },
+      { "id": "T2", "files": ["src/api/routes.ts"], "depends_on": [] }
+    ] },
+    { "t": "dispatch", "id": "s1", "subagent": "general-purpose", "task": "T1", "prompt": "implement T1; return only the JSON schema, no conversational text" },
+    { "t": "dispatch", "id": "s2", "subagent": "general-purpose", "task": "T2", "prompt": "implement T2; return only the JSON schema, no conversational text" },
+    { "t": "write", "actor": "sub:s1", "task": "T1", "kind": "impl", "path": "src/api/routes.ts" },
+    { "t": "write", "actor": "sub:s2", "task": "T2", "kind": "impl", "path": "src/api/routes.ts" },
+    { "t": "return", "id": "s1", "protocol": "sdp-v1", "status": "done", "lines": 7, "token_estimate": 1050 },
+    { "t": "return", "id": "s2", "protocol": "sdp-v1", "status": "done", "lines": 7, "token_estimate": 1020 }
+  ]
+}

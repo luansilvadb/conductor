@@ -1,0 +1,31 @@
+{
+  "id": "design-gate-skipped-on-close",
+  "skill": "conductor-implement",
+  "description": "A UI task runs the test and lint gates, both green, and closes. The required design_tokens gate is in the manifest and is never run. Nothing in the transcript looks wrong — two gates passed and the task shipped — which is exactly why an unrun gate has to be graded as unproven rather than inferred from the gates that did run.",
+  "expect_failures": ["gate-exit-contract"],
+  "gates": [
+    { "kind": "test", "cmd": "npm test", "required": true },
+    { "kind": "lint", "cmd": "npm run lint", "required": true },
+    { "kind": "design_tokens", "cmd": "node conductor/gates/design-tokens-gate.mjs --src src", "required": true }
+  ],
+  "events": [
+    { "t": "skill", "name": "conductor-implement" },
+    { "t": "wave", "op": "open", "n": 1, "tasks": [
+      { "id": "T1", "files": ["src/ui/PriceCard.tsx"], "depends_on": [] }
+    ] },
+    { "t": "plan", "task": "T1", "status": "[~]" },
+    { "t": "dispatch", "id": "s1", "subagent": "general-purpose", "task": "T1", "prompt": "implement T1 per spec; return only the JSON schema, no conversational text" },
+    { "t": "write", "actor": "sub:s1", "task": "T1", "kind": "test", "path": "src/ui/PriceCard.test.tsx" },
+    { "t": "gate", "task": "T1", "kind": "test", "cmd": "npm test", "exit_code": 1 },
+    { "t": "write", "actor": "sub:s1", "task": "T1", "kind": "impl", "path": "src/ui/PriceCard.tsx" },
+    { "t": "gate", "task": "T1", "kind": "test", "cmd": "npm test", "exit_code": 0 },
+    { "t": "gate", "task": "T1", "kind": "lint", "cmd": "npm run lint", "exit_code": 0 },
+    { "t": "return", "id": "s1", "protocol": "sdp-v1", "status": "done", "lines": 9, "token_estimate": 1290 },
+    { "t": "commit", "actor": "orchestrator", "sha": "a1b2c3d", "message": "feat(ui): add price card" },
+    { "t": "note", "actor": "orchestrator", "sha": "a1b2c3d" },
+    { "t": "plan", "task": "T1", "status": "[x]", "sha": "a1b2c3d" },
+    { "t": "commit", "actor": "orchestrator", "sha": "b2c3d4e", "message": "conductor(plan): mark T1 as complete" },
+    { "t": "write", "actor": "orchestrator", "path": "conductor/state.md" },
+    { "t": "wave", "op": "close", "n": 1 }
+  ]
+}

@@ -48,11 +48,23 @@ def determine_resumption():
 
     marker_present = os.path.exists(os.path.join(conductor_dir, setup_marker))
 
-    # Every chain step that has not produced its artifact yet, in chain order.
+    # A step carrying a `condition` does not apply to every project — the design
+    # system is skipped for a library, a CLI or a headless service. Its artifact
+    # will never exist there, so counting it as missing would leave the setup
+    # permanently incomplete: the marker stays, `missing_steps` never empties,
+    # and every later run greets as an upgrade and re-offers a step the user
+    # already declined. Conditional steps are reported separately so the skill
+    # can decide whether they apply, and they never block completion.
     missing_steps = [
         {"step": item["step"], "file": item["file"]}
         for item in setup_chain
-        if not checklist[item["file"]]
+        if not checklist[item["file"]] and "condition" not in item
+    ]
+
+    pending_conditional = [
+        {"step": item["step"], "file": item["file"], "condition": item["condition"]}
+        for item in setup_chain
+        if not checklist[item["file"]] and "condition" in item
     ]
 
     next_step = missing_steps[0] if missing_steps else None
@@ -70,6 +82,7 @@ def determine_resumption():
         "is_upgrade": marker_present and bool(missing_steps),
         "checklist": checklist,
         "missing_steps": missing_steps,
+        "pending_conditional": pending_conditional,
         "next_step": next_step,
     }
 

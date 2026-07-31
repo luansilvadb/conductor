@@ -30,7 +30,10 @@ orchestrator reading it (not), a `needs_context` re-dispatch (free) next to a fi
 (charged), a wave dispatched in parallel on disjoint files, `git checkout -b` and a plain
 `git push` next to the destructive spellings of both, and a ratchet write to
 `gates/baseline.json` inside an open task — which `config.ratchet` requires — next to the
-gate-manifest edit that is forbidden there. Without those, a grader that
+gate-manifest edit that is forbidden there, a design system read during a context load next
+to the implementation task that rewrites it, and a conditional setup step declined on a
+headless project and recorded as a decision next to the same step dropped in silence.
+Without those, a grader that
 over-fires still scores a perfect run — which is exactly what happened when this suite was
 first written, and how the current golden traces got their shape.
 
@@ -52,7 +55,8 @@ drift away from the framework they grade without saying so.
 | `cil-golden-rule` | The orchestrator never reads a `config.files.context_files` entry inline. |
 | `control-file-ownership` | Subagents never write a `config.files.control_files` entry. |
 | `subagent-write-scope` | A subagent dispatched as a `write_forbidden` type never writes. |
-| `history-guard` | No run rewrites git history, and no open task edits the gate manifest or the structure script. |
+| `history-guard` | No run rewrites git history, and no open task edits the gate manifest, the structure script or the design system. |
+| `conditional-setup-step` | A `setup_chain` step carrying a `condition` is either run or recorded as skipped, never left unevaluated. |
 | `subagent-no-commit` | Subagents never commit or attach notes. |
 | `sdp-envelope` | Every return carries the protocol field, a status from the enum, and a token estimate. |
 | `return-discipline` | Returns stay inside the line budget and never quote file text back. |

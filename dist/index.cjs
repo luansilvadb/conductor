@@ -3304,11 +3304,14 @@ var init_embedded = __esm({
       "tracks_registry": "tracks.md",
       "track_metadata": "metadata.json",
       "state": "state.md",
-      "lessons": "lessons.md"
+      "lessons": "lessons.md",
+      "design_system": "DESIGN.md"
     },
+    "context_files_policy": "These are the files a context load reads when they exist. An entry whose setup_chain step carries a \`condition\` is absent by design on a project the condition excludes \u2014 read it when present, say nothing when it is not, and never report its absence as an incomplete setup.",
     "context_files": [
       "product.md",
       "product-guidelines.md",
+      "DESIGN.md",
       "tech-stack.md",
       "decisions.md",
       "workflow.md",
@@ -3328,6 +3331,7 @@ var init_embedded = __esm({
     "setup_chain": [
       { "file": "product.md", "step": "Product Definition" },
       { "file": "product-guidelines.md", "step": "Product Guidelines" },
+      { "file": "DESIGN.md", "step": "Design System", "condition": "Only when the project renders a user interface. For a library, CLI or headless service, skip this step, say so once, and record the skip in config.files.artifacts.decisions \u2014 a skipped step that is stated is a decision, a silent one is a gap." },
       { "file": "tech-stack.md", "step": "Technology Stack" },
       { "file": "decisions.md", "step": "Architecture Decisions" },
       { "file": "code_styleguides", "step": "Code Style Guides", "is_directory": true },
@@ -3353,6 +3357,9 @@ var init_embedded = __esm({
   "protocols": {
     "subagent_dispatch": {
       "path": "\${config.tool_dir}/skills/conductor-setup/assets/subagent-protocol.md"
+    },
+    "design_authoring": {
+      "path": "\${config.tool_dir}/skills/conductor-setup/assets/design-scales.md"
     }
   },
 
@@ -3367,7 +3374,9 @@ var init_embedded = __esm({
       "typecheck": "The project's existing type checker or compiler in a no-emit mode.",
       "test": "The full test suite.",
       "coverage": "Coverage measurement. Compared against config.thresholds per config.thresholds.coverage_mode.",
-      "structure": "Project-specific structural checks that no off-the-shelf tool covers. Generated at setup from what the user described \u2014 e.g. tenant scoping, no server imports in client code, required auth on endpoints, environment variables complete, documentation in sync with the API, files within config.thresholds.file_max_lines."
+      "structure": "Project-specific structural checks that no off-the-shelf tool covers. Generated at setup from what the user described \u2014 e.g. tenant scoping, no server imports in client code, required auth on endpoints, environment variables complete, documentation in sync with the API, files within config.thresholds.file_max_lines.",
+      "design": "Soundness of the design system itself: broken token references, WCAG AA contrast on declared component pairs, whether each numeric axis landed on a declared band rather than between bands, and \u2014 against the recorded baseline \u2014 any widening or flattening of the token scales from inside an implementation task. Runs config.gates.scripts_dir/design-gate.mjs. Absent when the project has no user interface.",
+      "design_tokens": "Whether the code actually uses the design system: colour and dimension literals that appear in source but in no token. Ratcheted against a recorded baseline so a legacy interface can adopt it without being rewritten. Runs config.gates.scripts_dir/design-tokens-gate.mjs. Absent when the project has no user interface."
     },
     "entry_fields": {
       "cmd": "The exact command, runnable from the project root. Null when the project has no such tool.",
@@ -3395,7 +3404,8 @@ var init_embedded = __esm({
     "guarded_invariants": [
       "History rewriting and destructive resets \u2014 \`git reset --hard\`, \`git checkout --\` over tracked files, forced pushes, \`git notes\` removal. Conductor's revert skill reconstructs a track from git notes and commit history; an agent rewriting that history destroys the only record of what it did, silently and irreversibly.",
       "Direct writes by a subagent to any file in config.files.control_files[] \u2014 the tracks registry, the plan, the index, the track metadata, the state document, and the lessons ledger. These are orchestrator-owned by contract, and the contract is currently prose that nothing enforces.",
-      "Edits to the gate manifest, the ratchet baseline, or the structure script from inside an implementation task. Loosening the gate to make a task pass is the failure mode gates exist to prevent, and it looks like progress while it happens."
+      "Edits to the gate manifest, the ratchet baseline, or the structure script from inside an implementation task. Loosening the gate to make a task pass is the failure mode gates exist to prevent, and it looks like progress while it happens.",
+      "Edits to config.files.artifacts.design_system from inside an implementation task. Widening the palette or flattening a scale so a component fits is the same failure wearing different clothes, and it is the cheaper path for the model every time: changing one token is less work than reworking the component. A design system that genuinely needs to change is a design track, decided with the user, never a side effect of implementing something else."
     ],
     "limits": "These are guardrails for an agent acting in good faith, not a security boundary. A command can be spelled in ways a matcher will not recognise, so treat this as protection of the framework's invariants \u2014 never as protection against a malicious instruction."
   },
@@ -3499,7 +3509,7 @@ var init_embedded = __esm({
 
   "enums": {
     "track_types": ["MVP", "Feature", "Bug", "Chore", "Spike", "Epic", "Hotfix"],
-    "finding_categories": ["plan_compliance", "style", "security", "correctness", "coverage", "performance", "accessibility", "i18n", "decision_conflict"],
+    "finding_categories": ["plan_compliance", "style", "security", "correctness", "coverage", "performance", "accessibility", "design", "i18n", "decision_conflict"],
     "finding_severities": ["high", "medium", "low"],
     "trust_levels": ["1p", "3p", "1p-verified", "community-audited"],
     "task_statuses": {
@@ -3749,6 +3759,1040 @@ var init_embedded = __esm({
 `
       },
       {
+        sourcePath: "D:/conductor/src/internal/templates/data/config/gates/design-bands.json",
+        category: "config",
+        subpath: "gates",
+        ext: ".json",
+        content: `{
+  "description": "Machine-readable form of the bands in the setup skill's design-scales.md. The gate checks that the design system landed exactly on one band per numeric axis, which is what stops a draft from being filled with the average of every value the model has read. Edit this file to define your own bands \u2014 and edit design-scales.md to match, since that is the copy the authoring step reads.",
+  "matched_on": "The single value named per band below. Matching the whole scale would reject a project that legitimately added a step; matching the anchor catches the averaged answer, which is the failure this exists for.",
+  "axes": {
+    "rhythm": {
+      "token": "spacing.section",
+      "bands": { "compact": 48, "airy": 96, "editorial": 160 },
+      "note": "Anchored on \`spacing.section\`, which design-scales.md requires every banded system to declare. There is deliberately no fallback to \`spacing.xl\`: the xl step of a band is a different number from its section gap, so falling back would compare a value against anchors it was never drawn from \u2014 rejecting a correctly authored system and mislabelling another. An axis with no anchor is reported as unchecked, never guessed."
+    },
+    "type_contrast": {
+      "token": "typography.display.fontSize",
+      "bands": { "functional": 32, "expressive": 56, "editorial": 72 }
+    },
+    "shape": {
+      "token": "rounded.sm",
+      "bands": { "sharp": 2, "architectural": 4, "soft": 8 }
+    }
+  },
+  "banned": {
+    "accent_colors": ["#3b82f6", "#6366f1", "#8b5cf6"],
+    "neutral_must_not_be": ["#ffffff", "#fff"],
+    "primary_must_not_be": ["#000000", "#000"]
+  }
+}
+`
+      },
+      {
+        sourcePath: "D:/conductor/src/internal/templates/data/config/gates/design-cli.mjs",
+        category: "config",
+        subpath: "gates",
+        ext: ".mjs",
+        content: `// Shared bridge to the \`@google/design.md\` CLI, used by the design gates.
+// Kept in one place because invoking it correctly on Windows is not obvious.
+
+import { spawnSync } from 'node:child_process';
+
+// Pinned deliberately. The format is alpha, it lives in the user's repository,
+// and an unpinned \`npx\` would deliver a breaking upstream change silently on
+// some future run. Bump this after reading the changelog, never by drift.
+export const PACKAGE = '@google/design.md@0.4.0';
+export const BIN = 'designmd'; // not \`design.md\`: on Windows the .md suffix
+                               // collides with the shell's file association.
+
+/** Exit code 2 is reserved for "the gate could not run" \u2014 never for a design
+ *  verdict. A gate that failed to execute has not passed. */
+export function fail(code, message) {
+  process.stderr.write('design-gate: ' + message + '\\n');
+  process.exit(code);
+}
+
+function quoteForCmd(arg) {
+  return /[\\s"&|<>^]/.test(arg) ? '"' + arg.replace(/"/g, '""') + '"' : arg;
+}
+
+/**
+ * Runs a design.md subcommand and returns its parsed JSON output.
+ * Exit status 1 is treated as data, not failure: \`diff\` uses it for its own
+ * notion of regression, which the gates deliberately re-judge themselves.
+ */
+export function runDesignMd(args) {
+  const full = ['-y', '-p', PACKAGE, BIN, ...args];
+  // On Windows the launcher is \`npx.cmd\`, and since the fix for CVE-2024-27980
+  // Node refuses to spawn a .cmd without a shell. With a shell, arguments are
+  // re-parsed by cmd.exe, so anything that may contain a space is quoted here.
+  const isWin = process.platform === 'win32';
+  const res = isWin
+    ? spawnSync('npx.cmd', full.map(quoteForCmd), {
+        encoding: 'utf-8',
+        windowsHide: true,
+        shell: true,
+      })
+    : spawnSync('npx', full, { encoding: 'utf-8', windowsHide: true });
+
+  if (res.error) {
+    fail(2, 'could not execute npx (' + res.error.message + '). Is Node on PATH?');
+  }
+  if (res.status !== 0 && res.status !== 1) {
+    fail(2, PACKAGE + ' ' + args[0] + ' failed (exit ' + res.status + '):\\n' + (res.stderr || res.stdout));
+  }
+
+  try {
+    return JSON.parse(res.stdout);
+  } catch {
+    fail(2, 'could not parse JSON from \`' + BIN + ' ' + args[0] + '\`. Raw output:\\n' + res.stdout);
+  }
+}
+`
+      },
+      {
+        sourcePath: "D:/conductor/src/internal/templates/data/config/gates/design-extract.mjs",
+        category: "config",
+        subpath: "gates",
+        ext: ".mjs",
+        content: `#!/usr/bin/env node
+// Brownfield extraction. Reads an existing interface and reports the design
+// system it already has, so setup can propose it instead of inventing one.
+//
+// Why this exists: authoring DESIGN.md from the bands alone works on a
+// greenfield project and misdescribes every other kind. An existing interface
+// already has colours and a rhythm; a design system that contradicts them is
+// not adopted, it is ignored \u2014 and the token gate would open with hundreds of
+// findings that are all "the design system is wrong", not "the code is wrong".
+//
+// This is NOT a gate. It never blocks and never writes. It prints what it
+// found; the setup skill decides with the user what to keep.
+//
+// Usage:
+//   node conductor/gates/design-extract.mjs [--src <dir>]... [--format json|text]
+//        [--top <n>]
+
+import { eachLine, hexToHsl, isChromatic, normalizeHex, roleOfDimension, toPx, STYLESHEET_EXTS, HEX_RE, FUNC_COLOR_RE, DIM_RE, FONT_FAMILY_RE } from './design-scan.mjs';
+
+// Anchors from design-bands.json, duplicated here as plain numbers because this
+// script must run before any design system exists. Kept in sync by hand \u2014 the
+// only cost of an out-of-date copy is a weaker suggestion, never a wrong gate.
+const BAND_ANCHORS = {
+  rhythm: { compact: 48, airy: 96, editorial: 160 },
+  type_contrast: { functional: 32, expressive: 56, editorial: 72 },
+  shape: { sharp: 2, architectural: 4, soft: 8 },
+};
+
+
+function parseArgs(argv) {
+  const opts = { src: [], format: 'json', top: 12 };
+  for (let i = 0; i < argv.length; i += 1) {
+    if (argv[i] === '--src') opts.src.push(argv[++i]);
+    else if (argv[i] === '--format') opts.format = argv[++i];
+    else if (argv[i] === '--top') opts.top = Number(argv[++i]);
+  }
+  if (opts.src.length === 0) opts.src.push('.');
+  return opts;
+}
+
+function tally(map, key, at) {
+  const entry = map.get(key) ?? { count: 0, sample: at };
+  entry.count += 1;
+  map.set(key, entry);
+}
+
+function ranked(map, top) {
+  return [...map.entries()]
+    .sort((a, b) => b[1].count - a[1].count)
+    .slice(0, top)
+    .map(([value, { count, sample }]) => ({ value, count, sample }));
+}
+
+/** Nearest band by absolute distance, with the distance reported so a poor match is visible. */
+function nearestBand(anchors, observed) {
+  if (observed === null) return null;
+  const [name, value] = Object.entries(anchors)
+    .map(([n, v]) => [n, v, Math.abs(v - observed)])
+    .sort((a, b) => a[2] - b[2])[0];
+  return { band: name, band_value: value, observed, distance: Math.abs(value - observed) };
+}
+
+function main() {
+  const opts = parseArgs(process.argv.slice(2));
+
+  const colors = new Map();
+  const functional = new Map();
+  const dims = { spacing: new Map(), typography: new Map(), radius: new Map(), border: new Map(), layout: new Map() };
+  const fonts = new Map();
+
+  const scanned = eachLine(opts.src, (line, at, ext) => {
+    // Same rule as the gate: outside a stylesheet a bare \`#123\` is an issue
+    // reference, and counting those would put phantom colours at the top of the
+    // ranking the user is asked to adopt.
+    const colourLengths = STYLESHEET_EXTS.has(ext) ? [4, 5, 7, 9] : [7, 9];
+    for (const match of line.matchAll(HEX_RE)) {
+      if (!colourLengths.includes(match[0].length)) continue;
+      tally(colors, normalizeHex(match[0]), at);
+    }
+    // Kept separate: rgba() is usually an overlay or a shadow, not a palette entry,
+    // so folding it into the colour ranking would distort the proposal.
+    for (const match of line.matchAll(FUNC_COLOR_RE)) tally(functional, match[0].replace(/\\s+/g, ''), at);
+
+    for (const match of line.matchAll(DIM_RE)) {
+      if (Number(match[1]) === 0) continue;
+      tally(dims[roleOfDimension(line, match.index)], match[1] + match[2], at);
+    }
+    for (const match of line.matchAll(FONT_FAMILY_RE)) {
+      const family = match[1].trim().replace(/['"\`]/g, '').split(',')[0].trim();
+      if (family && !family.startsWith('$') && !family.startsWith('var(')) tally(fonts, family, at);
+    }
+  });
+
+  // Role proposal. Ink is the darkest desaturated colour, paper the lightest,
+  // and the accent the most used colour that is actually a hue.
+  const byUse = [...colors.entries()].sort((a, b) => b[1].count - a[1].count);
+  const withHsl = byUse.map(([hex, meta]) => ({ hex, ...meta, hsl: hexToHsl(hex) })).filter((c) => c.hsl);
+  const neutrals = withHsl.filter((c) => !isChromatic(c.hex));
+  const chromatics = withHsl.filter((c) => isChromatic(c.hex));
+  const hueBuckets = new Set(chromatics.map((c) => Math.round(c.hsl.h / 30)));
+
+  // Among the darks and among the lights, the one the codebase actually reaches
+  // for wins. Picking the most extreme value instead would nominate #FFFFFF as
+  // the page on a codebase that uses it once and a tinted paper everywhere else.
+  const mostUsed = (pool) => pool.slice().sort((a, b) => b.count - a.count)[0]?.hex ?? null;
+
+  const proposal = {
+    primary: mostUsed(neutrals.filter((c) => c.hsl.l < 0.5)),
+    neutral: mostUsed(neutrals.filter((c) => c.hsl.l >= 0.5)),
+    accent: chromatics[0]?.hex ?? null,
+    distinct_hues: hueBuckets.size,
+    colour_strategy: hueBuckets.size <= 1 ? 'monochrome+1' : hueBuckets.size === 2 ? 'dual' : 'expressive',
+  };
+
+  // Each axis is anchored on a different statistic, and using the wrong one
+  // produces a confident wrong answer. Rhythm is anchored on the section gap,
+  // so it reads the LARGEST spacing value \u2014 the most frequent one is the base
+  // step (typically 16px), which is not comparable to a 48/96/160 anchor.
+  // Typographic contrast is likewise the largest size, the display. Shape is
+  // the most FREQUENT radius, because the outlier pill button must not decide
+  // the band for the whole system.
+  // Compared in pixels: parseFloat on a key like '3.5rem' yields 3.5, which then
+  // reports a 56px display as the 32px band \u2014 confidently wrong on the majority
+  // of codebases, since rem is the common authoring unit.
+  const asPx = (key) => {
+    const parts = /^(-?\\d*\\.?\\d+)(px|rem)$/.exec(key);
+    return parts ? toPx(parts[1], parts[2]) : null;
+  };
+  const largest = (map) => {
+    const values = [...map.keys()].map(asPx).filter((n) => n !== null);
+    return values.length ? Math.max(...values) : null;
+  };
+  const mostFrequentPx = (map) => {
+    const top = ranked(map, 1)[0];
+    return top ? asPx(top.value) : null;
+  };
+  const topType = ranked(dims.typography, opts.top);
+
+  const report = {
+    scanned_files: scanned,
+    colors: ranked(colors, opts.top),
+    functional_colors: ranked(functional, 5),
+    spacing: ranked(dims.spacing, opts.top),
+    typography_sizes: topType,
+    radii: ranked(dims.radius, opts.top),
+    layout_sizes: ranked(dims.layout, 5),
+    font_families: ranked(fonts, 5),
+    proposal,
+    nearest_bands: {
+      rhythm: nearestBand(BAND_ANCHORS.rhythm, largest(dims.spacing)),
+      type_contrast: nearestBand(BAND_ANCHORS.type_contrast, largest(dims.typography)),
+      shape: nearestBand(BAND_ANCHORS.shape, mostFrequentPx(dims.radius)),
+    },
+    caveat:
+      'Frequency is evidence, not endorsement. The most used value may be the most repeated mistake \u2014 ' +
+      'present these to the user as findings to confirm, never adopt them silently.',
+  };
+
+  if (opts.format === 'text') {
+    const line = (label, rows) =>
+      process.stdout.write(label + ': ' + (rows.length ? rows.map((r) => r.value + ' (' + r.count + ')').join(', ') : '(none)') + '\\n');
+    process.stdout.write('Scanned ' + scanned + ' files\\n');
+    line('Colours', report.colors);
+    line('Spacing', report.spacing);
+    line('Type sizes', report.typography_sizes);
+    line('Radii', report.radii);
+    line('Fonts', report.font_families);
+    process.stdout.write(
+      'Proposed roles: primary ' + proposal.primary + ', neutral ' + proposal.neutral +
+      ', accent ' + proposal.accent + ' (' + proposal.distinct_hues + ' distinct hues -> ' + proposal.colour_strategy + ')\\n',
+    );
+    for (const [axis, near] of Object.entries(report.nearest_bands)) {
+      if (near) process.stdout.write('Nearest band on ' + axis + ': ' + near.band + ' (' + near.band_value + ' vs observed ' + near.observed + ')\\n');
+    }
+  } else {
+    process.stdout.write(JSON.stringify(report, null, 2) + '\\n');
+  }
+  process.exit(0);
+}
+
+main();
+`
+      },
+      {
+        sourcePath: "D:/conductor/src/internal/templates/data/config/gates/design-gate.mjs",
+        category: "config",
+        subpath: "gates",
+        ext: ".mjs",
+        content: `#!/usr/bin/env node
+// Design gate. Wraps the \`@google/design.md\` CLI and applies Conductor's own
+// severity policy on top of its JSON output.
+//
+// Why a wrapper exists at all: the upstream CLI is a linter, not a gate.
+//   - \`lint\` marks only \`broken-ref\` as an error, so a DESIGN.md whose button
+//     fails WCAG AA at 2.07:1 still exits 0.
+//   - \`diff\` computes \`regression\` from the delta in finding COUNTS, not from
+//     token changes. Flattening the type scale and halving the section rhythm
+//     changes no counts, so it reports \`regression: false\` and exits 0 \u2014 which
+//     is precisely the move an agent makes when it is easier to shrink the
+//     design system than to make the component fit it.
+// Both commands do expose everything needed via \`--format json\`. This script
+// reads that JSON and decides.
+//
+// Exit codes:
+//   0  pass
+//   1  design violation (the report on stderr is the point \u2014 it lands in the
+//      agent's next prompt)
+//   2  harness failure (CLI absent, file missing, unparsable output). Never
+//      conflate this with a passing design; a gate that cannot run has not run.
+//
+// Usage:
+//   node conductor/gates/design-gate.mjs [--mode implement|design]
+//                                        [--file <path>] [--baseline <path>]
+
+import { existsSync, readFileSync } from 'node:fs';
+import { fail, runDesignMd } from './design-cli.mjs';
+import { toPx } from './design-scan.mjs';
+
+// --- Policy -----------------------------------------------------------------
+// Maps each upstream lint rule to how Conductor treats it. Edit here, not in
+// the logic below.
+//
+//   fail  -> blocks
+//   warn  -> reported, does not block
+//   info  -> reported only in verbose output
+const LINT_POLICY = {
+  // Already an upstream error.
+  'broken-ref': 'fail',
+  // Arithmetic over declared values, and the file's own Do's and Don'ts
+  // demands it. Upstream calls it a warning; a contrast failure shipped is a
+  // contrast failure.
+  'contrast-ratio': 'fail',
+  // A token silently dropped is worse than a missing one: the agent believes
+  // it is constrained and is not.
+  'token-like-ignored': 'fail',
+  // Without these the design system constrains nothing and the model goes
+  // back to inventing values, which is the whole reason this gate exists.
+  'missing-primary': 'fail',
+  'missing-typography': 'fail',
+  // Gradual erosion: tokens defined but wired to no component. Reported, not
+  // blocking \u2014 an unused token is a smell, and a project mid-refactor has them
+  // legitimately.
+  'orphaned-tokens': 'warn',
+  // Cosmetic or advisory.
+  'section-order': 'warn',
+  'unknown-key': 'warn',
+  'token-summary': 'info',
+  'missing-sections': 'info',
+  'omitted-rules': 'info',
+};
+
+// Unknown rules from a future CLI version must not pass silently.
+const UNKNOWN_RULE_POLICY = 'warn';
+
+// Token groups an implementation task may never touch. Widening the palette or
+// flattening the scale mid-implementation is the design-system equivalent of
+// editing the gate manifest to make a task pass.
+const FROZEN_DURING_IMPLEMENT = ['colors', 'typography', 'spacing', 'rounded', 'components'];
+
+// --- Args -------------------------------------------------------------------
+function parseArgs(argv) {
+  const opts = {
+    mode: 'implement',
+    file: 'conductor/DESIGN.md',
+    baseline: 'conductor/gates/design-baseline.md',
+    bands: 'conductor/gates/design-bands.json',
+    verbose: false,
+  };
+  for (let i = 0; i < argv.length; i += 1) {
+    const arg = argv[i];
+    if (arg === '--mode') opts.mode = argv[++i];
+    else if (arg === '--file') opts.file = argv[++i];
+    else if (arg === '--baseline') opts.baseline = argv[++i];
+    else if (arg === '--bands') opts.bands = argv[++i];
+    else if (arg === '--verbose') opts.verbose = true;
+  }
+  if (opts.mode !== 'implement' && opts.mode !== 'design') {
+    fail(2, 'Unknown --mode "' + opts.mode + '". Expected "implement" or "design".');
+  }
+  return opts;
+}
+
+// --- Checks -----------------------------------------------------------------
+function checkSpec(file) {
+  const report = runDesignMd(['lint', '--format', 'json', file]);
+  const blocking = [];
+  const advisory = [];
+
+  for (const finding of report.findings ?? []) {
+    const policy = LINT_POLICY[finding.rule] ?? UNKNOWN_RULE_POLICY;
+    const where = finding.path ? finding.path + ': ' : '';
+    const line = '[' + finding.rule + '] ' + where + finding.message;
+
+    if (policy === 'fail') blocking.push(line);
+    else if (policy === 'warn') advisory.push(line);
+  }
+
+  return { name: 'spec', blocking, advisory };
+}
+
+function checkRatchet(baseline, file, mode) {
+  const report = runDesignMd(['diff', '--format', 'json', baseline, file]);
+  const blocking = [];
+  const advisory = [];
+
+  // Deliberately ignores report.regression \u2014 see the header. Judge the tokens.
+  for (const group of Object.keys(report.tokens ?? {})) {
+    const change = report.tokens[group];
+    const touched = [
+      ...(change.added ?? []).map((t) => 'added ' + t),
+      ...(change.removed ?? []).map((t) => 'removed ' + t),
+      ...(change.modified ?? []).map((t) => 'modified ' + t),
+    ];
+    if (touched.length === 0) continue;
+
+    const line = group + ': ' + touched.join(', ');
+    if (mode === 'implement' && FROZEN_DURING_IMPLEMENT.includes(group)) blocking.push(line);
+    else advisory.push(line);
+  }
+
+  const delta = report.findings?.delta ?? {};
+  if ((delta.errors ?? 0) > 0 || (delta.warnings ?? 0) > 0) {
+    blocking.push(
+      'lint findings increased against the baseline (errors +' +
+        (delta.errors ?? 0) + ', warnings +' + (delta.warnings ?? 0) + ')',
+    );
+  }
+
+  return { name: 'ratchet', blocking, advisory };
+}
+
+/**
+ * Checks that each numeric axis landed exactly on a band.
+ *
+ * Without this the whole banding scheme is advice: a design system filled with
+ * the median of every value the model has read is internally consistent, so it
+ * passes every other check here. A 64px section gap is not an error \u2014 it is the
+ * average, which is what generic is made of.
+ */
+function checkBands(designFile, bandsFile) {
+  let spec;
+  try {
+    spec = JSON.parse(readFileSync(bandsFile, 'utf-8'));
+  } catch (err) {
+    // Exit 1 here would reach the orchestrator as a design verdict and send the
+    // agent looking for a token to fix. The band file being broken is a harness
+    // failure and must say so.
+    fail(2, 'band definitions at ' + bandsFile + ' are unreadable (' + err.message + ')');
+  }
+  const dtcg = runDesignMd(['export', '--format', 'dtcg', designFile]);
+  const blocking = [];
+  const advisory = [];
+
+  // The DTCG export names the colour group \`color\`, singular.
+  const groupOf = (name) => (name === 'colors' ? dtcg.color : dtcg[name]);
+
+  // Band anchors are pixels. Returning the bare number would compare 3.5rem
+  // against 56 and fail every rem-authored system, while accepting 96rem as the
+  // 96px band \u2014 wrong in both directions.
+  const dimensionAt = (path) => {
+    const [group, token, prop] = path.split('.');
+    const value = groupOf(group)?.[token]?.$value;
+    if (!value) return null;
+    const dim = prop ? value[prop] : value;
+    if (typeof dim?.value !== 'number') return null;
+    const px = toPx(dim.value, dim.unit);
+    return px === null ? { unsupported: dim.unit } : px;
+  };
+
+  for (const [axis, def] of Object.entries(spec.axes ?? {})) {
+    const found = dimensionAt(def.token);
+    if (found === null) {
+      advisory.push(axis + ': ' + def.token + ' is not defined, so the axis was not checked');
+      continue;
+    }
+    if (typeof found === 'object') {
+      advisory.push(axis + ': ' + def.token + ' is in ' + found.unsupported + ', which cannot be compared to a pixel band; the axis was not checked');
+      continue;
+    }
+    const match = Object.entries(def.bands).find(([, v]) => v === found);
+    if (!match) {
+      const options = Object.entries(def.bands).map(([n, v]) => n + ' ' + v).join(', ');
+      blocking.push(
+        axis + ': ' + def.token + ' is ' + found + ', which is no band. Expected one of ' + options +
+        ' \u2014 a value between bands is the averaged answer this axis exists to prevent',
+      );
+    }
+  }
+
+  const banned = spec.banned ?? {};
+  const hexOf = (token) => groupOf('colors')?.[token]?.$value?.hex?.toLowerCase() ?? null;
+  const allHexes = Object.entries(groupOf('colors') ?? {})
+    .filter(([name]) => !name.startsWith('$'))
+    .map(([name, token]) => [name, token?.$value?.hex?.toLowerCase()]);
+
+  for (const [name, hex] of allHexes) {
+    if (hex && (banned.accent_colors ?? []).includes(hex)) {
+      blocking.push('colors.' + name + ' is ' + hex + ', one of the most frequently generated accents \u2014 pick a colour the product chose, not one the model reaches for');
+    }
+  }
+  if ((banned.neutral_must_not_be ?? []).includes(hexOf('neutral'))) {
+    blocking.push('colors.neutral is pure white \u2014 use a tinted off-white; pure white is the strongest signal of an unconsidered palette');
+  }
+  if ((banned.primary_must_not_be ?? []).includes(hexOf('primary'))) {
+    blocking.push('colors.primary is pure black \u2014 use a near-black');
+  }
+
+  return { name: 'bands', blocking, advisory };
+}
+
+// --- Report -----------------------------------------------------------------
+function report(sections, opts) {
+  const blocking = sections.flatMap((s) => s.blocking);
+  const advisory = sections.flatMap((s) => s.advisory);
+
+  if (blocking.length > 0) {
+    process.stderr.write('\\nDesign gate FAILED (' + blocking.length + ' blocking):\\n');
+    for (const line of blocking) process.stderr.write('  x ' + line + '\\n');
+    if (advisory.length > 0) {
+      process.stderr.write('\\nAlso reported (non-blocking):\\n');
+      for (const line of advisory) process.stderr.write('  - ' + line + '\\n');
+    }
+    // Where the fix belongs differs by section, and pointing at the wrong file
+    // is how an agent ends up "fixing" a contrast failure by deleting the
+    // component, or a ratchet failure by editing the design system.
+    const failed = sections.filter((s) => s.blocking.length > 0).map((s) => s.name);
+    if (failed.includes('spec')) {
+      process.stderr.write(
+        '\\nSpec findings are fixed in ' + opts.file + ' itself: correct the token values ' +
+        'so the declared system is internally sound.\\n',
+      );
+    }
+    if (failed.includes('bands')) {
+      process.stderr.write(
+        '\\nBand findings mean an axis was averaged rather than chosen. Go back to the band table, ' +
+        'pick one band for that axis and copy its value \u2014 do not nudge the current value toward the nearest band.\\n',
+      );
+    }
+    if (failed.includes('ratchet')) {
+      process.stderr.write(
+        '\\nRatchet findings are fixed in the code, never in ' + opts.file + '. ' +
+        'Changing the design system to make a task pass is the failure this gate exists to catch \u2014 ' +
+        'if the system genuinely needs to change, that is a design track, not an implementation task.\\n',
+      );
+    }
+    process.stdout.write('design: FAIL (' + blocking.length + ' blocking, ' + advisory.length + ' advisory)\\n');
+    process.exit(1);
+  }
+
+  if (advisory.length > 0 && opts.verbose) {
+    process.stderr.write('\\nDesign gate passed with notes:\\n');
+    for (const line of advisory) process.stderr.write('  - ' + line + '\\n');
+  }
+  process.stdout.write('design: PASS (' + advisory.length + ' advisory)\\n');
+  process.exit(0);
+}
+
+// --- Main -------------------------------------------------------------------
+function main() {
+  const opts = parseArgs(process.argv.slice(2));
+
+  if (!existsSync(opts.file)) {
+    fail(2, 'no design system found at ' + opts.file + '. Run the setup skill to author one, or declare this gate absent in the manifest.');
+  }
+  // Guard against an empty or truncated file reaching the CLI as "valid".
+  if (readFileSync(opts.file, 'utf-8').trim() === '') {
+    fail(2, opts.file + ' is empty.');
+  }
+
+  const sections = [checkSpec(opts.file)];
+
+  if (existsSync(opts.bands)) {
+    sections.push(checkBands(opts.file, opts.bands));
+  } else if (opts.verbose) {
+    process.stderr.write('design-gate: no band definitions at ' + opts.bands + ' \u2014 axis check skipped.\\n');
+  }
+
+  if (existsSync(opts.baseline)) {
+    sections.push(checkRatchet(opts.baseline, opts.file, opts.mode));
+  } else if (opts.verbose) {
+    process.stderr.write(
+      'design-gate: no baseline at ' + opts.baseline + ' \u2014 ratchet skipped. ' +
+      'Copy the approved ' + opts.file + ' there to enable it.\\n',
+    );
+  }
+
+  report(sections, opts);
+}
+
+main();
+`
+      },
+      {
+        sourcePath: "D:/conductor/src/internal/templates/data/config/gates/design-scan.mjs",
+        category: "config",
+        subpath: "gates",
+        ext: ".mjs",
+        content: `// Shared source scanner for the design gates.
+//
+// One traversal, two consumers with opposite intent: design-tokens-gate.mjs
+// asks "which literals are NOT in the design system", design-extract.mjs asks
+// "which literals ARE in this codebase". Same regexes, so a value the extractor
+// proposes as a token is by construction a value the gate will then accept.
+
+import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { join, extname, relative, sep } from 'node:path';
+
+export const SKIP_DIRS = new Set([
+  'node_modules', 'dist', 'build', 'out', '.next', '.nuxt', '.svelte-kit',
+  'coverage', 'vendor', '.git', '.venv', '__pycache__', 'conductor',
+]);
+
+export const SCAN_EXTS = new Set([
+  '.css', '.scss', '.sass', '.less', '.styl',
+  '.html', '.htm', '.vue', '.svelte', '.astro',
+  '.js', '.jsx', '.mjs', '.cjs', '.ts', '.tsx',
+]);
+
+export const SUPPRESS = 'design-tokens-ignore';
+export const MAX_FILE_BYTES = 1024 * 1024;
+
+export const HEX_RE = /#[0-9a-fA-F]{3,8}\\b/g;
+export const FUNC_COLOR_RE = /\\b(?:rgba?|hsla?)\\s*\\([^)]*\\)/gi;
+export const DIM_RE = /(-?\\d*\\.?\\d+)(px|rem)\\b/g;
+export const FONT_FAMILY_RE = /(?:font-family\\s*:|fontFamily\\s*:)\\s*([^;,\\n}]+)/gi;
+
+/** #abc -> #aabbcc, and a fully opaque alpha channel dropped so #141517ff === #141517. */
+export function normalizeHex(hex) {
+  let h = hex.toLowerCase();
+  if (h.length === 4 || h.length === 5) {
+    h = '#' + h.slice(1).split('').map((c) => c + c).join('');
+  }
+  if (h.length === 9 && h.slice(7) === 'ff') h = h.slice(0, 7);
+  return h;
+}
+
+/** Assumed root font size. Comparing rem to px is impossible without one, and
+ *  every mainstream stack defaults to 16px. */
+export const ROOT_FONT_PX = 16;
+
+/**
+ * Dimensions are compared in pixels, never as \`value+unit\` strings. A token set
+ * authored in px and a codebase authored in rem describe the same design, and
+ * keying by unit would report every dimension in such a project as off-scale \u2014
+ * a permanent finding set that the baseline then freezes in place.
+ *
+ * \`em\` is deliberately not converted: it resolves against the element's own font
+ * size, so there is no correct constant. It keeps its own namespace.
+ */
+export function toPx(value, unit) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return null;
+  if (unit === 'px') return n;
+  if (unit === 'rem') return n * ROOT_FONT_PX;
+  return null;
+}
+
+/** Comparison key: pixels when the unit is convertible, otherwise unit-scoped. */
+export function dimKey(value, unit) {
+  const px = toPx(value, unit);
+  return px === null ? String(Number(value)) + unit : String(px) + 'px';
+}
+
+/** Saturation and lightness are what separate an ink or a background from an accent. */
+export function hexToHsl(hex) {
+  const h = normalizeHex(hex);
+  if (h.length !== 7) return null;
+  const r = parseInt(h.slice(1, 3), 16) / 255;
+  const g = parseInt(h.slice(3, 5), 16) / 255;
+  const b = parseInt(h.slice(5, 7), 16) / 255;
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const l = (max + min) / 2;
+  if (max === min) return { h: 0, s: 0, l };
+  const d = max - min;
+  const s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+  let hue;
+  if (max === r) hue = ((g - b) / d + (g < b ? 6 : 0)) / 6;
+  else if (max === g) hue = ((b - r) / d + 2) / 6;
+  else hue = ((r - g) / d + 4) / 6;
+  return { h: hue * 360, s, l };
+}
+
+/**
+ * Chroma, not HSL saturation. At extreme lightness HSL inflates saturation \u2014 a
+ * warm off-white like #F7F5F2 reports s=0.24 and would be read as an accent,
+ * which is exactly backwards for the colour most likely to be the page.
+ */
+export function isChromatic(hex) {
+  const h = normalizeHex(hex);
+  if (h.length !== 7) return false;
+  const r = parseInt(h.slice(1, 3), 16) / 255;
+  const g = parseInt(h.slice(3, 5), 16) / 255;
+  const b = parseInt(h.slice(5, 7), 16) / 255;
+  const chroma = Math.max(r, g, b) - Math.min(r, g, b);
+  const l = (Math.max(r, g, b) + Math.min(r, g, b)) / 2;
+  return chroma >= 0.12 && l > 0.08 && l < 0.92;
+}
+
+/**
+ * The role of a dimension is decided by the property that governs it, which is
+ * the nearest \`name:\` to its left \u2014 not by the line, since \`border-radius: 4px;
+ * padding: 16px 24px\` puts three values of two roles on one line.
+ */
+export function roleOfDimension(line, index) {
+  const before = line.slice(0, index);
+  const property = before.match(/([a-zA-Z-]+)\\s*:\\s*[^:;]*$/);
+  const name = property ? property[1] : before;
+  if (/font-?size|line-?height|letter-?spacing/i.test(name) || /\\btext-\\[$|\\bleading-\\[$|\\btracking-\\[$/i.test(before)) return 'typography';
+  if (/border-?radius/i.test(name) || /\\brounded(-[a-z]+)?-\\[$/i.test(before)) return 'radius';
+  // Each alternative is anchored. Without the group, \`outline\` and \`box-shadow\`
+  // match anywhere in \`name\` \u2014 and \`name\` falls back to the whole text left of
+  // the value whenever the property regex misses, which is the common case in
+  // markup and utility classes.
+  if (/^(?:border|outline|box-?shadow)/i.test(name)) return 'border';
+  // A page is not a gap. The largest "spacing" value in any real stylesheet is a
+  // container width, so letting these into the spacing bucket makes the rhythm
+  // anchor read 1200px and propose the widest band to every project.
+  if (/^(?:max-|min-)?(?:width|height)$|^(?:top|right|bottom|left|inset)$/i.test(name)) return 'layout';
+  return 'spacing';
+}
+
+export function* walk(dir) {
+  let entries;
+  try {
+    entries = readdirSync(dir, { withFileTypes: true });
+  } catch {
+    return;
+  }
+  for (const entry of entries) {
+    const full = join(dir, entry.name);
+    if (entry.isDirectory()) {
+      if (SKIP_DIRS.has(entry.name) || entry.name.startsWith('.')) continue;
+      yield* walk(full);
+    } else if (entry.isFile() && SCAN_EXTS.has(extname(entry.name))) {
+      yield full;
+    }
+  }
+}
+
+/** Extensions where a bare \`#abc\` is a colour rather than an issue reference. */
+export const STYLESHEET_EXTS = new Set(['.css', '.scss', '.sass', '.less', '.styl']);
+
+/**
+ * Calls \`onLine(line, location, ext)\` for every scannable line under the given
+ * roots, skipping suppressed lines and files too large to be hand-written.
+ * Returns the number of files read.
+ */
+export function eachLine(roots, onLine) {
+  let scanned = 0;
+  for (const root of roots) {
+    for (const path of walk(root)) {
+      let size;
+      try {
+        size = statSync(path).size;
+      } catch {
+        continue;
+      }
+      if (size > MAX_FILE_BYTES) continue;
+
+      const rel = relative(process.cwd(), path).split(sep).join('/');
+      const ext = extname(path);
+      let lines;
+      try {
+        lines = readFileSync(path, 'utf-8').split(/\\r?\\n/);
+      } catch {
+        // Unreadable or deleted between statSync and now. Skipping one file is
+        // right; throwing here would surface as exit 1, which the gates reserve
+        // for a design verdict.
+        continue;
+      }
+      lines.forEach((line, index) => {
+        if (line.includes(SUPPRESS)) return;
+        onLine(line, rel + ':' + (index + 1), ext);
+      });
+      scanned += 1;
+    }
+  }
+  return scanned;
+}
+`
+      },
+      {
+        sourcePath: "D:/conductor/src/internal/templates/data/config/gates/design-tokens-gate.mjs",
+        category: "config",
+        subpath: "gates",
+        ext: ".mjs",
+        content: `#!/usr/bin/env node
+// Design token gate. Checks the CODE against the design system, which is the
+// half \`design-gate.mjs\` cannot see: that gate proves DESIGN.md is internally
+// sound, this one proves the components actually use it.
+//
+// Deliberately does NOT depend on stylelint. Two reasons:
+//   1. It would mean installing stylelint plus a plugin into the user's
+//      project, and choosing the user's tooling is not this framework's call.
+//   2. Stylelint only reads stylesheets. Most of what an agent invents lives
+//      in markup \u2014 \`className="p-[13px] bg-[#8B5CF6]"\`, inline \`style={{...}}\`
+//      \u2014 which a stylesheet linter never opens.
+// So the allowed values are read from \`designmd export --format dtcg\` and the
+// source tree is scanned directly. Zero dependencies, any stack.
+//
+// Findings are ratcheted, not absolute: a legacy project adopts this by
+// recording where it stands and never getting worse. A threshold an existing
+// codebase cannot meet is a threshold that gets deleted.
+//
+// Exit codes: 0 pass, 1 violation, 2 harness failure.
+//
+// Usage:
+//   node conductor/gates/design-tokens-gate.mjs [--src <dir>]... [--strict]
+//        [--file <DESIGN.md>] [--baseline <json>] [--update-baseline]
+
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { dirname } from 'node:path';
+import { fail, runDesignMd } from './design-cli.mjs';
+import { dimKey, eachLine, normalizeHex, HEX_RE, FUNC_COLOR_RE, DIM_RE, STYLESHEET_EXTS } from './design-scan.mjs';
+
+// --- Policy -----------------------------------------------------------------
+// Dimensions every design system tolerates regardless of its scale: the zero,
+// and the hairline border that no spacing scale bothers to name.
+// Keyed in pixels, matching dimKey.
+const ALWAYS_ALLOWED_DIMS = new Set(['0px', '1px']);
+
+const MAX_SHOWN_PER_RULE = 15;
+
+// --- Args -------------------------------------------------------------------
+function parseArgs(argv) {
+  const opts = {
+    file: 'conductor/DESIGN.md',
+    baseline: 'conductor/gates/design-tokens-baseline.json',
+    src: [],
+    strict: false,
+    updateBaseline: false,
+  };
+  for (let i = 0; i < argv.length; i += 1) {
+    const arg = argv[i];
+    if (arg === '--file') opts.file = argv[++i];
+    else if (arg === '--baseline') opts.baseline = argv[++i];
+    else if (arg === '--src') opts.src.push(argv[++i]);
+    else if (arg === '--strict') opts.strict = true;
+    else if (arg === '--update-baseline') opts.updateBaseline = true;
+  }
+  if (opts.src.length === 0) opts.src.push('.');
+  return opts;
+}
+
+// --- Allowed values ---------------------------------------------------------
+function collectAllowed(designFile) {
+  const dtcg = runDesignMd(['export', '--format', 'dtcg', designFile]);
+  const colors = new Set();
+  const dims = new Set(ALWAYS_ALLOWED_DIMS);
+
+  const addDim = (v) => {
+    if (v && typeof v === 'object' && typeof v.value === 'number' && v.unit) {
+      dims.add(dimKey(v.value, v.unit));
+    }
+  };
+
+  for (const [group, body] of Object.entries(dtcg)) {
+    if (group.startsWith('$') || !body || typeof body !== 'object') continue;
+    for (const [name, token] of Object.entries(body)) {
+      if (name.startsWith('$')) continue;
+      const value = token?.$value;
+      if (!value) continue;
+
+      if (typeof value.hex === 'string') {
+        colors.add(normalizeHex(value.hex));
+      } else if (typeof value.value === 'number' && value.unit) {
+        addDim(value);
+      } else if (typeof value === 'object') {
+        // Composite typography token: its dimensions count as part of the scale.
+        addDim(value.fontSize);
+        addDim(value.letterSpacing);
+        addDim(value.lineHeight);
+      }
+    }
+  }
+
+  if (colors.size === 0 && dims.size === ALWAYS_ALLOWED_DIMS.size) {
+    fail(2, 'no tokens exported from ' + designFile + '. Nothing to check against.');
+  }
+  return { colors, dims };
+}
+
+// --- Scan -------------------------------------------------------------------
+function scanLine(line, at, ext, allowed, findings) {
+  // Outside a stylesheet, \`#123\` is an issue reference or a URL fragment far more
+  // often than a colour, and flagging it tells the agent to "replace the literal
+  // value with a token" \u2014 i.e. to rewrite a correct comment. Shorthand hex is
+  // therefore only read as colour where CSS is the language.
+  const colourLengths = STYLESHEET_EXTS.has(ext) ? [4, 5, 7, 9] : [7, 9];
+  for (const match of line.matchAll(HEX_RE)) {
+    const raw = match[0];
+    if (!colourLengths.includes(raw.length)) continue;
+    if (!allowed.colors.has(normalizeHex(raw))) {
+      findings['hardcoded-color'].push(at + '  ' + raw);
+    }
+  }
+
+  for (const match of line.matchAll(FUNC_COLOR_RE)) {
+    // Functional colours are never token references, so any of them is an
+    // invented value by definition.
+    findings['hardcoded-color'].push(at + '  ' + match[0]);
+  }
+
+  for (const match of line.matchAll(DIM_RE)) {
+    if (!allowed.dims.has(dimKey(match[1], match[2]))) {
+      findings['off-scale-dimension'].push(at + '  ' + match[0]);
+    }
+  }
+}
+
+// --- Baseline ---------------------------------------------------------------
+/**
+ * Returns null ONLY when there is no baseline at all. A file that exists but
+ * cannot be used is a harness failure, never an absent baseline: conflating the
+ * two silently disarms an armed ratchet, which is the exact "unrun gate reads as
+ * a pass" failure the rest of this gate exists to prevent.
+ */
+function readBaseline(path) {
+  if (!existsSync(path)) return null;
+  let parsed;
+  try {
+    parsed = JSON.parse(readFileSync(path, 'utf-8'));
+  } catch (err) {
+    fail(2, 'baseline at ' + path + ' is unreadable (' + err.message + '). Delete it and re-record with --update-baseline.');
+  }
+  if (!parsed || typeof parsed.counts !== 'object' || parsed.counts === null) {
+    fail(2, 'baseline at ' + path + ' has no \`counts\` object. It was truncated or hand-edited; re-record with --update-baseline.');
+  }
+  return parsed.counts;
+}
+
+function writeBaseline(path, counts) {
+  const body = {
+    description:
+      'Design token findings recorded when this gate was adopted. The gate demands ' +
+      'no worse than these counts; the numbers may only move down.',
+    recordedAt: new Date().toISOString(),
+    counts,
+  };
+  try {
+    mkdirSync(dirname(path), { recursive: true });
+    writeFileSync(path, JSON.stringify(body, null, 2) + '\\n', 'utf-8');
+  } catch (err) {
+    fail(2, 'could not write the baseline to ' + path + ' (' + err.message + ')');
+  }
+}
+
+// --- Main -------------------------------------------------------------------
+function main() {
+  const opts = parseArgs(process.argv.slice(2));
+
+  if (!existsSync(opts.file)) {
+    fail(2, 'no design system found at ' + opts.file + '. Run the setup skill to author one, or declare this gate absent in the manifest.');
+  }
+
+  const allowed = collectAllowed(opts.file);
+  const findings = { 'hardcoded-color': [], 'off-scale-dimension': [] };
+
+  for (const root of opts.src) {
+    if (!existsSync(root)) fail(2, 'source path not found: ' + root);
+  }
+  const scanned = eachLine(opts.src, (line, at, ext) => scanLine(line, at, ext, allowed, findings));
+
+  const counts = Object.fromEntries(
+    Object.entries(findings).map(([rule, list]) => [rule, list.length]),
+  );
+  const total = Object.values(counts).reduce((a, b) => a + b, 0);
+
+  if (opts.updateBaseline) {
+    writeBaseline(opts.baseline, counts);
+    process.stdout.write('design-tokens: baseline recorded (' + total + ' findings across ' + scanned + ' files)\\n');
+    process.exit(0);
+  }
+
+  const baseline = readBaseline(opts.baseline);
+  const regressions = [];
+  for (const [rule, count] of Object.entries(counts)) {
+    const limit = opts.strict || baseline === null ? 0 : (baseline[rule] ?? 0);
+    if (count > limit) regressions.push({ rule, count, limit });
+  }
+
+  // Detail always goes to stderr: the point of this gate is that the agent
+  // reads the rejection and the address of the offending value.
+  for (const [rule, list] of Object.entries(findings)) {
+    if (list.length === 0) continue;
+    process.stderr.write('\\n' + rule + ' (' + list.length + '):\\n');
+    for (const line of list.slice(0, MAX_SHOWN_PER_RULE)) {
+      process.stderr.write('  ' + line + '\\n');
+    }
+    if (list.length > MAX_SHOWN_PER_RULE) {
+      process.stderr.write('  ... and ' + (list.length - MAX_SHOWN_PER_RULE) + ' more\\n');
+    }
+  }
+
+  if (baseline === null && !opts.strict && total > 0) {
+    // Honest middle ground: an unarmed ratchet must not read as a pass, and
+    // must not block a brownfield project on its first run either.
+    process.stderr.write(
+      '\\nNo baseline at ' + opts.baseline + ' \u2014 nothing was enforced this run.\\n' +
+      'Record where the project stands with --update-baseline, and the gate will hold that line from then on.\\n',
+    );
+    process.stdout.write('design-tokens: NOT ENFORCED (' + total + ' findings, no baseline)\\n');
+    process.exit(0);
+  }
+
+  if (regressions.length > 0) {
+    process.stderr.write('\\nDesign token gate FAILED:\\n');
+    for (const r of regressions) {
+      process.stderr.write('  x ' + r.rule + ': ' + r.count + ' (allowed ' + r.limit + ')\\n');
+    }
+    process.stderr.write(
+      '\\nReplace the literal values with tokens from ' + opts.file + '. ' +
+      'Adding the invented value to the design system instead is the move this gate exists to catch.\\n',
+    );
+    process.stdout.write('design-tokens: FAIL (' + total + ' findings)\\n');
+    process.exit(1);
+  }
+
+  const improved = baseline
+    ? Object.entries(counts).filter(([rule, c]) => c < (baseline[rule] ?? 0))
+    : [];
+  if (improved.length > 0) {
+    process.stderr.write(
+      '\\nImproved against the baseline: ' +
+      improved.map(([rule, c]) => rule + ' ' + (baseline[rule] ?? 0) + ' -> ' + c).join(', ') +
+      '. Re-record with --update-baseline so the gain is held.\\n',
+    );
+  }
+  process.stdout.write('design-tokens: PASS (' + total + ' findings, ' + scanned + ' files)\\n');
+  process.exit(0);
+}
+
+main();
+`
+      },
+      {
         sourcePath: "D:/conductor/src/internal/templates/data/i18n/base/constitution.json",
         category: "i18n",
         subpath: "base",
@@ -3884,7 +4928,8 @@ var init_embedded = __esm({
     "**Architecture gate on repeated failure**: after \`\${config.thresholds.fixes_before_architecture_review}\` failed fixes on the same problem, STOP. Do not attempt another fix. Repeated failure at one point means the design is wrong, not that the next attempt will be luckier \u2014 report the pattern to the user, state which assumption of the plan it contradicts, and ask whether to re-plan the affected phase. The two limits count different things and neither replaces the other: \`config.thresholds.max_fix_attempts\` caps retries *within one task* and stops that task; this gate counts failed fixes *on the same underlying problem across the whole track* \u2014 including attempts made in earlier tasks, earlier waves, and earlier sessions recorded in the state document. A problem that keeps resurfacing in different places is precisely the case this gate exists for, and it is invisible if you only count within the current task.",
     "**Record the lesson (CRITICAL)**: when the architecture gate fires, writing the lessons document (resolve via \`config.files.artifacts.lessons\`) is part of resolving it, not an optional follow-up \u2014 the gate exists because the same problem defeated several fixes, and a project that discards that finding will meet it again in the next track with nothing to show for the cost. Use the fields in \`config.lessons_document.entry_fields\` and pick an \`action\` from \`config.lessons_document.action_layers\`: which layer must the rule move to \u2014 a lint rule, a structure check, a styleguide sentence, or a decision that was never recorded. NEVER write an action listed in \`config.lessons_document.forbidden_actions\` or any equivalent appeal to future diligence: 'remember this' is not an action, it is the same prose instruction that already failed, and recording it converts a real finding into a placebo. Write the entry after the user decides how to proceed, and record what they decided \u2014 including a decision to proceed unchanged, which is itself the lesson. Keep the document under \`\${config.thresholds.lessons_max_lines}\` lines by dropping entries whose action has been carried out; it is listed in \`config.files.control_files[]\`, so you write it inline and subagents never touch it.",
     "**Watch the test fail**: a test that passes the moment it is written proves nothing \u2014 it may assert something already true, or nothing at all. Run every new test BEFORE the implementation exists and confirm it fails for the expected reason. If production code got written before its test, delete that code and restart the cycle; a test written afterwards is shaped by the code it was meant to judge.",
-    "**Resume before acting**: at the start of every run, read the state document (resolve via \`config.files.artifacts.state\`) before anything else. If it reports an unfinished track, open its \`Resume Hint\` and any \`Blockers\` and offer to continue from there instead of starting over. If it disagrees with the tracks registry or with \`git status\`, surface the divergence to the user and let them decide which is authoritative \u2014 never silently overwrite state that describes work you cannot account for."
+    "**Resume before acting**: at the start of every run, read the state document (resolve via \`config.files.artifacts.state\`) before anything else. If it reports an unfinished track, open its \`Resume Hint\` and any \`Blockers\` and offer to continue from there instead of starting over. If it disagrees with the tracks registry or with \`git status\`, surface the divergence to the user and let them decide which is authoritative \u2014 never silently overwrite state that describes work you cannot account for.",
+    "**Never widen the design system to make a task pass**: \`config.files.artifacts.design_system\` is read-only inside an implementation task, exactly as the gate manifest and the ratchet baseline are \u2014 see \`config.gate_hooks.guarded_invariants\`. When the design gate rejects a literal value, the fix is the component; adding the invented value to the token set is the failure the gate exists to catch, and it is always the cheaper path, which is why it must be named rather than trusted to judgement. If the work genuinely cannot be expressed in the declared tokens, stop and report that as a finding against the design system, so the user decides \u2014 do not decide it inside the task."
   ],
   "skills": [
     "File system operations: checking existence, reading/writing files using relative paths.",
@@ -4079,7 +5124,8 @@ var init_embedded = __esm({
     "**Do not re-derive what a gate already decided**: the review's scarce resource is judgement, and spending it on rules a command settles is how real findings get missed. Read only the judgement layer of the styleguides \u2014 the section named by \`config.styleguide_layers.judgment.heading\` \u2014 and take everything under \`config.styleguide_layers.tooling.heading\` as decided by the corresponding gate. If the gate that owns those rules is absent, say so and review them by hand, naming which section you had to read manually; that is the honest cost of a missing gate, not a reason to review every rule by hand every time.",
     "**Forbidden verdict language**: never soften a finding with hedging from \`config.enums.banned_completion_phrasings\` or any equivalent. A finding you are unsure about is reported as unsure, with what would settle it \u2014 writing \\"probably fine\\" converts your own uncertainty into the user's false confidence.",
     "**Recurrence detection**: a finding that keeps coming back is a different defect from the finding itself \u2014 the code is a symptom, the recurrence is the cause. Before writing the verdict, compare this review's findings by \`config.enums.finding_categories\` against the lessons document (resolve via \`config.files.artifacts.lessons\`) and the tracks already reviewed. When a category reaches \`\${config.thresholds.lesson_recurrence_threshold}\` distinct tracks, record it in the lessons document using \`config.lessons_document.entry_fields\`, with an \`action\` drawn from \`config.lessons_document.action_layers\` \u2014 never one listed in \`config.lessons_document.forbidden_actions\`. Report the recurrence in the review as its own line: naming the pattern is worth more to the user than the individual finding, because fixing this diff does nothing about the next one. If a lesson already on file has an open action and this review found the same category again, say that the action was never carried out rather than filing a duplicate entry. A missing lessons document follows \`config.lessons_document.missing_policy\` \u2014 create it empty and continue; never halt the review over its absence.",
-    "**Fail closed**: if a required input cannot be read or a check cannot be executed \u2014 missing styleguide, unreadable decisions file, test suite that will not run \u2014 the verdict is the human value from \`config.enums.review_statuses\` with the reason stated. Never treat an unreadable input as an absent problem."
+    "**Fail closed**: if a required input cannot be read or a check cannot be executed \u2014 missing styleguide, unreadable decisions file, test suite that will not run \u2014 the verdict is the human value from \`config.enums.review_statuses\` with the reason stated. Never treat an unreadable input as an absent problem.",
+    "**Design findings are judged against the declared system, never against taste**: for the \`design\` category in \`config.enums.finding_categories\`, the reference is \`config.files.artifacts.design_system\` \u2014 its tokens, its \`Components\` guidance and its \`Do's and Don'ts\`. Report what contradicts the declared system, not what you would have designed differently. Two things the token gate cannot see and a reviewer can: a token used in a role it was not meant for (an \`error\` colour as decoration), and an interface state the design system requires but the implementation never rendered \u2014 empty, loading, error, focus. Where the gate already ran, do not re-derive its verdict by reading the code; cite its output."
   ],
   "skills": [
     "Git diff and log analysis to pinpoint relevant changes.",
@@ -4144,7 +5190,8 @@ var init_embedded = __esm({
     "styleguides_dir": "Contains {languages} conventions",
     "lessons_file": "Starts empty; records what this project learned the hard way so a later track does not repeat it",
     "gates_dir": "Holds the commands that decide, rather than describe, quality: {gates_summary}",
-    "next_action": "Would you like to start planning your initial product implementation (MVP) now?"
+    "next_action": "Would you like to start planning your initial product implementation (MVP) now?",
+    "design_system_file": "Fixes the visual identity as machine-readable tokens plus the rationale for applying them ({bands} = the band chosen on each design axis)"
   },
   "description_short": "Initializes and scaffolds a project for Spec-Driven Development (SDD). Use this skill when Conductor is not yet configured in the project (the \`conductor/index.md\` marker is missing or incomplete), when the user asks to initialize, configure, or scaffold Conductor, when starting a brand-new project from scratch (greenfield), or when adopting Conductor on an existing codebase (brownfield). It guides the user through product definition, technology stack selection, code style guide selection, workflow configuration, and agent skill installation, and generates the project index as the single source of truth.",
   "role": "Conductor Architect",
@@ -4165,7 +5212,10 @@ var init_embedded = __esm({
     "Capture deliberate architectural decisions and negative space (what must NOT be revisited or changed without explicit confirmation) in the decisions file (resolve path via \`config.files.artifacts.decisions\`), so future skills and subagents can distinguish intentional trade-offs from unfinished technical debt.",
     "Create the lessons ledger (resolve path via \`config.files.artifacts.lessons\`) as an empty, structured document, so the triggers defined in \`config.lessons_document.triggers\` have somewhere to write from the very first track.",
     "Discover the quality gates the project already has \u2014 linter, formatter, type checker, test runner, coverage \u2014 and record them in the gate manifest (resolve path via \`config.gates.manifest\`), so that every rule a command can decide stops being prose the agent may reinterpret.",
-    "Measure the ratchet baseline (resolve path via \`config.ratchet.baseline_file\`) for each metric in \`config.ratchet.metrics\`, so the gates are adoptable on an existing codebase instead of blocking on its history."
+    "Measure the ratchet baseline (resolve path via \`config.ratchet.baseline_file\`) for each metric in \`config.ratchet.metrics\`, so the gates are adoptable on an existing codebase instead of blocking on its history.",
+    "When the project renders a user interface, author the design system (resolve path via \`config.directories.conductor_root\`/\`config.files.artifacts.design_system\`) by choosing one band per axis from the authoring aid at \`config.protocols.design_authoring.path\`, never by averaging bands \u2014 an averaged design system is indistinguishable from no design system.",
+    "When the design system step ran, register the two design gates in the gate manifest (resolve via \`config.gates.manifest\`): \`config.gates.kinds.design\` and \`config.gates.kinds.design_tokens\`. These are the one exception to discovering rather than inventing gate commands \u2014 Conductor ships both scripts, so there is nothing to discover and nothing installed on the user behalf. Record the design baselines in the same step: copy the approved design system to the gates directory as \`design-baseline.md\`, and run the token gate once with \`--update-baseline\`. Both gates are absent per \`config.gates.absent_policy\` when the project has no user interface.",
+    "On a brownfield project with an existing interface, run \`node \`+\`config.directories.conductor_root\`+\`/gates/design-extract.mjs --src <source dirs> --format json\` BEFORE choosing any band, and present what it found to the user as the starting proposal: the colour roles it inferred, the spacing and type scales in use, and the band nearest to each axis. A design system authored from the bands alone contradicts the interface that already exists, and a design system that contradicts the code is ignored rather than adopted. Frequency is evidence, not endorsement \u2014 the most repeated value may be the most repeated mistake, so every extracted value is confirmed with the user before it becomes a token, and the extractor never writes anything itself."
   ],
   "constraints": [
     "Must treat the current working directory as the project root and never create a new directory or ask for an alternative location.",
@@ -4183,7 +5233,8 @@ var init_embedded = __esm({
     "**Never write the user's editor configuration wholesale**: the tool settings file targeted by \`config.gate_hooks\` belongs to the user, not to Conductor, and may already carry unrelated hooks, permissions and preferences. Touch it only after an explicit yes, only by merging into what you read from disk, and only after showing the diff. A settings file replaced by a template is data loss the user discovers later, in an unrelated session.",
     "**Hooks never carry a rule of their own**: every hook wired by this skill invokes a gate already declared in \`config.gates.manifest\`. Never implement a check that exists only inside a hook \u2014 behaviour would then depend on which editor the project was opened with, and a teammate on another tool would silently get a weaker framework.",
     "**Baseline is measured, never estimated**: write \`config.ratchet.baseline_file\` only from numbers produced by the gates you just ran, recording the commit they were measured at. A guessed baseline is worse than none \u2014 it silently licenses regression down to the guess.",
-    "Must halt execution if the project is already fully initialized and announce completion with exactly: \\"\${i18n.t(\\"common.errors.already_initialized\\")}\\""
+    "Must halt execution if the project is already fully initialized and announce completion with exactly: \\"\${i18n.t(\\"common.errors.already_initialized\\")}\\"",
+    "**Conditional steps are decided by you, not by the resume script**: \`resume.py\` cannot tell whether a project renders an interface, so it reports a step carrying a \`condition\` under \`pending_conditional\` instead of \`missing_steps\` \u2014 otherwise a headless project would stay permanently incomplete and be re-offered a step its owner already declined. The cost of that is that \`setup_complete\` may read true while a conditional step genuinely applies. Always read \`pending_conditional\`, evaluate each condition against the project you audited, and either run the step or record the skip in \`config.files.artifacts.decisions\`. Treating an unevaluated conditional step as done is the same error as reporting an unrun gate as passed."
   ],
   "skills": [
     "Project directory auditing using automated resumption scripts and JSON parsing to detect partial or complete Conductor setups.",
@@ -4198,7 +5249,8 @@ var init_embedded = __esm({
     "Gate discovery: reading dependency manifests, script blocks, and tool configuration files to identify the project's existing linter, formatter, type checker, test runner, and coverage command, then verifying each by executing it before recording it in the gate manifest (resolve path via \`config.gates.manifest\`).",
     "Structure-check authoring: turning the project-specific invariants the user described \u2014 tenant scoping, client/server import boundaries, required authentication on endpoints, environment variable completeness, documentation kept in sync with the API \u2014 into an executable script at \`config.gates.structure_script\`, exiting non-zero on violation.",
     "Baseline measurement for the ratchet (resolve metrics from \`config.ratchet.metrics\`), recorded with the commit at which each number was observed.",
-    "Index generation with path mapping, integrity verification, git staging, and standardized commit message creation (resolve prefix from \`config.commit_conventions.setup_prefix\`)."
+    "Index generation with path mapping, integrity verification, git staging, and standardized commit message creation (resolve prefix from \`config.commit_conventions.setup_prefix\`).",
+    "Design system authoring in the DESIGN.md format: banded selection of rhythm, typographic contrast, colour strategy, shape and depth; declaration of component tokens so contrast can be verified; and recording of both design baselines so the gates are adoptable on an existing interface."
   ],
   "output_format": [
     "Begin with a high-level overview of the setup process adapted to the user's stated intent, using clear multi-line formatting.",
@@ -4780,11 +5832,15 @@ description: \${i18n.t("skills.conductor-setup.description_short")}
 ### Style Guide Recommendation \u2014 required wording
 When presenting style guide options, open with: *\${i18n.t("skills.conductor-setup.style_guide.recommendation")}* \u2014 \`{stack}\` MUST be replaced by the technology stack confirmed in the Technology Stack step. Justify the top recommendation with: *\${i18n.t("skills.conductor-setup.style_guide.reason")}*
 
+### Design System \u2014 required procedure
+Applies only when the project renders a user interface; otherwise skip the step and record the skip per the \`condition\` on that entry of \`config.files.setup_chain\`. Read [\`design-scales.md\`](\${config.protocols.design_authoring.path}) BEFORE drafting \`\${config.files.artifacts.design_system}\` and follow its procedure exactly. Ask one single-choice \`question\` per axis, presenting the band names and what each implies \u2014 never the raw numbers. Choose ONE band per axis and copy its values verbatim; an averaged answer is the failure this step exists to prevent, and it is invisible once written. The \`components\` section is mandatory: contrast is only verified on declared \`backgroundColor\`/\`textColor\` pairs, so a design system without components carries no accessibility guarantee at all.
+
 ### Completion Report \u2014 required structure
 On completion, report EXACTLY this structure, one line per generated artifact:
 
 - Open with: *\${i18n.t("skills.conductor-setup.completion.summary")}*
 - \`\${config.files.artifacts.product}\` \u2014 \${i18n.t("skills.conductor-setup.completion.product_file")} (\`{vision}\` = the product vision confirmed by the user)
+- \`\${config.files.artifacts.design_system}\` \u2014 \${i18n.t("skills.conductor-setup.completion.design_system_file")} \u2014 emit this line ONLY when the design system step ran
 - \`\${config.files.artifacts.tech_stack}\` \u2014 \${i18n.t("skills.conductor-setup.completion.tech_stack_file")} (\`{stack}\` = the confirmed technology stack)
 - \`\${config.files.artifacts.decisions}\` \u2014 \${i18n.t("skills.conductor-setup.completion.decisions_file")}
 - \`\${config.files.artifacts.workflow}\` \u2014 \${i18n.t("skills.conductor-setup.completion.workflow_file")} (\`{coverage}\` = \`config.thresholds.coverage_min_percent\`)
@@ -5496,6 +6552,164 @@ layer below.
 `
       },
       {
+        sourcePath: "D:/conductor/src/internal/templates/data/skills/conductor-setup/assets/design-scales.md",
+        category: "skills",
+        subpath: "conductor-setup/assets",
+        ext: ".md",
+        content: `# Design Scales \u2014 authoring aid for \`DESIGN.md\`
+
+Read this before writing \`\${config.directories.conductor_root}/DESIGN.md\`.
+
+## Why this file exists
+
+A weak model asked "what spacing should sections use?" answers with the average
+of everything it has read. The average of all CSS ever written is a 1.25 type
+ratio, 8/16/24 spacing, an 8px radius and a blue-violet accent. That answer is
+not a mistake \u2014 it is the centre of the distribution, and the centre is what
+generic looks like. Prose ("make it modern", "be bold") does not move it; the
+model regresses to the mean on the next token.
+
+What does move it is removing the choice. Each axis below offers named bands
+with concrete numbers. Pick **one band per axis** and copy its values
+literally into the front matter. Never average two bands, never interpolate,
+never invent a value "between" them.
+
+This is enforced, not advised: the design gate reads
+\`\${config.directories.conductor_root}/gates/design-bands.json\` and rejects a
+design system whose anchor value on any axis sits between bands. The two files
+carry the same numbers \u2014 change one and change the other.
+
+## Brownfield first
+
+If the project already has an interface, do not start from the bands. Run:
+
+\`\`\`
+node \${config.directories.conductor_root}/gates/design-extract.mjs --src src --format json
+\`\`\`
+
+It reports the colours and scales the code already uses, infers which colour is
+ink, which is paper and which is the accent, and names the band nearest to each
+axis. Present that as the proposal \u2014 "your code is closest to \`airy\`, with
+\`#1A1C1E\` as ink and \`#B8422E\` as the accent; adopt these or redesign?" \u2014 and
+run the questions below only to confirm or override.
+
+It never writes and never blocks. Frequency is evidence, not endorsement: the
+most repeated value may be the most repeated mistake, so every extracted value
+is confirmed before it becomes a token.
+
+## Procedure
+
+1. Ask the user one question per axis, in the order below, as a single-choice
+   \`question\`. Show the band names and what each implies \u2014 never the raw
+   numbers, which are an implementation detail.
+2. If the user has no preference on an axis, choose from the product vision
+   recorded in \`\${config.files.artifacts.product}\`, and say which band you
+   chose and why. Do not fall back to "the safe middle" \u2014 a stated band that
+   is wrong is correctable, an averaged one is invisible.
+3. Write \`DESIGN.md\` using the values of the chosen bands verbatim.
+4. Fill the \`components\` section. It is not optional: the contrast check only
+   examines \`backgroundColor\`/\`textColor\` pairs that are actually declared, so
+   a design system without components has no accessibility verification at all.
+5. Run \`node \${config.directories.conductor_root}/gates/design-gate.mjs\` and fix what blocks.
+6. Record the baselines: copy the approved file to
+   \`\${config.directories.conductor_root}/gates/design-baseline.md\`, then run
+   \`node \${config.directories.conductor_root}/gates/design-tokens-gate.mjs --update-baseline\`.
+
+## Axis 1 \u2014 Vertical rhythm
+
+How much the page breathes. The single most visible difference between a
+designed page and a generated one.
+
+| Band | Feel | \`spacing\` tokens |
+| --- | --- | --- |
+| \`compact\` | Dense tools, dashboards, tables | xs 4, sm 8, md 12, lg 20, xl 32, **section 48** |
+| \`airy\` | Product marketing, apps, most SaaS | xs 4, sm 8, md 16, lg 32, xl 64, **section 96** |
+| \`editorial\` | Long-form, portfolio, brand-led | xs 8, sm 16, md 24, lg 48, xl 96, **section 160** |
+
+The \`section\` token is required \u2014 it is the gap between page sections, it is what
+the gate reads for this axis, and it is a different number from \`xl\`. A system
+without it leaves the axis unchecked.
+
+The mean answer is a 64px section gap. None of the bands offer it.
+
+## Axis 2 \u2014 Typographic contrast
+
+The ratio between the largest heading and body text. A weak model defaults to
+roughly 2x, which reads as a document rather than a designed screen.
+
+| Band | Ratio | \`display\` | \`headline-lg\` | \`body-md\` |
+| --- | --- | --- | --- | --- |
+| \`functional\` | 2.0x | 32px | 24px | 16px |
+| \`expressive\` | 3.5x | 56px | 32px | 16px |
+| \`editorial\` | 4.5x | 72px | 32px | 16px |
+
+Tighten \`lineHeight\` as size grows \u2014 1.6 at body, 1.2 at headline, 1.05 at
+display \u2014 and apply negative \`letterSpacing\` (-0.02em to -0.03em) only at
+display sizes. A 72px heading at line-height 1.5 looks broken, and that
+combination is exactly what averaging produces.
+
+## Axis 3 \u2014 Colour strategy
+
+| Band | Rule | Palette shape |
+| --- | --- | --- |
+| \`monochrome+1\` | One accent, used only for the single most important action per screen | primary (ink), neutral (background), one accent, plus \`error\` |
+| \`dual\` | One accent plus one supporting hue for secondary emphasis | as above plus \`secondary\` |
+| \`expressive\` | Accent family with tonal steps for surfaces and states | accent-10 \u2026 accent-90, plus neutral ramp |
+
+\`monochrome+1\` is the safest strong choice and the hardest to make ugly. Note
+that it is not the average: the average is three or four competing hues.
+
+Whichever band is chosen, \`neutral\` should be a tinted off-white (warm
+\`#F7F5F2\`, cool \`#F4F6F8\`) rather than pure \`#FFFFFF\`, and \`primary\` a near-
+black (\`#141517\`) rather than \`#000000\`. Pure black on pure white is the
+strongest signal of an unconsidered palette.
+
+## Axis 4 \u2014 Shape
+
+| Band | \`rounded\` tokens |
+| --- | --- |
+| \`sharp\` | none 0, sm 2px, full 9999px |
+| \`architectural\` | none 0, sm 4px, md 8px, full 9999px |
+| \`soft\` | sm 8px, md 16px, lg 24px, full 9999px |
+
+Do not mix bands within a view \u2014 a sharp card containing pill buttons reads as
+an accident unless the whole system commits to that contrast deliberately.
+
+## Axis 5 \u2014 Depth
+
+| Band | How hierarchy is conveyed |
+| --- | --- |
+| \`tonal\` | Layered background values only. No shadows. |
+| \`bordered\` | 1px borders in \`secondary\`, no shadows. |
+| \`shadowed\` | Two shadow levels maximum, low opacity, large blur. |
+
+\`tonal\` and \`bordered\` are much harder to get wrong than \`shadowed\`, and a
+default shadow (\`0 2px 4px rgba(0,0,0,0.1)\`) is the mean answer.
+
+## Banned defaults
+
+If the draft contains any of these, an axis was averaged rather than chosen.
+Go back to the band and copy its values.
+
+- A spacing scale of 8 / 16 / 24 / 32 with a section gap of 48\u201364px
+- A display size under 32px, or a display/body ratio between 2.2x and 3.4x
+- \`#FFFFFF\` as \`neutral\`, or \`#000000\` as \`primary\`
+- A radius of 6px, 10px or 12px in the \`architectural\` or \`sharp\` bands
+- More than two font families, or more than three font weights
+- An accent that is any of \`#3B82F6\`, \`#6366F1\`, \`#8B5CF6\` \u2014 the three most
+  common generated blues and violets
+
+## What this file does not decide
+
+These bands constrain style, not composition. Hierarchy, information density,
+what belongs above the fold, and when a modal beats an inline panel are not
+expressible as tokens; they belong in the \`Overview\` and \`Layout\` prose of
+\`DESIGN.md\`, which is what the agent falls back to when no token applies.
+Write those sections as instructions, not adjectives: "prefer the more spacious
+option when unsure" is actionable, "modern and clean" is not.
+`
+      },
+      {
         sourcePath: "D:/conductor/src/internal/templates/data/skills/conductor-setup/assets/subagent-protocol.md",
         category: "skills",
         subpath: "conductor-setup/assets",
@@ -5867,11 +7081,23 @@ def determine_resumption():
 
     marker_present = os.path.exists(os.path.join(conductor_dir, setup_marker))
 
-    # Every chain step that has not produced its artifact yet, in chain order.
+    # A step carrying a \`condition\` does not apply to every project \u2014 the design
+    # system is skipped for a library, a CLI or a headless service. Its artifact
+    # will never exist there, so counting it as missing would leave the setup
+    # permanently incomplete: the marker stays, \`missing_steps\` never empties,
+    # and every later run greets as an upgrade and re-offers a step the user
+    # already declined. Conditional steps are reported separately so the skill
+    # can decide whether they apply, and they never block completion.
     missing_steps = [
         {"step": item["step"], "file": item["file"]}
         for item in setup_chain
-        if not checklist[item["file"]]
+        if not checklist[item["file"]] and "condition" not in item
+    ]
+
+    pending_conditional = [
+        {"step": item["step"], "file": item["file"], "condition": item["condition"]}
+        for item in setup_chain
+        if not checklist[item["file"]] and "condition" in item
     ]
 
     next_step = missing_steps[0] if missing_steps else None
@@ -5889,6 +7115,7 @@ def determine_resumption():
         "is_upgrade": marker_present and bool(missing_steps),
         "checklist": checklist,
         "missing_steps": missing_steps,
+        "pending_conditional": pending_conditional,
         "next_step": next_step,
     }
 
@@ -5985,11 +7212,14 @@ var init_config = __esm({
           tracks_registry: "tracks.md",
           track_metadata: "metadata.json",
           state: "state.md",
-          lessons: "lessons.md"
+          lessons: "lessons.md",
+          design_system: "DESIGN.md"
         },
+        context_files_policy: "These are the files a context load reads when they exist. An entry whose setup_chain step carries a `condition` is absent by design on a project the condition excludes \u2014 read it when present, say nothing when it is not, and never report its absence as an incomplete setup.",
         context_files: [
           "product.md",
           "product-guidelines.md",
+          "DESIGN.md",
           "tech-stack.md",
           "decisions.md",
           "workflow.md",
@@ -6009,6 +7239,7 @@ var init_config = __esm({
         setup_chain: [
           { file: "product.md", step: "Product Definition" },
           { file: "product-guidelines.md", step: "Product Guidelines" },
+          { file: "DESIGN.md", step: "Design System", condition: "Only when the project renders a user interface. For a library, CLI or headless service, skip this step, say so once, and record the skip in config.files.artifacts.decisions \u2014 a skipped step that is stated is a decision, a silent one is a gap." },
           { file: "tech-stack.md", step: "Technology Stack" },
           { file: "decisions.md", step: "Architecture Decisions" },
           { file: "code_styleguides", step: "Code Style Guides", is_directory: true },
@@ -6032,6 +7263,9 @@ var init_config = __esm({
       protocols: {
         subagent_dispatch: {
           path: "${config.tool_dir}/skills/conductor-setup/assets/subagent-protocol.md"
+        },
+        design_authoring: {
+          path: "${config.tool_dir}/skills/conductor-setup/assets/design-scales.md"
         }
       },
       gates: {
@@ -6045,7 +7279,9 @@ var init_config = __esm({
           typecheck: "The project's existing type checker or compiler in a no-emit mode.",
           test: "The full test suite.",
           coverage: "Coverage measurement. Compared against config.thresholds per config.thresholds.coverage_mode.",
-          structure: "Project-specific structural checks that no off-the-shelf tool covers. Generated at setup from what the user described \u2014 e.g. tenant scoping, no server imports in client code, required auth on endpoints, environment variables complete, documentation in sync with the API, files within config.thresholds.file_max_lines."
+          structure: "Project-specific structural checks that no off-the-shelf tool covers. Generated at setup from what the user described \u2014 e.g. tenant scoping, no server imports in client code, required auth on endpoints, environment variables complete, documentation in sync with the API, files within config.thresholds.file_max_lines.",
+          design: "Soundness of the design system itself: broken token references, WCAG AA contrast on declared component pairs, whether each numeric axis landed on a declared band rather than between bands, and \u2014 against the recorded baseline \u2014 any widening or flattening of the token scales from inside an implementation task. Runs config.gates.scripts_dir/design-gate.mjs. Absent when the project has no user interface.",
+          design_tokens: "Whether the code actually uses the design system: colour and dimension literals that appear in source but in no token. Ratcheted against a recorded baseline so a legacy interface can adopt it without being rewritten. Runs config.gates.scripts_dir/design-tokens-gate.mjs. Absent when the project has no user interface."
         },
         entry_fields: {
           cmd: "The exact command, runnable from the project root. Null when the project has no such tool.",
@@ -6072,7 +7308,8 @@ var init_config = __esm({
         guarded_invariants: [
           "History rewriting and destructive resets \u2014 `git reset --hard`, `git checkout --` over tracked files, forced pushes, `git notes` removal. Conductor's revert skill reconstructs a track from git notes and commit history; an agent rewriting that history destroys the only record of what it did, silently and irreversibly.",
           "Direct writes by a subagent to any file in config.files.control_files[] \u2014 the tracks registry, the plan, the index, the track metadata, the state document, and the lessons ledger. These are orchestrator-owned by contract, and the contract is currently prose that nothing enforces.",
-          "Edits to the gate manifest, the ratchet baseline, or the structure script from inside an implementation task. Loosening the gate to make a task pass is the failure mode gates exist to prevent, and it looks like progress while it happens."
+          "Edits to the gate manifest, the ratchet baseline, or the structure script from inside an implementation task. Loosening the gate to make a task pass is the failure mode gates exist to prevent, and it looks like progress while it happens.",
+          "Edits to config.files.artifacts.design_system from inside an implementation task. Widening the palette or flattening a scale so a component fits is the same failure wearing different clothes, and it is the cheaper path for the model every time: changing one token is less work than reworking the component. A design system that genuinely needs to change is a design track, decided with the user, never a side effect of implementing something else."
         ],
         limits: "These are guardrails for an agent acting in good faith, not a security boundary. A command can be spelled in ways a matcher will not recognise, so treat this as protection of the framework's invariants \u2014 never as protection against a malicious instruction."
       },
@@ -6167,7 +7404,7 @@ var init_config = __esm({
       user_interaction_tools: ["ask_question", "AskUserQuestion", "NotifyUser"],
       enums: {
         track_types: ["MVP", "Feature", "Bug", "Chore", "Spike", "Epic", "Hotfix"],
-        finding_categories: ["plan_compliance", "style", "security", "correctness", "coverage", "performance", "accessibility", "i18n", "decision_conflict"],
+        finding_categories: ["plan_compliance", "style", "security", "correctness", "coverage", "performance", "accessibility", "design", "i18n", "decision_conflict"],
         finding_severities: ["high", "medium", "low"],
         trust_levels: ["1p", "3p", "1p-verified", "community-audited"],
         task_statuses: {
@@ -8477,7 +9714,7 @@ var init_package = __esm({
   "package.json"() {
     package_default = {
       name: "@luansilvadb/conductor",
-      version: "1.3.22",
+      version: "1.3.23",
       description: "Conductor - Spec Driven Development",
       type: "module",
       bin: {

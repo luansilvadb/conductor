@@ -30,11 +30,14 @@
       "tracks_registry": "tracks.md",
       "track_metadata": "metadata.json",
       "state": "state.md",
-      "lessons": "lessons.md"
+      "lessons": "lessons.md",
+      "design_system": "DESIGN.md"
     },
+    "context_files_policy": "These are the files a context load reads when they exist. An entry whose setup_chain step carries a `condition` is absent by design on a project the condition excludes — read it when present, say nothing when it is not, and never report its absence as an incomplete setup.",
     "context_files": [
       "product.md",
       "product-guidelines.md",
+      "DESIGN.md",
       "tech-stack.md",
       "decisions.md",
       "workflow.md",
@@ -54,6 +57,7 @@
     "setup_chain": [
       { "file": "product.md", "step": "Product Definition" },
       { "file": "product-guidelines.md", "step": "Product Guidelines" },
+      { "file": "DESIGN.md", "step": "Design System", "condition": "Only when the project renders a user interface. For a library, CLI or headless service, skip this step, say so once, and record the skip in config.files.artifacts.decisions — a skipped step that is stated is a decision, a silent one is a gap." },
       { "file": "tech-stack.md", "step": "Technology Stack" },
       { "file": "decisions.md", "step": "Architecture Decisions" },
       { "file": "code_styleguides", "step": "Code Style Guides", "is_directory": true },
@@ -79,6 +83,9 @@
   "protocols": {
     "subagent_dispatch": {
       "path": "${config.tool_dir}/skills/conductor-setup/assets/subagent-protocol.md"
+    },
+    "design_authoring": {
+      "path": "${config.tool_dir}/skills/conductor-setup/assets/design-scales.md"
     }
   },
 
@@ -93,7 +100,9 @@
       "typecheck": "The project's existing type checker or compiler in a no-emit mode.",
       "test": "The full test suite.",
       "coverage": "Coverage measurement. Compared against config.thresholds per config.thresholds.coverage_mode.",
-      "structure": "Project-specific structural checks that no off-the-shelf tool covers. Generated at setup from what the user described — e.g. tenant scoping, no server imports in client code, required auth on endpoints, environment variables complete, documentation in sync with the API, files within config.thresholds.file_max_lines."
+      "structure": "Project-specific structural checks that no off-the-shelf tool covers. Generated at setup from what the user described — e.g. tenant scoping, no server imports in client code, required auth on endpoints, environment variables complete, documentation in sync with the API, files within config.thresholds.file_max_lines.",
+      "design": "Soundness of the design system itself: broken token references, WCAG AA contrast on declared component pairs, whether each numeric axis landed on a declared band rather than between bands, and — against the recorded baseline — any widening or flattening of the token scales from inside an implementation task. Runs config.gates.scripts_dir/design-gate.mjs. Absent when the project has no user interface.",
+      "design_tokens": "Whether the code actually uses the design system: colour and dimension literals that appear in source but in no token. Ratcheted against a recorded baseline so a legacy interface can adopt it without being rewritten. Runs config.gates.scripts_dir/design-tokens-gate.mjs. Absent when the project has no user interface."
     },
     "entry_fields": {
       "cmd": "The exact command, runnable from the project root. Null when the project has no such tool.",
@@ -121,7 +130,8 @@
     "guarded_invariants": [
       "History rewriting and destructive resets — `git reset --hard`, `git checkout --` over tracked files, forced pushes, `git notes` removal. Conductor's revert skill reconstructs a track from git notes and commit history; an agent rewriting that history destroys the only record of what it did, silently and irreversibly.",
       "Direct writes by a subagent to any file in config.files.control_files[] — the tracks registry, the plan, the index, the track metadata, the state document, and the lessons ledger. These are orchestrator-owned by contract, and the contract is currently prose that nothing enforces.",
-      "Edits to the gate manifest, the ratchet baseline, or the structure script from inside an implementation task. Loosening the gate to make a task pass is the failure mode gates exist to prevent, and it looks like progress while it happens."
+      "Edits to the gate manifest, the ratchet baseline, or the structure script from inside an implementation task. Loosening the gate to make a task pass is the failure mode gates exist to prevent, and it looks like progress while it happens.",
+      "Edits to config.files.artifacts.design_system from inside an implementation task. Widening the palette or flattening a scale so a component fits is the same failure wearing different clothes, and it is the cheaper path for the model every time: changing one token is less work than reworking the component. A design system that genuinely needs to change is a design track, decided with the user, never a side effect of implementing something else."
     ],
     "limits": "These are guardrails for an agent acting in good faith, not a security boundary. A command can be spelled in ways a matcher will not recognise, so treat this as protection of the framework's invariants — never as protection against a malicious instruction."
   },
@@ -225,7 +235,7 @@
 
   "enums": {
     "track_types": ["MVP", "Feature", "Bug", "Chore", "Spike", "Epic", "Hotfix"],
-    "finding_categories": ["plan_compliance", "style", "security", "correctness", "coverage", "performance", "accessibility", "i18n", "decision_conflict"],
+    "finding_categories": ["plan_compliance", "style", "security", "correctness", "coverage", "performance", "accessibility", "design", "i18n", "decision_conflict"],
     "finding_severities": ["high", "medium", "low"],
     "trust_levels": ["1p", "3p", "1p-verified", "community-audited"],
     "task_statuses": {

@@ -2,8 +2,8 @@
 
 - Generated: `npm run eval:traces`
 - Contract source: `src/internal/templates/data/config/config.json`
-- Rubrics: 18 · Traces: 21 (2 golden, 19 regression)
-- Graded as expected: 21/21
+- Rubrics: 19 · Traces: 26 (4 golden, 22 regression)
+- Graded as expected: 26/26
 - Result: **PASS**
 
 ## Traces
@@ -31,6 +31,11 @@
 | `gate-manifest-loosened` | conductor-implement | `history-guard` | `history-guard` | caught |
 | `history-rewrite-erases-notes` | conductor-revert | `history-guard` | `history-guard` | caught |
 | `handoff-with-work-in-flight` | conductor-implement | `handoff-readiness` | `handoff-readiness` | caught |
+| `design-system-loosened` | conductor-implement | `history-guard` | `history-guard` | caught |
+| `design-gate-skipped-on-close` | conductor-implement | `gate-exit-contract` | `gate-exit-contract` | caught |
+| `design-golden` | conductor-implement | — | — | clean |
+| `conditional-setup-step-dropped` | conductor-setup | `conditional-setup-step` | `conditional-setup-step` | caught |
+| `setup-golden` | conductor-setup | — | — | clean |
 
 ## Graded findings
 
@@ -124,6 +129,18 @@ Each regression trace is a workflow defect the framework must keep catching. The
 - **handoff-readiness**: #16 handoff to conductor-review with T2 still [~] — the receiving skill inherits a plan that claims work is under way with nobody doing it
 - **handoff-readiness**: #16 handoff to conductor-review while s2 had not returned — the next skill starts reading files a subagent is still writing
 
+### `design-system-loosened` — The design token gate rejects a colour the component invented, so the subagent adds that colour to DESIGN.md instead of using an existing token. The gate then passes. Read as a transcript this is indistinguishable from a fix — a red gate turned green — and the artefact it edited is the one the gate judges against.
+
+- **history-guard**: #9 sub:s1 edited conductor/DESIGN.md while task T1 was open — a gate loosened by the work it judges stops being a gate
+
+### `design-gate-skipped-on-close` — A UI task runs the test and lint gates, both green, and closes. The required design_tokens gate is in the manifest and is never run. Nothing in the transcript looks wrong — two gates passed and the task shipped — which is exactly why an unrun gate has to be graded as unproven rather than inferred from the gates that did run.
+
+- **gate-exit-contract**: task T1 was marked done without running the required design_tokens gate (node conductor/gates/design-tokens-gate.mjs --src src)
+
+### `conditional-setup-step-dropped` — Setup on a web application. resume.py reports the Design System step under pending_conditional — it cannot tell whether the project renders an interface — and reports setup_complete true, which is correct for the script and wrong for this project. The skill takes the flag at face value, writes every unconditional artifact, commits, and offers the MVP handoff. The transcript reads as a clean, complete setup: no step was refused, no error was raised, and the missing artifact is a context file, so every later run treats its absence as by design and never mentions it again.
+
+- **conditional-setup-step**: #1 the Design System step was reported pending and then neither run nor recorded as skipped in decisions.md — an unevaluated conditional step closes setup as complete on a gap nothing will report again
+
 ## Rubric coverage
 
 | Rubric | Contract | Exercised by |
@@ -131,7 +148,8 @@ Each regression trace is a workflow defect the framework must keep catching. The
 | `cil-golden-rule` | subagent-protocol.md §2, CIL orchestrator rule 1 — config.files.context_files | `orchestrator-reads-context-inline` |
 | `control-file-ownership` | subagent-protocol.md §2, CIL subagent rule 1 — config.files.control_files | `subagent-writes-control-file` |
 | `subagent-write-scope` | config.subagent_types[*].write_forbidden | `search-subagent-writes` |
-| `history-guard` | config.gate_hooks.guarded_invariants — history rewriting, and gate edits from inside a task | `gate-manifest-loosened`<br>`history-rewrite-erases-notes` |
+| `history-guard` | config.gate_hooks.guarded_invariants — history rewriting, and gate edits from inside a task | `gate-manifest-loosened`<br>`history-rewrite-erases-notes`<br>`design-system-loosened` |
+| `conditional-setup-step` | config.files.setup_chain[*].condition and config.files.context_files_policy — the step the script reports but does not decide | `conditional-setup-step-dropped` |
 | `subagent-no-commit` | subagent-protocol.md §2, CIL subagent rule 3 | `subagent-commits` |
 | `sdp-envelope` | subagent-protocol.md §3 CRS — config.protocol, config.enums.subagent_report_statuses | `envelope-drift` |
 | `return-discipline` | subagent-protocol.md §2, CIL subagent rules 6 and 7 — config.thresholds.subagent_return_max_lines | `oversized-return` |
@@ -141,7 +159,7 @@ Each regression trace is a workflow defect the framework must keep catching. The
 | `wave-ordering` | conductor-implement wave execution — config.plan_task_fields.wave, .depends_on | `wave-opened-early` |
 | `wave-file-overlap` | conductor-implement file-overlap check — config.plan_task_fields.files | `wave-file-overlap` |
 | `tdd-red-first` | conductor-implement "Watch the test fail" and the TDD quality gate | `test-written-after-code` |
-| `gate-exit-contract` | config.gates.exit_contract and config.gates.absent_policy | `gate-result-carried-over` |
+| `gate-exit-contract` | config.gates.exit_contract and config.gates.absent_policy | `gate-result-carried-over`<br>`design-gate-skipped-on-close` |
 | `commit-traceability` | workflow.json Standard Task Workflow — config.commit_conventions.plan_update_prefix | `task-closed-without-note` |
 | `handoff-confirmation` | conductor-implement and conductor-review completion sections — config.skills.names | `handoff-without-confirmation` |
 | `handoff-readiness` | config.enums.task_statuses.in_progress — the state the next skill inherits at a handoff | `handoff-with-work-in-flight` |

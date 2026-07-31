@@ -39,11 +39,15 @@ ${i18n.list("skills.conductor-setup.output_format")}
 ### Style Guide Recommendation — required wording
 When presenting style guide options, open with: *${i18n.t("skills.conductor-setup.style_guide.recommendation")}* — `{stack}` MUST be replaced by the technology stack confirmed in the Technology Stack step. Justify the top recommendation with: *${i18n.t("skills.conductor-setup.style_guide.reason")}*
 
+### Design System — required procedure
+Applies only when the project renders a user interface; otherwise skip the step and record the skip per the `condition` on that entry of `config.files.setup_chain`. Read [`design-scales.md`](${config.protocols.design_authoring.path}) BEFORE drafting `${config.files.artifacts.design_system}` and follow its procedure exactly. Ask one single-choice `question` per axis, presenting the band names and what each implies — never the raw numbers. Choose ONE band per axis and copy its values verbatim; an averaged answer is the failure this step exists to prevent, and it is invisible once written. The `components` section is mandatory: contrast is only verified on declared `backgroundColor`/`textColor` pairs, so a design system without components carries no accessibility guarantee at all.
+
 ### Completion Report — required structure
 On completion, report EXACTLY this structure, one line per generated artifact:
 
 - Open with: *${i18n.t("skills.conductor-setup.completion.summary")}*
 - `${config.files.artifacts.product}` — ${i18n.t("skills.conductor-setup.completion.product_file")} (`{vision}` = the product vision confirmed by the user)
+- `${config.files.artifacts.design_system}` — ${i18n.t("skills.conductor-setup.completion.design_system_file")} — emit this line ONLY when the design system step ran
 - `${config.files.artifacts.tech_stack}` — ${i18n.t("skills.conductor-setup.completion.tech_stack_file")} (`{stack}` = the confirmed technology stack)
 - `${config.files.artifacts.decisions}` — ${i18n.t("skills.conductor-setup.completion.decisions_file")}
 - `${config.files.artifacts.workflow}` — ${i18n.t("skills.conductor-setup.completion.workflow_file")} (`{coverage}` = `config.thresholds.coverage_min_percent`)

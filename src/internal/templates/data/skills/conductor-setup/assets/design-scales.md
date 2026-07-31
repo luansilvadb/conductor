@@ -41,9 +41,37 @@ is confirmed before it becomes a token.
 
 ## Procedure
 
-1. Ask the user one question per axis, in the order below, as a single-choice
-   `question`. Show the band names and what each implies — never the raw
-   numbers, which are an implementation detail.
+0. **Ask for references first.** Before any band question: *"Show me two or
+   three pages you admire, and say in one sentence what you like about each."*
+   Read each sentence against
+   `${config.directories.conductor_root}/gates/intent-vocabulary.json`, which
+   maps what people actually say onto these axes — "the rhythm breathes" is a
+   rhythm answer, "premium" is almost always negative space rather than
+   ornament, "feels alive" is motion. Show the user the mapping you extracted
+   and let them correct it; it is a claim about what they meant, and they are
+   the only one who can confirm it.
+
+   Then ask which single reference the product should feel most like. That one
+   is **primary** and sets every axis it speaks to; each other reference may
+   override at most one axis, and only where the primary is silent. Do not
+   average them — three admired pages have three identities, and the middle of
+   three coherent positions is the mean answer this whole file exists to
+   prevent, reached by a route that is harder to notice.
+
+   Record all of it in `${config.directories.conductor_root}/design/intent.json`:
+   each reference with its sentence, which is primary, which axis each one
+   decided, and any reason that mapped to no axis, verbatim. Unmapped reasons
+   are usually the part specific to this product; no gate acts on them, and
+   dropping them loses the most product-specific input the project will get.
+
+   This step is what turns the questions below from a menu into a confirmation.
+   Skip it and the bands are still chosen, but nobody can later say why — and a
+   band nobody can account for is a band that drifts.
+
+1. Ask the remaining questions one axis at a time, as a single-choice
+   `question`, proposing the band the references imply and saying which
+   reference implied it. Show the band names and what each implies — never the
+   raw numbers, which are an implementation detail.
 2. If the user has no preference on an axis, choose from the product vision
    recorded in `${config.files.artifacts.product}`, and say which band you
    chose and why. Do not fall back to "the safe middle" — a stated band that

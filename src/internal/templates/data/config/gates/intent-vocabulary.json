@@ -1,0 +1,65 @@
+{
+  "description": "Maps what a person says about a page they admire onto the axes this framework can act on. The compression step between human taste and executable parameters.",
+
+  "why": "Every question this framework asks about design is phrased in its own terms — which rhythm band, which type contrast, which depth system. Almost nobody thinks that way, including experienced designers. What they have is 'I want the tension of that landing page' and 'the type on that campaign is doing something right'. That sentence is not vague: it carries structural information, and discarding it in favour of a band menu throws away the most valuable input the project will ever receive. Asking for the band directly gets an answer; asking for a reference and a reason gets the same answer plus the intent behind it, which is what survives into every later decision the band alone cannot settle.",
+
+  "what_this_is_not": "This does not generate identity and does not evaluate references. It transports a signal a person already has across the boundary into parameters the gates can hold. Originality, surprise and aesthetic signature stay where design-scales.md puts them — outside what any of this reaches. The framework's honest role here is fidelity, not creation: carry the intent without pretending it authored it.",
+
+  "signals": {
+    "rhythm": {
+      "axis": "rhythm",
+      "phrases": ["ritmo", "rhythm", "pacing", "breathing", "espaçado", "spacious", "airy", "dense", "denso", "compacto", "compact", "respira"],
+      "reads_as": "cadence and density — how much space the page gives itself between ideas",
+      "maps_to": { "dense": "compact", "spacious": "airy", "very spacious": "editorial" }
+    },
+    "type_contrast": {
+      "axis": "type_contrast",
+      "phrases": ["editorial", "tipografia", "typography", "headline", "type-led", "agressividade tipográfica", "typographic", "bold type", "titulos", "revista", "magazine"],
+      "reads_as": "typographic hierarchy — how far the display size sits from the body size",
+      "maps_to": { "restrained": "functional", "editorial": "expressive", "type-led": "editorial" }
+    },
+    "depth": {
+      "axis": "depth",
+      "phrases": ["profundidade", "depth", "camadas", "layers", "elevação", "elevation", "flat", "plano", "sombra", "shadow"],
+      "reads_as": "layering and contrast — how hierarchy is conveyed between surfaces",
+      "maps_to": { "flat": "tonal", "bordered": "bordered", "layered": "shadowed" }
+    },
+    "premium": {
+      "axis": "rhythm",
+      "phrases": ["premium", "sofisticado", "sophisticated", "luxo", "luxury", "refinado", "refined", "caro", "expensive", "elegante", "elegant"],
+      "reads_as": "proportion and negative space — 'premium' almost always means more space per element, not more ornament",
+      "maps_to": { "premium": "editorial" }
+    },
+    "alive": {
+      "axis": "motion",
+      "phrases": ["vivo", "alive", "movimento", "motion", "animado", "animated", "fluido", "fluid", "responsivo ao scroll", "kinetic"],
+      "reads_as": "motion and transitions — how much the page moves as it is read",
+      "maps_to": { "still": "restrained", "alive": "measured", "kinetic": "kinetic" }
+    },
+    "tension": {
+      "axis": "composition",
+      "phrases": ["tensão", "tension", "assimetria", "asymmetry", "quebra", "breaks the grid", "ousado", "bold layout", "inesperado", "unexpected"],
+      "reads_as": "composition — whether the page varies its own frame, which is the grammar's turn movement and the bleed invariant",
+      "maps_to": { "calm": "fewer turns", "tense": "turn plus bleed" }
+    },
+    "image_ratio": {
+      "axis": "composition",
+      "phrases": ["relação texto/imagem", "text to image", "imagens grandes", "big images", "visual", "fotografia", "photography", "ilustração", "illustration"],
+      "reads_as": "how much of the page is image — which archetypes carry the argument, and how much asset work the project is committing to",
+      "maps_to": { "text-led": "editorial-offset, data-grid", "image-led": "full-bleed-media, hero-full-bleed" }
+    }
+  },
+
+  "elicitation": {
+    "ask": "Show me two or three pages you admire, and say in one sentence what you like about each.",
+    "why_this_question": "It is the question a designer would ask and the one this framework never asked. 'Minimal or expressive?' returns a word; 'what do you like about it?' returns the reason, and the reason is where the structure is hiding.",
+    "then": "Read each sentence against `signals` above, name the axis you extracted and the band it implies, and show the user that mapping before writing anything. The mapping is a claim about what they meant — they are the only one who can confirm it, and confirming it takes them one line.",
+    "when_nothing_matches": "If a sentence maps to no signal here, record it verbatim in the intent file as an unmapped note and say so. An unmapped reason is not noise: it is usually the part that is specific to this product, and inventing a band for it is worse than carrying it forward as prose for a human to act on."
+  },
+
+  "the_averaging_trap": {
+    "rule": "One reference is PRIMARY and decides the identity. The others inform named axes only. Never average them, and never take the majority.",
+    "why": "This is the failure mode that would undo the whole point. Three admired pages generally have three different identities — that is why the person admires all three. Averaging them produces something in the middle of three coherent positions, which is precisely the mean answer this framework exists to prevent, arrived at by a more sophisticated route and therefore harder to notice. A page built from the primary reference's rhythm, the second's type and the third's depth is not a synthesis; it is three-quarters of nothing.",
+    "how": "Ask which one the product should feel most like. That is the primary, and it sets every axis it speaks to. Each remaining reference may override at most one axis, and only where it says something the primary is silent about. Record which reference decided which axis in the intent file, so a later track can see where each parameter came from instead of re-deriving it from taste."
+  }
+}

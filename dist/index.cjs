@@ -3427,6 +3427,7 @@ var init_embedded = __esm({
       "coverage": "Coverage measurement. Compared against config.thresholds per config.thresholds.coverage_mode.",
       "structure": "Project-specific structural checks that no off-the-shelf tool covers. Generated at setup from what the user described \u2014 e.g. tenant scoping, no server imports in client code, required auth on endpoints, environment variables complete, documentation in sync with the API, files within config.thresholds.file_max_lines.",
       "design": "Soundness of the design system itself: broken token references, WCAG AA contrast on declared component pairs, whether each numeric axis landed on a declared band rather than between bands, whether the type families match the selected pairing from config.gates.scripts_dir/type-pairings.json and number no more than two, and \u2014 against the recorded baseline \u2014 any widening or flattening of the token scales from inside an implementation task. Runs config.gates.scripts_dir/design-gate.mjs. Absent when the project has no user interface.",
+      "design_intent": "Whether the design parameters still say what the person said. At setup the user names two or three pages they admire and one sentence about each; those sentences are read against config.gates.scripts_dir/intent-vocabulary.json, mapped to axes, and recorded in conductor/design/intent.json with the reference each parameter came from. This gate checks that the recorded reason and the configured band still agree, and that exactly one reference is primary \u2014 averaging several admired pages produces something in the middle of three coherent positions, which is the mean answer arrived at by a more sophisticated route. It does NOT judge whether the interface resembles the references; nothing here can settle that. Runs config.gates.scripts_dir/design-intent-gate.mjs. Absent when the project has no user interface.",
       "design_grammar": "Whether each page's declared composition is a valid sentence in the composition grammar (config.gates.scripts_dir/design-grammar.json): a page is an ordered list of archetypes drawn from a finite vocabulary, and it must derive from one of the declared page grammars as well as satisfy the variety invariants \u2014 no adjacent repeat, a floor on distinct archetypes, a cap on centred entry, alternating density. This is the earliest and cheapest design gate: it reads a list of names, so it runs while the page is still an outline. That is the point \u2014 composition is decided when the page is planned, and an agent asked to recompose a layout it already built will nudge rather than recompose. Runs config.gates.scripts_dir/design-grammar-gate.mjs. Absent when the project has no user interface.",
       "design_assets": "Whether the images the page presents as content are actually content: one asset referenced with several different alt texts, and assets used as illustration that are too simple to be one. Not a judgement of artistic quality, which no gate can make \u2014 a check that the asset exists at the fidelity the markup claims for it, which is the same kind of check as a broken link and fails for the same reason. Ratcheted. Runs config.gates.scripts_dir/design-assets-gate.mjs. Absent when the project has no user interface.",
       "design_render": "What the page actually renders, measured in a browser at each configured viewport: whether every style axis lands on its declared band AND lands on the SAME band at every breakpoint, whether the shadow count matches the declared depth band, whether the page BUILT the composition it declared to the grammar gate, the motion invariants that only a browser can settle (nothing above the fold starts hidden, the page survives with JavaScript disabled, reduced motion calms movement rather than removing content), and the composition floors in config.gates.scripts_dir/composition-bands.json. This is the only gate that reads the rendered result rather than a declaration, which is what lets it see the two things every other design check is blind to \u2014 a utility class or custom property that carries no literal for the token scan to find, and a media query that silently moves an axis to a different band in the viewport the project calls primary. Optionally writes per-viewport screenshots, the only artefact that lets a later step review the page instead of the markup. Runs config.gates.scripts_dir/design-render-gate.mjs and needs a running page (--url) plus Playwright resolvable from the project. Playwright is NOT installed on the user's behalf: when it is absent this gate is registered absent per config.gates.absent_policy, never with a command that cannot run.",
@@ -3444,6 +3445,7 @@ var init_embedded = __esm({
       "1": "Verdict. The check ran and the project failed it \u2014 the output names what to fix, and fixing it is the work.",
       "2": "Unrunnable. The check did NOT run: the tool is missing, a runner refused to start, an input is unreadable, output was unparsable. There is no verdict, so there is nothing to fix in the code and no finding to act on."
     },
+    "where_a_rule_belongs": "Rules do not all survive equally, and where one is written decides how long it lasts. In ascending order of durability: (1) a code comment \u2014 read only by whoever opens that file; (2) documentation \u2014 read at most once, usually at setup; (3) output text from a gate \u2014 read in the moment, and only if the reader quotes it; (4) a skill instruction \u2014 read every run of that skill, but restated per skill and therefore able to drift between them; (5) configuration \u2014 read by whatever consults it, single source; (6) a referenceable contract in this file that skills and gates cite by key \u2014 the only form where a violation can be pointed at rather than argued about. Only the last two survive the evolution of the system. When a finding matters, move it up this list rather than repeating it further down: a principle stated in three skills is three copies that will disagree within a year, while the same principle as one key those skills cite is one thing to change. The corollary is the useful part \u2014 if a rule cannot be expressed as configuration or a contract, that is evidence it is advice rather than a rule, and it should be labelled as advice instead of being written more emphatically.",
     "design_gates_measure_defects_not_quality": "A green board is not a verdict on whether the interface is good. The design gates decompose into what a machine can settle \u2014 an internally sound token system, valid contrast, axes on their bands, a page that derives from the composition grammar and renders what it declared, assets that exist at the fidelity the markup claims. That is structure and integrity, which is roughly the UX quarter of what actually separates a memorable interface from a competent one, plus part of the motion share. Art direction, visual identity and original assets are the larger part and are absent from this framework entirely \u2014 they are aesthetic intent and creative work, which do not live in a closed catalogue and cannot be gated. So never report passing design gates as evidence that the interface is well designed, attractive, or of high quality: report them as the absence of the specific defects they name. The aim of these gates is to raise a low-cost interface to clearly-designed, non-generic and visually coherent \u2014 to reduce average mediocrity, not to guarantee brilliance. A page can pass every check here and still be forgettable, and saying so plainly is more useful to the user than a summary that implies otherwise.",
     "unrunnable_policy": "Exit 2 is not a soft failure and it is not a human to-do. A required gate that could not run leaves its whole subject unverified \u2014 the same position as if the gate did not exist, except that the project believes it does. Record every such gate in config.state_document.frontmatter_fields.unrunnable_gates with the exact command and the complete output including stderr, and treat the list as closed: while it is non-empty, no task may be marked done, the state document may not carry the done status, and the track may not be archived. Never reclassify an exit 2 as a pending manual check, an environment quirk, or an absent gate. Absent (config.gates.absent_policy) means the project declared it has no such tool and the skills report the check as resting on human judgement; unrunnable means the project declared a tool, the framework tried to run it, and it broke \u2014 a defect to repair, not a judgement to defer. Conflating the two is how a broken gate acquires the same standing as a deliberate decision, and it is the cheaper path every time, which is why it is named here rather than left to judgement. When the gate cannot be repaired in the current session, the resolution is to say so to the user and stop, or \u2014 with the user's explicit and recorded decision \u2014 to redeclare the gate absent in the manifest, which is a visible change to the project's contract rather than a silent one.",
     "missing_manifest_policy": "A project set up before gates existed has no manifest, and that is not an error to halt on. Say so once, offer to run the gate-configuration step of the setup skill, and proceed with every check treated as absent per absent_policy \u2014 which means the work continues and the report states plainly that nothing was machine-verified. Never fabricate a manifest to keep going, and never let the absence read as though the gates passed."
@@ -5500,6 +5502,192 @@ main();
 `
       },
       {
+        sourcePath: "D:/conductor/src/internal/templates/data/config/gates/design-intent-gate.mjs",
+        category: "config",
+        subpath: "gates",
+        ext: ".mjs",
+        content: `#!/usr/bin/env node
+// Intent coherence gate.
+//
+// The design system is a set of answers. This gate checks them against the
+// reason they were given \u2014 the references the user named at setup and what they
+// said about each.
+//
+// Why this is a gate and not a note: intent is the one input that arrives once,
+// early, from a person, and is never regenerated. Every later track reads the
+// bands and the tokens; none of them reads the sentence that produced those
+// bands, so a band quietly changed in track four cannot be checked against
+// anything, and by then nobody remembers that \`airy\` was chosen because the user
+// said the reference "breathes". Recording the intent as a referenceable
+// contract is what keeps that sentence available and makes drifting away from it
+// visible rather than gradual.
+//
+// It is deliberately NOT a check that the interface looks like the reference \u2014
+// nothing here can settle that, and claiming to would be the exact overreach
+// design-scales.md warns about. It checks one thing: that the parameters still
+// say what the person said.
+//
+// Exit codes: 0 pass, 1 violation, 2 harness failure.
+//
+// Usage:
+//   node conductor/gates/design-intent-gate.mjs
+//        [--intent <intent.json>] [--vocabulary <json>] [--bands <json>]
+//        [--motion <json>]
+
+import { existsSync, readFileSync } from 'node:fs';
+import { fail } from './design-cli.mjs';
+
+function parseArgs(argv) {
+  const opts = {
+    intent: 'conductor/design/intent.json',
+    vocabulary: 'conductor/gates/intent-vocabulary.json',
+    bands: 'conductor/gates/design-bands.json',
+    motion: 'conductor/gates/motion-bands.json',
+  };
+  for (let i = 0; i < argv.length; i += 1) {
+    const arg = argv[i];
+    if (arg === '--intent') opts.intent = argv[++i];
+    else if (arg === '--vocabulary') opts.vocabulary = argv[++i];
+    else if (arg === '--bands') opts.bands = argv[++i];
+    else if (arg === '--motion') opts.motion = argv[++i];
+  }
+  return opts;
+}
+
+function readJson(path, what, required) {
+  if (!existsSync(path)) {
+    if (required) fail(2, 'no ' + what + ' at ' + path);
+    return null;
+  }
+  try {
+    return JSON.parse(readFileSync(path, 'utf-8'));
+  } catch (err) {
+    fail(2, what + ' at ' + path + ' is unreadable (' + err.message + ')');
+  }
+}
+
+/** The band actually configured on each axis, from the files that own it. */
+function configuredBands(opts) {
+  const bands = readJson(opts.bands, 'band definitions', false);
+  const motion = readJson(opts.motion, 'motion bands', false);
+  return {
+    depth: bands?.depth?.selected ?? null,
+    motion: motion?.selected ?? null,
+    // rhythm and type_contrast live as numbers in DESIGN.md rather than as a
+    // named selection, so they are carried in the intent file itself, recorded
+    // at the moment the band was chosen. Re-deriving them here would mean
+    // running the design CLI for a check that is about provenance, not values.
+  };
+}
+
+function main() {
+  const opts = parseArgs(process.argv.slice(2));
+
+  const intent = readJson(opts.intent, 'design intent', false);
+  if (!intent) {
+    fail(
+      2,
+      'no design intent at ' + opts.intent + ', so no parameter can be checked against the reason it was chosen.\\n' +
+      'Setup records it from the references the user named. Without it the bands are values nobody can account for, ' +
+      'and a later track cannot tell a deliberate change from a drift.',
+    );
+  }
+
+  const vocabulary = readJson(opts.vocabulary, 'intent vocabulary', true);
+  const references = Array.isArray(intent.references) ? intent.references : [];
+  const blocking = [];
+  const advisory = [];
+
+  // --- The averaging trap ---------------------------------------------------
+  if (references.length > 0) {
+    const primaries = references.filter((r) => r.primary === true);
+    if (primaries.length === 0) {
+      blocking.push(
+        'no reference is marked primary. ' + vocabulary.the_averaging_trap.rule + ' ' +
+        vocabulary.the_averaging_trap.why,
+      );
+    } else if (primaries.length > 1) {
+      blocking.push(
+        primaries.length + ' references are marked primary. Exactly one decides the identity \u2014 ' +
+        'two primaries is an average with extra steps',
+      );
+    }
+
+    // Each non-primary reference may claim at most one axis.
+    for (const ref of references.filter((r) => r.primary !== true)) {
+      const claimed = ref.decides ?? [];
+      if (claimed.length > 1) {
+        blocking.push(
+          'reference ' + JSON.stringify(ref.url ?? ref.name ?? '?') + ' decides ' + claimed.length +
+          ' axes (' + claimed.join(', ') + '). A secondary reference may override at most one, and only ' +
+          'where the primary is silent \u2014 beyond that the identity is being assembled from parts',
+        );
+      }
+    }
+  } else {
+    advisory.push('no references recorded, so the parameters have no stated reason behind them');
+  }
+
+  // --- Parameters still say what the person said ----------------------------
+  const declared = intent.axes ?? {};
+  const configured = configuredBands(opts);
+
+  for (const [axis, expected] of Object.entries(declared)) {
+    const actual = configured[axis];
+    if (actual === undefined) continue; // axis not owned by a selection file
+    if (actual === null) {
+      advisory.push(
+        axis + ': intent says \`' + expected.band + '\` but no band is selected, so the axis is unchecked' +
+        (expected.because ? ' (recorded reason: "' + expected.because + '")' : ''),
+      );
+      continue;
+    }
+    if (actual !== expected.band) {
+      blocking.push(
+        axis + ' is configured as \`' + actual + '\` but the recorded intent is \`' + expected.band + '\`' +
+        (expected.because ? ', from "' + expected.because + '"' : '') +
+        (expected.from ? ' (' + expected.from + ')' : '') +
+        '. Either the configuration drifted, or the intent genuinely changed \u2014 if it changed, update ' +
+        opts.intent + ' and say why, so the next track inherits the reason and not just the value',
+      );
+    }
+  }
+
+  // --- Unmapped reasons are carried, not dropped ----------------------------
+  const unmapped = (intent.unmapped ?? []).filter(Boolean);
+  if (unmapped.length > 0) {
+    advisory.push(
+      unmapped.length + ' reason(s) recorded that map to no axis: ' +
+      unmapped.map((u) => JSON.stringify(u)).join(', ') +
+      ' \u2014 these are usually the part specific to this product, and no gate acts on them. They belong ' +
+      'in front of a human.',
+    );
+  }
+
+  for (const line of advisory) process.stderr.write('  - ' + line + '\\n');
+
+  if (blocking.length > 0) {
+    process.stderr.write('\\nIntent gate FAILED (' + blocking.length + ' blocking):\\n');
+    for (const line of blocking) process.stderr.write('  x ' + line + '\\n');
+    process.stderr.write(
+      '\\nThis gate does not judge whether the interface resembles the references \u2014 nothing here can ' +
+      'settle that. It checks that the parameters still say what the person said.\\n',
+    );
+    process.stdout.write('design-intent: FAIL (' + blocking.length + ' blocking, ' + advisory.length + ' advisory)\\n');
+    process.exit(1);
+  }
+
+  process.stdout.write(
+    'design-intent: PASS (' + references.length + ' reference(s), ' +
+    Object.keys(declared).length + ' axis reason(s), ' + advisory.length + ' advisory)\\n',
+  );
+  process.exit(0);
+}
+
+main();
+`
+      },
+      {
         sourcePath: "D:/conductor/src/internal/templates/data/config/gates/design-render-gate.mjs",
         category: "config",
         subpath: "gates",
@@ -6906,6 +7094,78 @@ main();
 `
       },
       {
+        sourcePath: "D:/conductor/src/internal/templates/data/config/gates/intent-vocabulary.json",
+        category: "config",
+        subpath: "gates",
+        ext: ".json",
+        content: `{
+  "description": "Maps what a person says about a page they admire onto the axes this framework can act on. The compression step between human taste and executable parameters.",
+
+  "why": "Every question this framework asks about design is phrased in its own terms \u2014 which rhythm band, which type contrast, which depth system. Almost nobody thinks that way, including experienced designers. What they have is 'I want the tension of that landing page' and 'the type on that campaign is doing something right'. That sentence is not vague: it carries structural information, and discarding it in favour of a band menu throws away the most valuable input the project will ever receive. Asking for the band directly gets an answer; asking for a reference and a reason gets the same answer plus the intent behind it, which is what survives into every later decision the band alone cannot settle.",
+
+  "what_this_is_not": "This does not generate identity and does not evaluate references. It transports a signal a person already has across the boundary into parameters the gates can hold. Originality, surprise and aesthetic signature stay where design-scales.md puts them \u2014 outside what any of this reaches. The framework's honest role here is fidelity, not creation: carry the intent without pretending it authored it.",
+
+  "signals": {
+    "rhythm": {
+      "axis": "rhythm",
+      "phrases": ["ritmo", "rhythm", "pacing", "breathing", "espa\xE7ado", "spacious", "airy", "dense", "denso", "compacto", "compact", "respira"],
+      "reads_as": "cadence and density \u2014 how much space the page gives itself between ideas",
+      "maps_to": { "dense": "compact", "spacious": "airy", "very spacious": "editorial" }
+    },
+    "type_contrast": {
+      "axis": "type_contrast",
+      "phrases": ["editorial", "tipografia", "typography", "headline", "type-led", "agressividade tipogr\xE1fica", "typographic", "bold type", "titulos", "revista", "magazine"],
+      "reads_as": "typographic hierarchy \u2014 how far the display size sits from the body size",
+      "maps_to": { "restrained": "functional", "editorial": "expressive", "type-led": "editorial" }
+    },
+    "depth": {
+      "axis": "depth",
+      "phrases": ["profundidade", "depth", "camadas", "layers", "eleva\xE7\xE3o", "elevation", "flat", "plano", "sombra", "shadow"],
+      "reads_as": "layering and contrast \u2014 how hierarchy is conveyed between surfaces",
+      "maps_to": { "flat": "tonal", "bordered": "bordered", "layered": "shadowed" }
+    },
+    "premium": {
+      "axis": "rhythm",
+      "phrases": ["premium", "sofisticado", "sophisticated", "luxo", "luxury", "refinado", "refined", "caro", "expensive", "elegante", "elegant"],
+      "reads_as": "proportion and negative space \u2014 'premium' almost always means more space per element, not more ornament",
+      "maps_to": { "premium": "editorial" }
+    },
+    "alive": {
+      "axis": "motion",
+      "phrases": ["vivo", "alive", "movimento", "motion", "animado", "animated", "fluido", "fluid", "responsivo ao scroll", "kinetic"],
+      "reads_as": "motion and transitions \u2014 how much the page moves as it is read",
+      "maps_to": { "still": "restrained", "alive": "measured", "kinetic": "kinetic" }
+    },
+    "tension": {
+      "axis": "composition",
+      "phrases": ["tens\xE3o", "tension", "assimetria", "asymmetry", "quebra", "breaks the grid", "ousado", "bold layout", "inesperado", "unexpected"],
+      "reads_as": "composition \u2014 whether the page varies its own frame, which is the grammar's turn movement and the bleed invariant",
+      "maps_to": { "calm": "fewer turns", "tense": "turn plus bleed" }
+    },
+    "image_ratio": {
+      "axis": "composition",
+      "phrases": ["rela\xE7\xE3o texto/imagem", "text to image", "imagens grandes", "big images", "visual", "fotografia", "photography", "ilustra\xE7\xE3o", "illustration"],
+      "reads_as": "how much of the page is image \u2014 which archetypes carry the argument, and how much asset work the project is committing to",
+      "maps_to": { "text-led": "editorial-offset, data-grid", "image-led": "full-bleed-media, hero-full-bleed" }
+    }
+  },
+
+  "elicitation": {
+    "ask": "Show me two or three pages you admire, and say in one sentence what you like about each.",
+    "why_this_question": "It is the question a designer would ask and the one this framework never asked. 'Minimal or expressive?' returns a word; 'what do you like about it?' returns the reason, and the reason is where the structure is hiding.",
+    "then": "Read each sentence against \`signals\` above, name the axis you extracted and the band it implies, and show the user that mapping before writing anything. The mapping is a claim about what they meant \u2014 they are the only one who can confirm it, and confirming it takes them one line.",
+    "when_nothing_matches": "If a sentence maps to no signal here, record it verbatim in the intent file as an unmapped note and say so. An unmapped reason is not noise: it is usually the part that is specific to this product, and inventing a band for it is worse than carrying it forward as prose for a human to act on."
+  },
+
+  "the_averaging_trap": {
+    "rule": "One reference is PRIMARY and decides the identity. The others inform named axes only. Never average them, and never take the majority.",
+    "why": "This is the failure mode that would undo the whole point. Three admired pages generally have three different identities \u2014 that is why the person admires all three. Averaging them produces something in the middle of three coherent positions, which is precisely the mean answer this framework exists to prevent, arrived at by a more sophisticated route and therefore harder to notice. A page built from the primary reference's rhythm, the second's type and the third's depth is not a synthesis; it is three-quarters of nothing.",
+    "how": "Ask which one the product should feel most like. That is the primary, and it sets every axis it speaks to. Each remaining reference may override at most one axis, and only where it says something the primary is silent about. Record which reference decided which axis in the intent file, so a later track can see where each parameter came from instead of re-deriving it from taste."
+  }
+}
+`
+      },
+      {
         sourcePath: "D:/conductor/src/internal/templates/data/config/gates/motion-bands.json",
         category: "config",
         subpath: "gates",
@@ -7457,7 +7717,7 @@ main();
     "Discover the quality gates the project already has \u2014 linter, formatter, type checker, test runner, coverage \u2014 and record them in the gate manifest (resolve path via \`config.gates.manifest\`), so that every rule a command can decide stops being prose the agent may reinterpret.",
     "Measure the ratchet baseline (resolve path via \`config.ratchet.baseline_file\`) for each metric in \`config.ratchet.metrics\`, so the gates are adoptable on an existing codebase instead of blocking on its history.",
     "When the project renders a user interface, author the design system (resolve path via \`config.directories.conductor_root\`/\`config.files.artifacts.design_system\`) by choosing one band per axis from the authoring aid at \`config.protocols.design_authoring.path\`, never by averaging bands \u2014 an averaged design system is indistinguishable from no design system.",
-    "When the design system step ran, register the two design gates in the gate manifest (resolve via \`config.gates.manifest\`): \`config.gates.kinds.design\` and \`config.gates.kinds.design_tokens\`. These are the one exception to discovering rather than inventing gate commands \u2014 Conductor ships both scripts, so there is nothing to discover and nothing installed on the user behalf. Record the design baselines in the same step, and verify both landed: copy the approved design system to the gates directory as \`design-baseline.md\`, and run the token gate once with \`--update-baseline\`, confirming that \`design-tokens-baseline.json\` now exists. Neither is optional bookkeeping \u2014 the ratchet has nothing to compare against until the baseline file is on disk, and the gate reports that state as unrunnable (exit 2) rather than as a pass. Both gates are absent per \`config.gates.absent_policy\` when the project has no user interface. Then offer the third: \`config.gates.kinds.design_render\` measures the rendered page rather than the declaration, and it is the only check that sees a value delivered by a utility class or a custom property, or an axis that changes band at a breakpoint. It needs two things the project may not have \u2014 Playwright, and a command that serves the interface. Ask for the serve command, and check whether Playwright resolves from the project. Register the gate with \`--url\` and the viewports the project treats as primary and as desktop only when both are present; when either is missing, register it absent with \`cmd\` null and say which of the two was missing, per \`config.gates.absent_policy\`. Do NOT install Playwright to make the gate registrable \u2014 that is the user's decision, and an absent gate honestly declared is worth more than a command that will exit 2 on every run. Finally register \`config.gates.kinds.design_grammar\` and \`config.gates.kinds.design_assets\`, which need no tooling at all: both read files the project already has. The grammar gate needs each page declared in \`conductor/design/composition.json\` as a grammar plus an ordered list of archetypes \u2014 write that file with the user during the design step, one entry per page they named, choosing archetypes from the shipped vocabulary rather than inventing names. Record the depth band, the motion band and the type pairing in the same pass, in their respective files; every one of them left null is an axis the gates report as unchecked for the life of the project.",
+    "When the design system step ran, register the two design gates in the gate manifest (resolve via \`config.gates.manifest\`): \`config.gates.kinds.design\` and \`config.gates.kinds.design_tokens\`. These are the one exception to discovering rather than inventing gate commands \u2014 Conductor ships both scripts, so there is nothing to discover and nothing installed on the user behalf. Record the design baselines in the same step, and verify both landed: copy the approved design system to the gates directory as \`design-baseline.md\`, and run the token gate once with \`--update-baseline\`, confirming that \`design-tokens-baseline.json\` now exists. Neither is optional bookkeeping \u2014 the ratchet has nothing to compare against until the baseline file is on disk, and the gate reports that state as unrunnable (exit 2) rather than as a pass. Both gates are absent per \`config.gates.absent_policy\` when the project has no user interface. Then offer the third: \`config.gates.kinds.design_render\` measures the rendered page rather than the declaration, and it is the only check that sees a value delivered by a utility class or a custom property, or an axis that changes band at a breakpoint. It needs two things the project may not have \u2014 Playwright, and a command that serves the interface. Ask for the serve command, and check whether Playwright resolves from the project. Register the gate with \`--url\` and the viewports the project treats as primary and as desktop only when both are present; when either is missing, register it absent with \`cmd\` null and say which of the two was missing, per \`config.gates.absent_policy\`. Do NOT install Playwright to make the gate registrable \u2014 that is the user's decision, and an absent gate honestly declared is worth more than a command that will exit 2 on every run. Finally register \`config.gates.kinds.design_grammar\` and \`config.gates.kinds.design_assets\`, which need no tooling at all: both read files the project already has. The grammar gate needs each page declared in \`conductor/design/composition.json\` as a grammar plus an ordered list of archetypes \u2014 write that file with the user during the design step, one entry per page they named, choosing archetypes from the shipped vocabulary rather than inventing names. Record the depth band, the motion band and the type pairing in the same pass, in their respective files; every one of them left null is an axis the gates report as unchecked for the life of the project. Register \`config.gates.kinds.design_intent\` too, and record \`conductor/design/intent.json\` as step 0 of the design system procedure describes \u2014 the references the user named, the sentence for each, which one is primary, and which axis each decided. That file is what lets a later track tell a deliberate change from a drift: without it the bands are values with no account behind them, and the reason the user gave is lost after the session that heard it.",
     "On a brownfield project with an existing interface, run \`node \`+\`config.directories.conductor_root\`+\`/gates/design-extract.mjs --src <source dirs> --format json\` BEFORE choosing any band, and present what it found to the user as the starting proposal: the colour roles it inferred, the spacing and type scales in use, and the band nearest to each axis. A design system authored from the bands alone contradicts the interface that already exists, and a design system that contradicts the code is ignored rather than adopted. Frequency is evidence, not endorsement \u2014 the most repeated value may be the most repeated mistake, so every extracted value is confirmed with the user before it becomes a token, and the extractor never writes anything itself."
   ],
   "constraints": [
@@ -8826,9 +9086,37 @@ is confirmed before it becomes a token.
 
 ## Procedure
 
-1. Ask the user one question per axis, in the order below, as a single-choice
-   \`question\`. Show the band names and what each implies \u2014 never the raw
-   numbers, which are an implementation detail.
+0. **Ask for references first.** Before any band question: *"Show me two or
+   three pages you admire, and say in one sentence what you like about each."*
+   Read each sentence against
+   \`\${config.directories.conductor_root}/gates/intent-vocabulary.json\`, which
+   maps what people actually say onto these axes \u2014 "the rhythm breathes" is a
+   rhythm answer, "premium" is almost always negative space rather than
+   ornament, "feels alive" is motion. Show the user the mapping you extracted
+   and let them correct it; it is a claim about what they meant, and they are
+   the only one who can confirm it.
+
+   Then ask which single reference the product should feel most like. That one
+   is **primary** and sets every axis it speaks to; each other reference may
+   override at most one axis, and only where the primary is silent. Do not
+   average them \u2014 three admired pages have three identities, and the middle of
+   three coherent positions is the mean answer this whole file exists to
+   prevent, reached by a route that is harder to notice.
+
+   Record all of it in \`\${config.directories.conductor_root}/design/intent.json\`:
+   each reference with its sentence, which is primary, which axis each one
+   decided, and any reason that mapped to no axis, verbatim. Unmapped reasons
+   are usually the part specific to this product; no gate acts on them, and
+   dropping them loses the most product-specific input the project will get.
+
+   This step is what turns the questions below from a menu into a confirmation.
+   Skip it and the bands are still chosen, but nobody can later say why \u2014 and a
+   band nobody can account for is a band that drifts.
+
+1. Ask the remaining questions one axis at a time, as a single-choice
+   \`question\`, proposing the band the references imply and saying which
+   reference implied it. Show the band names and what each implies \u2014 never the
+   raw numbers, which are an implementation detail.
 2. If the user has no preference on an axis, choose from the product vision
    recorded in \`\${config.files.artifacts.product}\`, and say which band you
    chose and why. Do not fall back to "the safe middle" \u2014 a stated band that
@@ -9663,6 +9951,7 @@ var init_config = __esm({
           coverage: "Coverage measurement. Compared against config.thresholds per config.thresholds.coverage_mode.",
           structure: "Project-specific structural checks that no off-the-shelf tool covers. Generated at setup from what the user described \u2014 e.g. tenant scoping, no server imports in client code, required auth on endpoints, environment variables complete, documentation in sync with the API, files within config.thresholds.file_max_lines.",
           design: "Soundness of the design system itself: broken token references, WCAG AA contrast on declared component pairs, whether each numeric axis landed on a declared band rather than between bands, whether the type families match the selected pairing from config.gates.scripts_dir/type-pairings.json and number no more than two, and \u2014 against the recorded baseline \u2014 any widening or flattening of the token scales from inside an implementation task. Runs config.gates.scripts_dir/design-gate.mjs. Absent when the project has no user interface.",
+          design_intent: "Whether the design parameters still say what the person said. At setup the user names two or three pages they admire and one sentence about each; those sentences are read against config.gates.scripts_dir/intent-vocabulary.json, mapped to axes, and recorded in conductor/design/intent.json with the reference each parameter came from. This gate checks that the recorded reason and the configured band still agree, and that exactly one reference is primary \u2014 averaging several admired pages produces something in the middle of three coherent positions, which is the mean answer arrived at by a more sophisticated route. It does NOT judge whether the interface resembles the references; nothing here can settle that. Runs config.gates.scripts_dir/design-intent-gate.mjs. Absent when the project has no user interface.",
           design_grammar: "Whether each page's declared composition is a valid sentence in the composition grammar (config.gates.scripts_dir/design-grammar.json): a page is an ordered list of archetypes drawn from a finite vocabulary, and it must derive from one of the declared page grammars as well as satisfy the variety invariants \u2014 no adjacent repeat, a floor on distinct archetypes, a cap on centred entry, alternating density. This is the earliest and cheapest design gate: it reads a list of names, so it runs while the page is still an outline. That is the point \u2014 composition is decided when the page is planned, and an agent asked to recompose a layout it already built will nudge rather than recompose. Runs config.gates.scripts_dir/design-grammar-gate.mjs. Absent when the project has no user interface.",
           design_assets: "Whether the images the page presents as content are actually content: one asset referenced with several different alt texts, and assets used as illustration that are too simple to be one. Not a judgement of artistic quality, which no gate can make \u2014 a check that the asset exists at the fidelity the markup claims for it, which is the same kind of check as a broken link and fails for the same reason. Ratcheted. Runs config.gates.scripts_dir/design-assets-gate.mjs. Absent when the project has no user interface.",
           design_render: "What the page actually renders, measured in a browser at each configured viewport: whether every style axis lands on its declared band AND lands on the SAME band at every breakpoint, whether the shadow count matches the declared depth band, whether the page BUILT the composition it declared to the grammar gate, the motion invariants that only a browser can settle (nothing above the fold starts hidden, the page survives with JavaScript disabled, reduced motion calms movement rather than removing content), and the composition floors in config.gates.scripts_dir/composition-bands.json. This is the only gate that reads the rendered result rather than a declaration, which is what lets it see the two things every other design check is blind to \u2014 a utility class or custom property that carries no literal for the token scan to find, and a media query that silently moves an axis to a different band in the viewport the project calls primary. Optionally writes per-viewport screenshots, the only artefact that lets a later step review the page instead of the markup. Runs config.gates.scripts_dir/design-render-gate.mjs and needs a running page (--url) plus Playwright resolvable from the project. Playwright is NOT installed on the user's behalf: when it is absent this gate is registered absent per config.gates.absent_policy, never with a command that cannot run.",
@@ -9680,6 +9969,7 @@ var init_config = __esm({
           "1": "Verdict. The check ran and the project failed it \u2014 the output names what to fix, and fixing it is the work.",
           "2": "Unrunnable. The check did NOT run: the tool is missing, a runner refused to start, an input is unreadable, output was unparsable. There is no verdict, so there is nothing to fix in the code and no finding to act on."
         },
+        where_a_rule_belongs: "Rules do not all survive equally, and where one is written decides how long it lasts. In ascending order of durability: (1) a code comment \u2014 read only by whoever opens that file; (2) documentation \u2014 read at most once, usually at setup; (3) output text from a gate \u2014 read in the moment, and only if the reader quotes it; (4) a skill instruction \u2014 read every run of that skill, but restated per skill and therefore able to drift between them; (5) configuration \u2014 read by whatever consults it, single source; (6) a referenceable contract in this file that skills and gates cite by key \u2014 the only form where a violation can be pointed at rather than argued about. Only the last two survive the evolution of the system. When a finding matters, move it up this list rather than repeating it further down: a principle stated in three skills is three copies that will disagree within a year, while the same principle as one key those skills cite is one thing to change. The corollary is the useful part \u2014 if a rule cannot be expressed as configuration or a contract, that is evidence it is advice rather than a rule, and it should be labelled as advice instead of being written more emphatically.",
         design_gates_measure_defects_not_quality: "A green board is not a verdict on whether the interface is good. The design gates decompose into what a machine can settle \u2014 an internally sound token system, valid contrast, axes on their bands, a page that derives from the composition grammar and renders what it declared, assets that exist at the fidelity the markup claims. That is structure and integrity, which is roughly the UX quarter of what actually separates a memorable interface from a competent one, plus part of the motion share. Art direction, visual identity and original assets are the larger part and are absent from this framework entirely \u2014 they are aesthetic intent and creative work, which do not live in a closed catalogue and cannot be gated. So never report passing design gates as evidence that the interface is well designed, attractive, or of high quality: report them as the absence of the specific defects they name. The aim of these gates is to raise a low-cost interface to clearly-designed, non-generic and visually coherent \u2014 to reduce average mediocrity, not to guarantee brilliance. A page can pass every check here and still be forgettable, and saying so plainly is more useful to the user than a summary that implies otherwise.",
         unrunnable_policy: "Exit 2 is not a soft failure and it is not a human to-do. A required gate that could not run leaves its whole subject unverified \u2014 the same position as if the gate did not exist, except that the project believes it does. Record every such gate in config.state_document.frontmatter_fields.unrunnable_gates with the exact command and the complete output including stderr, and treat the list as closed: while it is non-empty, no task may be marked done, the state document may not carry the done status, and the track may not be archived. Never reclassify an exit 2 as a pending manual check, an environment quirk, or an absent gate. Absent (config.gates.absent_policy) means the project declared it has no such tool and the skills report the check as resting on human judgement; unrunnable means the project declared a tool, the framework tried to run it, and it broke \u2014 a defect to repair, not a judgement to defer. Conflating the two is how a broken gate acquires the same standing as a deliberate decision, and it is the cheaper path every time, which is why it is named here rather than left to judgement. When the gate cannot be repaired in the current session, the resolution is to say so to the user and stop, or \u2014 with the user's explicit and recorded decision \u2014 to redeclare the gate absent in the manifest, which is a visible change to the project's contract rather than a silent one.",
         missing_manifest_policy: "A project set up before gates existed has no manifest, and that is not an error to halt on. Say so once, offer to run the gate-configuration step of the setup skill, and proceed with every check treated as absent per absent_policy \u2014 which means the work continues and the report states plainly that nothing was machine-verified. Never fabricate a manifest to keep going, and never let the absence read as though the gates passed."

@@ -1,85 +1,55 @@
-# Effective Go Style Guide Summary
+# Effective Go
 
-This document summarizes key rules and best practices from the official
-"Effective Go" guide for writing idiomatic Go code.
+Rules are split into two layers (see `config.styleguide_layers`). The tooling layer
+is decided by the `lint`/`format`/`typecheck` gates in `config.gates.manifest` — a
+review MUST NOT re-derive it by hand. The judgment layer is what a reviewer reads.
 
-## 1. Formatting
+Go is the ecosystem where this split is least controversial: `gofmt` is, in the
+guide's own words, a non-negotiable automated standard, so every formatting rule
+below is settled before a reviewer ever sees the diff.
 
--   **`gofmt`:** All Go code **must** be formatted with `gofmt` (or `go fmt`).
-    This is a non-negotiable, automated standard.
--   **Indentation:** Use tabs for indentation (`gofmt` handles this).
--   **Line Length:** Go has no strict line length limit. Let `gofmt` handle line
-    wrapping.
+## Enforced by tooling
 
-## 2. Naming
+| Rule | Tool rule |
+| --- | --- |
+| All code formatted with `gofmt` / `go fmt` | `gofmt -l` (gate: format) |
+| Tabs for indentation; line wrapping left to the formatter | `gofmt` |
+| `MixedCaps` / `mixedCaps`; no underscores in multi-word names | `revive:var-naming` |
+| Exported vs unexported by initial case | `revive:exported` |
+| Package names short, single-word, lowercase | `revive:package-comments`, `stylecheck ST1003` |
+| Getters not prefixed with `Get` | `stylecheck ST1016` / `revive` |
+| One-method interfaces named with the `-er` suffix | `stylecheck ST1003` |
+| No parentheses around `if` conditions; braces mandatory | `gofmt` |
+| Explicit `fallthrough`; cases do not fall through | compiler |
+| Errors never discarded with the blank identifier | `errcheck` |
+| Unused variables and imports | compiler |
+| Suspect constructs (shadowing, printf mismatches, lost cancels) | `go vet` |
 
--   **`MixedCaps`:** Use `MixedCaps` or `mixedCaps` for multi-word names. Do not
-    use underscores.
--   **Exported vs. Unexported:** Names starting with an uppercase letter are
-    exported (public). Names starting with a lowercase letter are not exported
-    (private).
--   **Package Names:** Short, concise, single-word, lowercase names.
--   **Getters:** Do not name getters with a `Get` prefix. A getter for a field
-    named `owner` should be named `Owner()`.
--   **Interface Names:** One-method interfaces are named by the method name plus
-    an `-er` suffix (e.g., `Reader`, `Writer`).
+## Requires judgment
 
-## 3. Control Structures
+-   **Named result parameters:** use them where they clarify what is returned;
+    they cost clarity when they invite naked returns in a long function.
+-   **`defer` placement:** correct cleanup is mechanical to spot, but whether a
+    `defer` belongs at acquisition or later — and whether it silently swallows an
+    error — needs a reader.
+-   **Small interfaces:** prefer many small interfaces to one large one. Whether
+    an interface has grown past its purpose is a design judgement.
+-   **Interface definition site:** Go interfaces belong with the consumer, not the
+    implementer. Misplacement compiles fine and couples packages.
+-   **Share memory by communicating.** Whether a given use of shared state should
+    have been a channel is the core design question in concurrent Go, and no
+    linter decides it.
+-   **`panic` reserved for the truly unrecoverable.** Libraries should not panic.
+    What counts as unrecoverable is a judgement about the caller's options.
+-   **Error wrapping and message quality:** whether an error tells the caller
+    something actionable cannot be linted.
 
--   **`if`:** No parentheses around the condition. Braces are mandatory. Can
-    include an initialization statement (e.g., `if err := file.Chmod(0664); err
-    != nil`).
--   **`for`:** Go's only looping construct. Unifies `for` and `while`. Use
-    `for...range` to iterate over slices, maps, strings, and channels.
--   **`switch`:** More general than in C. Cases do not fall through by default
-    (use `fallthrough` explicitly). Can be used without an expression to
-    function as a cleaner `if-else-if` chain.
+## Removed
 
-## 4. Functions
-
--   **Multiple Returns:** Functions can return multiple values. This is the
-    standard way to return a result and an error (e.g., `value, err`).
--   **Named Result Parameters:** Return parameters can be named. This can make
-    code clearer and more concise.
--   **`defer`:** Schedules a function call to be run immediately before the
-    function executing `defer` returns. Use it for cleanup tasks like closing
-    files.
-
-## 5. Data
-
--   **`new` vs. `make`:**
-    -   `new(T)`: Allocates memory for a new item of type `T`, zeroes it, and
-        returns a pointer (`*T`).
-    -   `make(T, ...)`: Creates and initializes slices, maps, and channels only.
-        Returns an initialized value of type `T` (not a pointer).
--   **Slices:** The preferred way to work with sequences. They are more flexible
-    than arrays.
--   **Maps:** Use the "comma ok" idiom to check for the existence of a key:
-    `value, ok := myMap[key]`.
-
-## 6. Interfaces
-
--   **Implicit Implementation:** A type implements an interface by implementing
-    its methods. No `implements` keyword is needed.
--   **Small Interfaces:** Prefer many small interfaces over one large one. The
-    standard library is full of single-method interfaces (e.g., `io.Reader`).
-
-## 7. Concurrency
-
--   **Share Memory By Communicating:** This is the core philosophy. Do not
-    communicate by sharing memory; instead, share memory by communicating.
--   **Goroutines:** Lightweight, concurrently executing functions. Start one
-    with the `go` keyword.
--   **Channels:** Typed conduits for communication between goroutines. Use
-    `make` to create them.
-
-## 8. Errors
-
--   **`error` type:** The built-in `error` interface is the standard way to
-    handle errors.
--   **Explicit Error Handling:** Do not discard errors with the blank identifier
-    (`_`). Check for errors explicitly.
--   **`panic`:** Reserved for truly exceptional, unrecoverable situations.
-    Generally, libraries should not panic.
+Explanations of `new` vs `make`, slices versus arrays, the comma-ok idiom,
+goroutines, channels, and implicit interface satisfaction were removed. They teach
+the language rather than constrain a choice, and the model already knows them —
+carrying them here only dilutes the rules that do constrain something
+(`config.styleguide_layers.removed`).
 
 *Source: [Effective Go](https://go.dev/doc/effective_go)*

@@ -19,6 +19,36 @@ export enum AIToolType {
 }
 
 // ---------------------------------------------------------------------------
+// ToolLifecycle — optional hook/permission integration
+// ---------------------------------------------------------------------------
+
+/**
+ * Where a tool keeps its lifecycle configuration, when it has one.
+ *
+ * This is deliberately optional. Conductor's quality gates are invoked by the
+ * generated skills, which every supported tool can do; hooks only make the same
+ * gates fire automatically. A tool without a lifecycle therefore loses
+ * automation, never capability — which is what keeps `TOOL_REGISTRY` neutral
+ * while still letting a tool that offers more get more.
+ *
+ * Only fill this in for tools whose hook contract is actually known. An omitted
+ * lifecycle is correct; a guessed one writes broken configuration into the
+ * user's editor.
+ */
+export interface ToolLifecycle {
+  /** Settings file holding hooks/permissions, relative to the project root. */
+  settingsPath: string;
+  /**
+   * Tool-native event names for the two points Conductor cares about:
+   *   - `beforeToolUse`: intercept a command before it runs (deny-list guard).
+   *   - `afterResponse`: run the ratchet once the agent finishes responding.
+   */
+  events: Readonly<{ beforeToolUse: string; afterResponse: string }>;
+  /** Whether the tool supports persistent allow/deny command rules. */
+  permissions: boolean;
+}
+
+// ---------------------------------------------------------------------------
 // ToolDescriptor — complete per-tool specification
 // ---------------------------------------------------------------------------
 
@@ -56,6 +86,11 @@ export interface ToolDescriptor {
    * Categories not listed here use their source name unchanged.
    */
   categoryMapping?: Readonly<Record<string, string>>;
+  /**
+   * Optional lifecycle integration. Omit when the tool has no hook contract, or
+   * when its contract is not known with certainty — see {@link ToolLifecycle}.
+   */
+  lifecycle?: ToolLifecycle;
 }
 
 // ---------------------------------------------------------------------------
@@ -80,6 +115,11 @@ export const TOOL_REGISTRY: readonly ToolDescriptor[] = [
     configBaseDir: '.claude',
     signatures: ['.claude', 'CLAUDE.md'],
     detectionPriority: 2,
+    lifecycle: {
+      settingsPath: '.claude/settings.json',
+      events: { beforeToolUse: 'PreToolUse', afterResponse: 'Stop' },
+      permissions: true,
+    },
   },
   {
     id: AIToolType.Antigravity,
@@ -123,6 +163,16 @@ export function findDescriptorByFlag(flag: string): ToolDescriptor | undefined {
  */
 export function registeredToolsByPriority(): readonly ToolDescriptor[] {
   return [...TOOL_REGISTRY].sort((a, b) => a.detectionPriority - b.detectionPriority);
+}
+
+/**
+ * Lifecycle integration for a tool, or undefined when it has none.
+ *
+ * Callers MUST treat undefined as "gates run via the skills only" — never as an
+ * error and never as a reason to skip the gates.
+ */
+export function findLifecycle(id: AIToolType): ToolLifecycle | undefined {
+  return findDescriptor(id)?.lifecycle;
 }
 
 /** Parse a tool flag string to AIToolType. Returns AIToolType.Unknown if unrecognised. */

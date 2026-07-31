@@ -1,69 +1,52 @@
-# Google HTML/CSS Style Guide Summary
+# Google HTML/CSS Style Guide
 
-This document summarizes key rules and best practices from the Google HTML/CSS
-Style Guide.
+Rules are split into two layers (see `config.styleguide_layers`). The tooling layer
+is decided by the `lint`/`format` gates in `config.gates.manifest` — a review MUST
+NOT re-derive it by hand. The judgment layer is what a reviewer reads.
 
-## 1. General Rules
+`stylelint` and `prettier` cover the CSS side; an HTML linter plus `prettier` cover
+the markup side.
 
--   **Protocol:** Use HTTPS for all embedded resources.
--   **Indentation:** Indent by 2 spaces. Do not use tabs.
--   **Capitalization:** Use only lowercase for all code (element names,
-    attributes, selectors, properties).
--   **Trailing Whitespace:** Remove all trailing whitespace.
--   **Encoding:** Use UTF-8 (without a BOM). Specify `<meta charset="utf-8">` in
-    HTML.
+## Enforced by tooling
 
-## 2. HTML Style Rules
+| Rule | Tool rule |
+| --- | --- |
+| Indent by 2 spaces; no tabs | `prettier` |
+| Lowercase for elements, attributes, selectors, properties | `stylelint` case rules, HTML linter |
+| No trailing whitespace | `prettier` |
+| UTF-8 without BOM; `<meta charset="utf-8">` present | HTML linter |
+| `<!doctype html>` present | `htmlhint doctype-first` |
+| Valid HTML | HTML validator |
+| Omit `type` on `<link>` and `<script>` | `htmlhint` |
+| New line per block/list/table element; children indented | `prettier` |
+| Double quotes for HTML attribute values | `prettier` |
+| Valid CSS | `stylelint` |
+| Hyphen-separated class names | `stylelint selector-class-pattern` |
+| No ID selectors for styling | `stylelint selector-max-id` |
+| Shorthand properties where possible | `stylelint shorthand-property-no-redundant-values` |
+| Omit units on zero values | `stylelint length-zero-no-unit` |
+| Leading zeros on decimals | `stylelint number-leading-zero` |
+| 3-character hex where possible | `stylelint color-hex-length` |
+| Avoid `!important` | `stylelint declaration-no-important` |
+| Alphabetized declarations within a rule | `stylelint-order` |
+| Semicolon after every declaration | `stylelint declaration-block-trailing-semicolon` |
+| Space after property colon; space before opening brace | `prettier` |
+| New line per selector and declaration; rules separated by a blank line | `prettier` |
+| Single quotes in attribute selectors and property values | `stylelint string-quotes` |
+| HTTPS for embedded resources | `stylelint function-url-scheme-allowed-list` |
 
--   **Document Type:** Use `<!doctype html>`.
--   **HTML Validity:** Use valid HTML.
--   **Semantics:** Use HTML elements according to their intended purpose (e.g.,
-    use `<p>` for paragraphs, not for spacing).
--   **Multimedia Fallback:** Provide `alt` text for images and
-    transcripts/captions for audio/video.
--   **Separation of Concerns:** Strictly separate structure (HTML), presentation
-    (CSS), and behavior (JavaScript). Link to CSS and JS from external files.
--   **`type` Attributes:** Omit `type` attributes for stylesheets (`<link>`) and
-    scripts (`<script>`).
+## Requires judgment
 
-## 3. HTML Formatting Rules
+-   **Semantics.** Use elements for their intended purpose — `<p>` for paragraphs,
+    not for spacing. A validator confirms the markup parses; only a reader
+    confirms it means what the element claims.
+-   **Multimedia fallback.** `alt` text and captions must be *present* (linted)
+    and *useful* (not). `alt="image"` passes every tool and helps nobody.
+-   **Separation of concerns.** Structure, presentation and behaviour stay in
+    HTML, CSS and JS respectively. Whether a given piece of logic has leaked
+    across that boundary is a design call.
+-   **Class naming.** `.video-player` over `.vid`, and never `.red-text`. The rule
+    is that a name describes purpose rather than appearance; a pattern lint
+    enforces the shape of the name, never its meaning.
 
--   **General:** Use a new line for every block, list, or table element, and
-    indent its children.
--   **Quotation Marks:** Use double quotation marks (`""`) for attribute values.
-
-## 4. CSS Style Rules
-
--   **CSS Validity:** Use valid CSS.
--   **Class Naming:** Use meaningful, generic names. Separate words with a
-    hyphen (`-`).
-    -   **Good:** `.video-player`, `.site-navigation`
-    -   **Bad:** `.vid`, `.red-text`
--   **ID Selectors:** Avoid using ID selectors for styling. Prefer class
-    selectors.
--   **Shorthand Properties:** Use shorthand properties where possible (e.g.,
-    `padding`, `font`).
--   **`0` and Units:** Omit units for `0` values (e.g., `margin: 0;`).
--   **Leading `0`s:** Always include leading `0`s for decimal values (e.g.,
-    `font-size: 0.8em;`).
--   **Hexadecimal Notation:** Use 3-character hex notation where possible (e.g.,
-    `#fff`).
--   **`!important`:** Avoid using `!important`.
-
-## 5. CSS Formatting Rules
-
--   **Declaration Order:** Alphabetize declarations within a rule.
--   **Indentation:** Indent all block content.
--   **Semicolons:** Use a semicolon after every declaration.
--   **Spacing:**
-    -   Use a space after a property name's colon (`font-weight: bold;`).
-    -   Use a space between the last selector and the opening brace (`.foo {`).
-    -   Start a new line for each selector and declaration.
--   **Rule Separation:** Separate rules with a new line.
--   **Quotation Marks:** Use single quotes (`''`) for attribute selectors and
-    property values (e.g., `[type='text']`).
-
-**BE CONSISTENT.** When editing code, match the existing style.
-
-*Source:
-[Google HTML/CSS Style Guide](https://google.github.io/styleguide/htmlcssguide.html)*
+*Source: [Google HTML/CSS Style Guide](https://google.github.io/styleguide/htmlcssguide.html)*

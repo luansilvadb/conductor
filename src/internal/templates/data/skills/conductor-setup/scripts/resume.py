@@ -46,22 +46,30 @@ def determine_resumption():
         path = os.path.join(conductor_dir, filename)
         checklist[filename] = os.path.exists(path)
 
-    setup_complete = os.path.exists(os.path.join(conductor_dir, setup_marker))
+    marker_present = os.path.exists(os.path.join(conductor_dir, setup_marker))
 
-    # Find first incomplete step
-    next_step = None
-    for item in setup_chain:
-        filename = item["file"]
-        if not checklist[filename]:
-            next_step = {
-                "step": item["step"],
-                "file": filename,
-            }
-            break
+    # Every chain step that has not produced its artifact yet, in chain order.
+    missing_steps = [
+        {"step": item["step"], "file": item["file"]}
+        for item in setup_chain
+        if not checklist[item["file"]]
+    ]
 
+    next_step = missing_steps[0] if missing_steps else None
+
+    # The marker alone does not mean "done": a project set up by an older
+    # Conductor carries the marker but predates steps added since. Reporting it
+    # as complete would hide them; reporting it as fresh would re-run a setup
+    # that already happened and overwrite the user's answers. The two flags are
+    # kept separate so the skill can tell those cases apart — marker present and
+    # nothing missing is complete, marker present with steps missing is an
+    # upgrade, and no marker is a first run.
     return {
-        "setup_complete": setup_complete,
+        "setup_complete": marker_present and not missing_steps,
+        "marker_present": marker_present,
+        "is_upgrade": marker_present and bool(missing_steps),
         "checklist": checklist,
+        "missing_steps": missing_steps,
         "next_step": next_step,
     }
 

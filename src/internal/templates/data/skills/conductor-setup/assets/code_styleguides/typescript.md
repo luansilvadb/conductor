@@ -1,73 +1,61 @@
-# Google TypeScript Style Guide Summary
+# Google TypeScript Style Guide
 
-This document summarizes key rules and best practices from the Google TypeScript
-Style Guide, which is enforced by the `gts` tool.
+Rules are split into two layers (see `config.styleguide_layers`). The tooling layer
+is decided by the `lint`/`format`/`typecheck` gates in `config.gates.manifest` — a
+review MUST NOT re-derive it by hand. The judgment layer is what a reviewer reads.
 
-## 1. Language Features
+Google's own guide is enforced by `gts`, which already ships most of the tooling
+layer below.
 
--   **Variable Declarations:** Always use `const` or `let`. **`var` is
-    forbidden.** Use `const` by default.
--   **Modules:** Use ES6 modules (`import`/`export`). **Do not use
-    `namespace`.**
--   **Exports:** Use named exports (`export {MyClass};`). **Do not use default
-    exports.**
--   **Classes:**
-    -   **Do not use `#private` fields.** Use TypeScript's `private` visibility
-        modifier.
-    -   Mark properties never reassigned outside the constructor with
-        `readonly`.
-    -   **Never use the `public` modifier** (it's the default). Restrict
-        visibility with `private` or `protected` where possible.
--   **Functions:** Prefer function declarations for named functions. Use arrow
-    functions for anonymous functions/callbacks.
--   **String Literals:** Use single quotes (`'`). Use template literals (`` `
-    ``) for interpolation and multi-line strings.
--   **Equality Checks:** Always use triple equals (`===`) and not equals
-    (`!==`).
--   **Type Assertions:** **Avoid type assertions (`x as SomeType`) and
-    non-nullability assertions (`y!`)**. If you must use them, provide a clear
-    justification.
+## Enforced by tooling
 
-## 2. Disallowed Features
+| Rule | Tool rule |
+| --- | --- |
+| Use `const`/`let`; `var` is forbidden; `const` by default | `no-var`, `prefer-const` |
+| ES6 modules; do not use `namespace` | `@typescript-eslint/no-namespace` |
+| Named exports; no default exports | `import/no-default-export` |
+| Do not use `#private` fields; use the `private` modifier | `no-restricted-syntax` (PrivateIdentifier) |
+| Mark never-reassigned properties `readonly` | `@typescript-eslint/prefer-readonly` |
+| Never write the `public` modifier | `@typescript-eslint/explicit-member-accessibility` (`no-public`) |
+| Function declarations for named functions; arrows for anonymous | `func-style` |
+| Single quotes; template literals for interpolation | `quotes` |
+| Always `===` / `!==` | `eqeqeq` |
+| Avoid non-nullability assertions (`y!`) | `@typescript-eslint/no-non-null-assertion` |
+| Avoid `any`; prefer `unknown` or a specific type | `@typescript-eslint/no-explicit-any` |
+| Do not instantiate `String`/`Boolean`/`Number` wrappers | `no-new-wrappers` |
+| Terminate statements with semicolons; never rely on ASI | `semi` |
+| Do not use `const enum` | `no-restricted-syntax` (TSEnumDeclaration[const=true]) |
+| `eval()` and `Function(...string)` forbidden | `no-eval`, `no-new-func` |
+| `UpperCamelCase` for classes, interfaces, types, enums, decorators | `@typescript-eslint/naming-convention` |
+| `lowerCamelCase` for variables, parameters, functions, methods, properties | `@typescript-eslint/naming-convention` |
+| `CONSTANT_CASE` for global constants and enum values | `@typescript-eslint/naming-convention` |
+| No `_` prefix or suffix on identifiers | `@typescript-eslint/naming-convention` |
+| `T[]` for simple types, `Array<T>` for unions | `@typescript-eslint/array-type` (`array-simple`) |
+| Do not use the `{}` type | `@typescript-eslint/no-empty-object-type` |
+| No types in `@param` / `@return` — redundant in TypeScript | `jsdoc/no-types` |
 
--   **`any` Type:** **Avoid `any`**. Prefer `unknown` or a more specific type.
--   **Wrapper Objects:** Do not instantiate `String`, `Boolean`, or `Number`
-    wrapper classes.
--   **Automatic Semicolon Insertion (ASI):** Do not rely on it. **Explicitly end
-    all statements with a semicolon.**
--   **`const enum`:** Do not use `const enum`. Use plain `enum` instead.
--   **`eval()` and `Function(...string)`:** Forbidden.
+## Requires judgment
 
-## 3. Naming
+-   **Type assertions:** avoid `x as SomeType`. Where one is unavoidable, the
+    assertion must carry a justification explaining why the compiler cannot know
+    what the author knows. The assertion is mechanical; the adequacy of the
+    justification is the review's concern.
+-   **Type inference:** rely on inference for simple, obvious types; be explicit
+    for complex ones. "Complex" has no mechanical threshold — judge whether a
+    reader can reconstruct the type without running the compiler.
+-   **Optional vs `|undefined`:** prefer optional parameters and fields (`?`) over
+    adding `|undefined` to a type.
+-   **JSDoc vs implementation comments:** `/** JSDoc */` documents the API; `//`
+    explains the implementation. Using one where the other belongs misleads about
+    the intended audience.
+-   **Comments must add information.** A comment restating the code is worse than
+    no comment: it doubles the surface that can go stale.
 
--   **`UpperCamelCase`:** For classes, interfaces, types, enums, and decorators.
--   **`lowerCamelCase`:** For variables, parameters, functions, methods, and
-    properties.
--   **`CONSTANT_CASE`:** For global constant values, including enum values.
--   **`_` Prefix/Suffix:** **Do not use `_` as a prefix or suffix** for
-    identifiers, including for private properties.
+## Moved out of this guide
 
-## 4. Type System
+-   **`undefined` vs `null` consistency** is a project-wide architectural choice,
+    not a per-file style rule. Record it once in `config.files.artifacts.decisions`
+    (see `config.styleguide_layers.misplaced_rule_policy`) instead of asking every
+    review to re-decide it.
 
--   **Type Inference:** Rely on type inference for simple, obvious types. Be
-    explicit for complex types.
--   **`undefined` and `null`:** Both are supported. Be consistent within your
-    project.
--   **Optional vs. `|undefined`:** Prefer optional parameters and fields (`?`)
-    over adding `|undefined` to the type.
--   **`Array<T>` Type:** Use `T[]` for simple types. Use `Array<T>` for more
-    complex union types (e.g., `Array<string | number>`).
--   **`{}` Type:** **Do not use `{}`**. Prefer `unknown`, `Record<string,
-    unknown>`, or `object`.
-
-## 5. Comments and Documentation
-
--   **JSDoc:** Use `/** JSDoc */` for documentation, `//` for implementation
-    comments.
--   **Redundancy:** **Do not declare types in `@param` or `@return` blocks**
-    (e.g., `/** @param {string} user */`). This is redundant in TypeScript.
--   **Add Information:** Comments must add information, not just restate the
-    code.
-
-*Source:
-[Google TypeScript Style Guide](https://google.github.io/styleguide/tsguide.html)*
+*Source: [Google TypeScript Style Guide](https://google.github.io/styleguide/tsguide.html)*

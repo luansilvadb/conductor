@@ -1,175 +1,85 @@
-# Google C++ Style Guide Summary
+# Google C++ Style Guide
 
-## 1. Naming
+Rules are split into two layers (see `config.styleguide_layers`). The tooling layer
+is decided by the `lint`/`format`/`typecheck` gates in `config.gates.manifest` — a
+review MUST NOT re-derive it by hand. The judgment layer is what a reviewer reads.
 
--   **General:** Optimize for readability. Be descriptive but concise. Use
-    inclusive language.
--   **Files:** `.h` (headers), `.cc` (source). Lowercase with underscores (`_`)
-    or dashes (`-`). Be consistent.
--   **Types:** PascalCase (`MyClass`, `MyEnum`). Use `int` by default; use
-    `<cstdint>` (`int32_t`) if size matters.
--   **Concepts:** PascalCase (`MyConcept`).
--   **Variables:** snake_case (`my_var`). Class members end with underscore
-    (`my_member_`), struct members do not.
--   **Constants/Enumerators:** `k` + PascalCase (`kDays`, `kOk`).
--   **Template Parameters:** PascalCase for types (`T`, `MyType`),
-    snake_case/kPascalCase for non-types (`N`, `kLimit`).
--   **Functions:** PascalCase (`GetValue()`).
--   **Accessors/Mutators:** snake_case. `count()` (not `GetCount`),
-    `set_count(v)`.
--   **Namespaces:** lowercase (`web_search`).
--   **Macros:** ALL_CAPS (`MY_MACRO`).
+`clang-format` with the Google style decides the entire formatting section;
+`clang-tidy` with the `google-*`, `modernize-*` and `readability-*` checks decides
+most of the rest.
 
-## 2. Header Files
+## Enforced by tooling
 
--   **General:** Every `.cc` usually has a `.h`. Headers must be self-contained.
--   **Guards:** Use `#define <PROJECT>_<PATH>_<FILE>_H_`.
--   **IWYU:** Direct includes only. Do not rely on transitive includes.
--   **Forward Decls:** Avoid. Include headers instead. **Never** forward declare
-    `std::` symbols.
--   **Inline Definitions:** Only short functions (<10 lines) in headers. Must be
-    ODR-safe (`inline` or templates).
--   **Include Order:**
-    1.  Related header (`foo.h`)
-    2.  C system (`<unistd.h>`)
-    3.  C++ standard (`<vector>`)
-    4.  Other libraries (`<Python.h>`)
-    5.  Project headers (`"base/logging.h"`) *Separate groups with blank lines.
-        Alphabetical within groups.*
+| Rule | Tool rule |
+| --- | --- |
+| Every formatting rule: indent 2, column 80, brace placement, wrapping, spacing, pointer alignment, template spacing, `#` at line start, init-list layout, no namespace indent | `clang-format` (Google style) |
+| `PascalCase` types, concepts, functions; `snake_case` variables; trailing `_` on class members | `readability-identifier-naming` |
+| `k` + PascalCase constants and enumerators | `readability-identifier-naming` |
+| Lowercase namespaces; `ALL_CAPS` macros | `readability-identifier-naming` |
+| Accessors/mutators `count()` / `set_count(v)` | `readability-identifier-naming` |
+| Header guards `<PROJECT>_<PATH>_<FILE>_H_` | `llvm-header-guard` |
+| Include order: related, C system, C++ standard, other libs, project | `clang-format` `IncludeCategories` |
+| Direct includes only (IWYU); no reliance on transitive includes | `include-what-you-use` |
+| Never forward declare `std::` symbols | `google-build-using-namespace` / IWYU |
+| `explicit` on single-argument constructors and conversion operators | `google-explicit-constructor` |
+| Copy/move explicitly `= default` or `= delete` | `cppcoreguidelines-special-member-functions` |
+| `override` used, `virtual` omitted on overrides | `modernize-use-override` |
+| Use C++ casts (`static_cast`), never C casts | `cppcoreguidelines-pro-type-cstyle-cast` |
+| `nullptr`, never `NULL` or `0` | `modernize-use-nullptr` |
+| `using` instead of `typedef` | `modernize-use-using` |
+| Prefer range-based `for` | `modernize-loop-convert` |
+| Prefer `++i` over `i++` | `readability-pre-increment` |
+| Brace initialization | `modernize-use-default-member-init` |
+| `constexpr` / `consteval` where possible | `misc-const-correctness` |
+| `noexcept` where correct | `performance-noexcept-move-constructor` |
+| No `using namespace` | `google-build-using-namespace` |
+| Anonymous namespaces or `static` for internal linkage in `.cc` | `misc-use-anonymous-namespace` |
+| Locals declared at narrowest scope and initialized | `cppcoreguidelines-init-variables` |
+| `switch` always has `default`; `[[fallthrough]]` explicit | `bugprone-switch-missing-default-case`, `implicit-fallthrough` |
+| Floating-point literals carry a radix point | `readability-uppercase-literal-suffix` |
+| `return result;` without parentheses | `clang-format` |
+| Avoid `dynamic_cast` / `typeid` (RTTI) | `cppcoreguidelines-pro-type-*` |
+| Exceptions forbidden | `-fno-exceptions` (compiler) |
+| Prefer `sizeof(varname)` over `sizeof(type)` | `bugprone-sizeof-expression` |
+| Functions under 40 lines | `readability-function-size` |
+| Declaration order `public` → `protected` → `private` | `llvm-else-after-return` / review-assisted |
 
-## 3. Formatting
+## Requires judgment
 
--   **Indentation:** 2 spaces. **Line Length:** 80 chars.
--   **Non-ASCII:** Rare, use UTF-8. Avoid `u8` prefix if possible.
--   **Braces:** `if (cond) { ... }`. **Exception:** Function definition open
-    brace goes on the **next line**.
--   **Switch:** Always include `default`. Use `[[fallthrough]]` for explicit
-    fallthrough.
--   **Literals:** Floating-point must have radix point (`1.0f`).
--   **Calls:** Wrap arguments at paren or 4-space indent.
--   **Init Lists:** Colon on new line, indent 4 spaces.
--   **Namespaces:** No indentation.
--   **Vertical Whitespace:** Use sparingly. Separate related chunks, not code
-    blocks.
--   **Loops/Branching:** Use braces (optional if single line). No space after
-    `(`, space before `{`.
--   **Return:** No parens `return result;`.
--   **Preprocessor:** `#` always at line start.
--   **Pointers:** `char* c` (attached to type).
--   **Templates:** No spaces inside `< >` (`vector<int>`).
--   **Operators:** Space around assignment/binary, no space for unary.
--   **Class Order:** `public`, `protected`, `private`.
--   **Parameter Wrapping:** Wrap parameter lists that don't fit. Use 4-space
-    indent for wrapped parameters.
+-   **Header self-containment and inline definitions.** The <10-line threshold for
+    inline functions in headers is mechanical, but ODR safety and whether a
+    definition belongs in the header at all is design.
+-   **Structs vs classes.** `struct` only for passive data. Whether a type has
+    grown behaviour past that line is a reader's call.
+-   **Composition over inheritance; `public` inheritance only.** No tool decides
+    that a hierarchy should have been composition.
+-   **Operator overloading.** Judicious use only; binary operators as non-members;
+    never overload `&&`, `||`, `,` or unary `&`. Whether an overload is intuitive
+    is exactly the judgement.
+-   **Parameter ordering and output style.** Inputs before outputs; prefer return
+    values or `std::optional`; references for required outputs, pointers for
+    optional ones. Mechanical to check once decided, semantic to decide.
+-   **Overload sets.** Use only where behaviour is obvious across the set, and
+    document the set under a single umbrella comment.
+-   **Static and global lifetime.** Statics must be trivially destructible. The
+    rule is checkable; whether a global should exist at all is not.
+-   **Ownership.** Single fixed owner, transferred via smart pointers. Which
+    component *should* own a resource is the design decision the smart pointer
+    only records.
+-   **Macros.** Avoid; prefer `constexpr`/`inline`. When unavoidable, define close
+    to use and `#undef` immediately.
+-   **Concepts over `enable_if`; r-value references restricted** to move
+    operations, perfect forwarding, and consuming `*this`. Correct usage is
+    contextual.
+-   **Comment quality.** File, class and function comments must explain intent.
+    Presence is lintable; usefulness is not.
 
-## 4. Classes
+## Removed
 
--   **Constructors:** `explicit` for single-arg and conversion operators.
-    **Exception:** `std::initializer_list`. No virtual calls in ctors. Use
-    factories for fallible init.
--   **Structs:** Only for passive data. Prefer `struct` over `std::pair` or
-    `std::tuple`.
--   **Copy/Move:** Explicitly `= default` or `= delete`. **Rule of 5:** If
-    defining one, declare all.
--   **Inheritance:** `public` only. Composition > Inheritance. Use `override`
-    (omit `virtual`). No multiple implementation inheritance.
--   **Operator Overloading:** Judicious use only. Binary ops as non-members.
-    Never overload `&&`, `||`, `,`, or unary `&`. No User-Defined Literals.
--   **Access:** Data members `private` (except structs/constants).
--   **Declaration Order:** `public` before `protected` before `private`. Within
-    sections: Types, Constants, Factory, Constructors, Destructor, Methods, Data
-    Members.
+The C++20 version policy (target C++20, no modules, approved coroutine libraries
+only, approved Boost subset) is a project-wide toolchain decision, not a style
+rule — it belongs in `config.files.artifacts.decisions` and in the build
+configuration, where it can be enforced rather than remembered
+(`config.styleguide_layers.misplaced_rule_policy`).
 
-## 5. Functions
-
--   **Params:** Inputs (`const T&`, `std::string_view`, `std::span` or value)
-    first, then outputs. **Ordering:** Inputs before outputs.
--   **Outputs:** Prefer return values/`std::optional`. For non-optional outputs,
-    use references. For optional outputs, use pointers.
--   **Optional Inputs:** Use `std::optional` for by-value, `const T*` for
-    reference.
--   **Nonmember vs Static:** Prefer nonmember functions in namespaces over
-    static member functions.
--   **Length:** Prefer small (<40 lines).
--   **Overloading:** Use only when behavior is obvious. Document overload sets
-    with a single umbrella comment.
--   **Default Args:** Allowed on non-virtual functions only (value must be
-    fixed/constant).
--   **Trailing Return:** Only when necessary (lambdas).
-
-## 6. Scoping
-
--   **Namespaces:** No `using namespace`. Use `using std::string`. Never add to
-    `namespace std`.
--   **Internal:** Use anonymous namespaces or `static` in `.cc` files. Avoid in
-    headers.
--   **Locals:** Narrowest scope. Initialize at declaration. **Exception:**
-    Declare complex objects outside loops.
--   **Static/Global:** Must be **trivially destructible** (e.g., `constexpr`,
-    raw pointers, arrays). No global `std::string`, `std::map`, smart pointers.
-    Dynamic initialization allowed only for function-static variables.
--   **Thread Local:** `thread_local` must be `constinit` if global. Prefer
-    `thread_local` over other mechanisms.
-
-## 7. Modern C++ Features
-
--   **Version:** Target **C++20**. Do not use C++23. Consider portability for
-    C++17/20 features. No non-standard extensions.
--   **Modules:** Do not use C++20 Modules.
--   **Coroutines:** Use approved libraries only. Do not roll your own promise or
-    awaitable types.
--   **Concepts:** Prefer C++20 Concepts (`requires`) over `std::enable_if`. Use
-    `requires(Concept<T>)`, not `template<Concept T>`.
--   **R-Value References:** Use only for move ctors/assignment, perfect
-    forwarding, or consuming `*this`.
--   **Smart Pointers:** `std::unique_ptr` (exclusive), `std::shared_ptr`
-    (shared). No `std::auto_ptr`.
--   **Auto:** Use when type is obvious (`make_unique`, iterators). Avoid for
-    public APIs.
--   **CTAD:** Use only if explicitly supported (deduction guides exist).
--   **Structured Bindings:** Use for pairs/tuples. Comment aliased field names.
--   **Nullptr:** Use `nullptr`, never `NULL` or `0`.
--   **Constexpr:** Use `constexpr`/`consteval` for constants/functions whenever
-    possible. Use `constinit` for static initialization.
--   **Noexcept:** Specify when useful/correct. Prefer unconditional `noexcept`
-    if exceptions are disabled.
--   **Lambdas:** Prefer explicit captures (`[&x]`) if escaping scope. Avoid
-    `std::bind`.
--   **Initialization:** Prefer brace init. **Designated Initializers:** Allowed
-    (C++20 ordered form only).
--   **Casts:** Use C++ casts (`static_cast`). Use `std::bit_cast` for type
-    punning.
--   **Loops:** Prefer range-based `for`.
-
-## 8. Best Practices
-
--   **Const:** Mark methods/variables `const` whenever possible. `const` methods
-    must be thread-safe.
--   **Exceptions:** **Forbidden**.
--   **RTTI:** Avoid `dynamic_cast`/`typeid`. Allowed in unit tests. Do not
-    hand-implement workarounds.
--   **Macros:** Avoid. Use `constexpr`/`inline`. If needed, define close to use
-    and `#undef` immediately. Do not define in headers.
--   **0 and nullptr:** Use `nullptr` for pointers, `\0` for chars, not `0`.
--   **Streams:** Use streams primarily for logging. Prefer printf-style
-    formatting or absl::StrCat.
--   **Types:** Avoid `unsigned` for non-negativity. No `long double`.
--   **Pre-increment:** Prefer `++i` over `i++`.
--   **Sizeof:** Prefer `sizeof(varname)` over `sizeof(type)`.
--   **Friends:** Allowed, usually defined in the same file.
--   **Boost:** Use only approved libraries (e.g., Call Traits, Compressed Pair,
-    BGL, Property Map, Iterator, etc.).
--   **Aliases:** Use `using` instead of `typedef`. Public aliases must be
-    documented.
--   **Ownership:** Single fixed owner. Transfer via smart pointers.
--   **Aliases:** Document intent. Don't use in public API for convenience.
-    `using` > `typedef`.
--   **Switch:** Always include `default`. Use `[[fallthrough]]` for explicit
-    fallthrough.
--   **Comments:** Document File, Class, Function (params/return). Use `//` or
-    `/* */`. Implementation comments for tricky code. `TODO(user):` format.
-
-**BE CONSISTENT.** Follow existing code style.
-
-*Source:
-[Google C++ Style Guide](https://google.github.io/styleguide/cppguide.html)*
+*Source: [Google C++ Style Guide](https://google.github.io/styleguide/cppguide.html)*

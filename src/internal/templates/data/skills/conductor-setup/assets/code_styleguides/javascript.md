@@ -1,74 +1,52 @@
-# Google JavaScript Style Guide Summary
+# Google JavaScript Style Guide
 
-This document summarizes key rules and best practices from the Google JavaScript
-Style Guide.
+Rules are split into two layers (see `config.styleguide_layers`). The tooling layer
+is decided by the `lint`/`format` gates in `config.gates.manifest` — a review MUST
+NOT re-derive it by hand. The judgment layer is what a reviewer reads.
 
-## 1. Source File Basics
+Nearly this entire guide is mechanical: `eslint` plus `prettier` decide it.
 
--   **File Naming:** All lowercase, with underscores (`_`) or dashes (`-`).
-    Extension must be `.js`.
--   **File Encoding:** UTF-8.
--   **Whitespace:** Use only ASCII horizontal spaces (0x20). Tabs are forbidden
-    for indentation.
+## Enforced by tooling
 
-## 2. Source File Structure
+| Rule | Tool rule |
+| --- | --- |
+| File names lowercase with `_` or `-`; extension `.js` | `unicorn/filename-case` |
+| UTF-8 encoding; ASCII spaces only; tabs forbidden | `no-irregular-whitespace`, `no-tabs` |
+| New files are ES modules (`import`/`export`) | `sourceType: module` |
+| Named exports; no default exports | `import/no-default-export` |
+| No line-wrapped imports; `.js` extension mandatory in paths | `import/extensions` |
+| Braces required for all control structures; K&R style | `curly`, `brace-style` |
+| Indent +2 spaces per block | `indent` / `prettier` |
+| Every statement terminated with a semicolon | `semi` |
+| Column limit 80; continuation lines indented +4 | `max-len` / `prettier` |
+| Single blank line between methods; no trailing whitespace | `no-trailing-spaces`, `padded-blocks` |
+| `const` by default, `let` when reassigned; `var` forbidden | `no-var`, `prefer-const` |
+| Trailing commas; no `Array`/`Object` constructors | `comma-dangle`, `no-array-constructor`, `no-new-object` |
+| Object literal shorthand | `object-shorthand` |
+| No JavaScript getter/setter properties | `accessor-pairs` / `no-restricted-syntax` |
+| Arrow functions for nested functions | `prefer-arrow-callback` |
+| Single quotes; template literals for multi-line | `quotes`, `prefer-template` |
+| Prefer `for-of`; `for-in` only on dict-style objects | `no-restricted-syntax`, `guard-for-in` |
+| `this` only in constructors, methods, or arrows within them | `no-invalid-this` |
+| Always `===` / `!==` | `eqeqeq` |
+| `with` forbidden | `no-with` |
+| `eval()` / `Function(...string)` forbidden | `no-eval`, `no-new-func` |
+| Never rely on ASI | `semi` |
+| Do not modify builtin objects | `no-extend-native` |
+| `UpperCamelCase` classes; `lowerCamelCase` methods, functions, fields, variables | `camelcase` / `@typescript-eslint/naming-convention` |
+| `CONSTANT_CASE` for constants | `@typescript-eslint/naming-convention` |
+| JSDoc present on classes, fields, methods | `jsdoc/require-jsdoc` |
+| JSDoc types enclosed in braces | `jsdoc/valid-types` |
 
--   New files should be ES modules (`import`/`export`).
--   **Exports:** Use named exports (`export {MyClass};`). **Do not use default
-    exports.**
--   **Imports:** Do not use line-wrapped imports. The `.js` extension in import
-    paths is mandatory.
+## Requires judgment
 
-## 3. Formatting
+-   **`this` binding intent.** Preferring arrow functions to preserve `this` is
+    mechanical; whether the surrounding code *should* depend on `this` at all is
+    not. Flag designs that need lexical `this` to stay correct.
+-   **JSDoc completeness and accuracy.** A linter can require the tag; only a
+    reader can tell whether `@param` describes what the parameter actually means
+    or merely restates its name.
+-   **Choice of `@deprecated` / `@override`.** Whether a member genuinely
+    overrides or is genuinely deprecated is semantic, not syntactic.
 
--   **Braces:** Required for all control structures (`if`, `for`, `while`,
-    etc.), even single-line blocks. Use K&R style ("Egyptian brackets").
--   **Indentation:** +2 spaces for each new block.
--   **Semicolons:** Every statement must be terminated with a semicolon.
--   **Column Limit:** 80 characters.
--   **Line-wrapping:** Indent continuation lines at least +4 spaces.
--   **Whitespace:** Use single blank lines between methods. No trailing
-    whitespace.
-
-## 4. Language Features
-
--   **Variable Declarations:** Use `const` by default, `let` if reassignment is
-    needed. **`var` is forbidden.**
--   **Array Literals:** Use trailing commas. Do not use the `Array` constructor.
--   **Object Literals:** Use trailing commas and shorthand properties. Do not
-    use the `Object` constructor.
--   **Classes:** Do not use JavaScript getter/setter properties (`get name()`).
-    Provide ordinary methods instead.
--   **Functions:** Prefer arrow functions for nested functions to preserve
-    `this` context.
--   **String Literals:** Use single quotes (`'`). Use template literals (`` `
-    ``) for multi-line strings or complex interpolation.
--   **Control Structures:** Prefer `for-of` loops. `for-in` loops should only be
-    used on dict-style objects.
--   **`this`:** Only use `this` in class constructors, methods, or in arrow
-    functions defined within them.
--   **Equality Checks:** Always use identity operators (`===` / `!==`).
-
-## 5. Disallowed Features
-
--   `with` keyword.
--   `eval()` or `Function(...string)`.
--   Automatic Semicolon Insertion.
--   Modifying builtin objects (`Array.prototype.foo = ...`).
-
-## 6. Naming
-
--   **Classes:** `UpperCamelCase`.
--   **Methods & Functions:** `lowerCamelCase`.
--   **Constants:** `CONSTANT_CASE` (all uppercase with underscores).
--   **Non-constant Fields & Variables:** `lowerCamelCase`.
-
-## 7. JSDoc
-
--   JSDoc is used on all classes, fields, and methods.
--   Use `@param`, `@return`, `@override`, `@deprecated`.
--   Type annotations are enclosed in braces (e.g., `/** @param {string} userName
-    */`).
-
-*Source:
-[Google JavaScript Style Guide](https://google.github.io/styleguide/jsguide.html)*
+*Source: [Google JavaScript Style Guide](https://google.github.io/styleguide/jsguide.html)*

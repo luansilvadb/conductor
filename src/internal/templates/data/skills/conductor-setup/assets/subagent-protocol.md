@@ -46,6 +46,7 @@ Every dispatch decision follows this matrix. The orchestrator MUST consult it BE
 | Target file path starts with `${config.directories.conductor_root}/` or `${config.directories.source_code}/` AND file exceeds `${config.thresholds.delegate_lines}` lines | **DELEGATE** via subagent (mandatory) |
 | Operation is read-only and input is a file path | **DELEGATE** via the subagent type whose `config.subagent_types[].capabilities` contains `read_files` |
 | Operation is an analysis (diff, coverage, lint, test) | **DELEGATE** via the subagent type whose `config.subagent_types[].capabilities` contains `analysis` |
+| Operation writes any file | **DELEGATE** only via a type whose `config.subagent_types[].write_forbidden` is false — never to a retrieval type, per Subagent Rule 8 |
 | Parallelism is possible (tasks with no dependencies) | **DELEGATE** in parallel via multiple subagents (max: `${config.thresholds.max_parallel_subagents}`) |
 | Task writes any file listed in `config.files.control_files[]` | **ORCHESTRATOR** executes inline (subagents NEVER write control files) |
 | Task is trivial: 1-step operation with no file reading | **ORCHESTRATOR** executes inline |
@@ -117,6 +118,7 @@ The CIL is an architectural boundary between the orchestrator and subagents. It 
 5. **MANDATORY** to include approximate `${config.protocol.token_estimate_field}` of own consumption.
 6. **FORBIDDEN** to reproduce file contents in the return. A subagent that reads a file returns findings *about* it — assertions, counts, paths, line references — never the text it read. Quoting a file back to the orchestrator defeats the entire isolation layer: the tokens the delegation was meant to keep out land in the orchestrator anyway.
 7. **MANDATORY** to keep the whole return under `${config.thresholds.subagent_return_max_lines}` lines. A subagent whose findings genuinely exceed that budget writes the detail to a file under `config.directories.conductor_root`, returns the path in the data envelope, and sets `${config.protocol.status_field}` to `done_with_concerns` with an explanatory entry in `${config.protocol.warnings_field}`.
+8. **FORBIDDEN** to write any file at all when dispatched as a type whose `config.subagent_types[].write_forbidden` is true. The retrieval type is the one the orchestrator dispatches most, precisely because it cannot change anything, and the DDM routes every read-only operation to it. A write from inside it edits the project through a channel nobody reviews: the dispatch still reads as a lookup, and the change arrives with no task, no gate, and no commit attached to it. A retrieval subagent that finds a defect reports it in `${config.protocol.summary_field}` and `${config.protocol.warnings_field}` — fixing what it was sent to read is outside its scope even when the fix is obvious and correct. If the task genuinely requires a write, that is a misclassification: return `${config.protocol.status_field}` as `needs_context` so the orchestrator re-dispatches it to a type whose capabilities include writing.
 
 ### Subagent Lifecycle (Auto-Cleanup)
 

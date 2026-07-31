@@ -1,0 +1,31 @@
+{
+  "id": "handoff-with-work-in-flight",
+  "skill": "conductor-implement",
+  "description": "The user is asked about the review while T2 is still running, and the handoff fires on the answer. The review then reads a plan that shows T2 in progress and a diff that does not contain it yet — its findings describe a state that stopped being true moments after it looked.",
+  "expect_failures": ["handoff-readiness"],
+  "gates": [],
+  "events": [
+    { "t": "skill", "name": "conductor-implement" },
+    { "t": "wave", "op": "open", "n": 1, "tasks": [
+      { "id": "T1", "files": ["src/auth/login.ts"], "depends_on": [] },
+      { "id": "T2", "files": ["src/auth/token.ts"], "depends_on": [] }
+    ] },
+    { "t": "plan", "task": "T1", "status": "[~]" },
+    { "t": "plan", "task": "T2", "status": "[~]" },
+    { "t": "dispatch", "id": "s1", "subagent": "general-purpose", "task": "T1", "prompt": "implement T1 per spec; return only the JSON schema, no conversational text" },
+    { "t": "dispatch", "id": "s2", "subagent": "general-purpose", "task": "T2", "prompt": "implement T2 per spec; return only the JSON schema, no conversational text" },
+
+    { "t": "write", "actor": "sub:s1", "task": "T1", "kind": "test", "path": "src/auth/login.test.ts" },
+    { "t": "gate", "task": "T1", "kind": "test", "cmd": "npm test", "exit_code": 1 },
+    { "t": "write", "actor": "sub:s1", "task": "T1", "kind": "impl", "path": "src/auth/login.ts" },
+    { "t": "gate", "task": "T1", "kind": "test", "cmd": "npm test", "exit_code": 0 },
+    { "t": "return", "id": "s1", "protocol": "sdp-v1", "status": "done", "lines": 9, "token_estimate": 1390 },
+    { "t": "commit", "actor": "orchestrator", "sha": "a1b2c3d", "message": "feat(auth): add login handler" },
+    { "t": "note", "actor": "orchestrator", "sha": "a1b2c3d" },
+    { "t": "plan", "task": "T1", "status": "[x]", "sha": "a1b2c3d" },
+    { "t": "commit", "actor": "orchestrator", "sha": "b2c3d4e", "message": "conductor(plan): mark T1 as complete" },
+
+    { "t": "ask", "about": "conductor-review", "question": "Would you like a formal code review?", "answer": "yes" },
+    { "t": "handoff", "to": "conductor-review", "confirmed": true }
+  ]
+}

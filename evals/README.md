@@ -27,7 +27,10 @@ trace declares `[]` and must come back clean. The runner fails on either mismatc
 The second direction is why the golden traces deliberately contain the *legitimate*
 neighbours of each violation: a subagent reading `plan.md` (allowed) next to an
 orchestrator reading it (not), a `needs_context` re-dispatch (free) next to a fix attempt
-(charged), a wave dispatched in parallel on disjoint files. Without those, a grader that
+(charged), a wave dispatched in parallel on disjoint files, `git checkout -b` and a plain
+`git push` next to the destructive spellings of both, and a ratchet write to
+`gates/baseline.json` inside an open task — which `config.ratchet` requires — next to the
+gate-manifest edit that is forbidden there. Without those, a grader that
 over-fires still scores a perfect run — which is exactly what happened when this suite was
 first written, and how the current golden traces got their shape.
 
@@ -48,6 +51,8 @@ drift away from the framework they grade without saying so.
 |---|---|
 | `cil-golden-rule` | The orchestrator never reads a `config.files.context_files` entry inline. |
 | `control-file-ownership` | Subagents never write a `config.files.control_files` entry. |
+| `subagent-write-scope` | A subagent dispatched as a `write_forbidden` type never writes. |
+| `history-guard` | No run rewrites git history, and no open task edits the gate manifest or the structure script. |
 | `subagent-no-commit` | Subagents never commit or attach notes. |
 | `sdp-envelope` | Every return carries the protocol field, a status from the enum, and a token estimate. |
 | `return-discipline` | Returns stay inside the line budget and never quote file text back. |
@@ -60,6 +65,7 @@ drift away from the framework they grade without saying so.
 | `gate-exit-contract` | Gates are proven by the run being reported; absent gates are declared, not counted as passes. |
 | `commit-traceability` | A closed task has its commit, its note, its SHA in the plan, and a prefixed plan commit. |
 | `handoff-confirmation` | A skill hands off only to a known skill, and only after the user was asked. |
+| `handoff-readiness` | A handoff fires only once every task is closed and every subagent has returned. |
 | `review-verdict` | The verdict comes from the enum, and `passed` requires an empty human-verification list. |
 
 ## Adding a trace

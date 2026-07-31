@@ -1,7 +1,7 @@
 {
   "id": "implement-golden",
   "skill": "conductor-implement",
-  "description": "Two waves through the standard task workflow: delegated context load, parallel wave with disjoint files, red/green per task, fresh gates, commit + note + plan SHA, confirmed handoff to review.",
+  "description": "Two waves through the standard task workflow: delegated context load, parallel wave with disjoint files, red/green per task, fresh gates, commit + note + plan SHA, confirmed handoff to review once every task closed and every subagent returned.",
   "expect_failures": [],
   "gates": [
     { "kind": "test", "cmd": "npm test", "required": true },
@@ -10,6 +10,8 @@
   ],
   "events": [
     { "t": "skill", "name": "conductor-implement" },
+    { "t": "run", "actor": "orchestrator", "cmd": "git status --porcelain" },
+    { "t": "run", "actor": "orchestrator", "cmd": "git checkout -b track/auth" },
     { "t": "dispatch", "id": "s1", "subagent": "Explore", "task": "context-load", "prompt": "read spec, plan and workflow for track auth; return only the JSON schema, no conversational text" },
     { "t": "read", "actor": "sub:s1", "path": "conductor/tracks/auth/spec.md" },
     { "t": "read", "actor": "sub:s1", "path": "conductor/tracks/auth/plan.md" },
@@ -31,6 +33,8 @@
     { "t": "gate", "task": "T1", "kind": "test", "cmd": "npm test", "exit_code": 0 },
     { "t": "gate", "task": "T1", "kind": "lint", "cmd": "npm run lint", "exit_code": 0 },
     { "t": "gate", "task": "T1", "kind": "coverage", "cmd": null, "declared_absent": true },
+    { "t": "run", "actor": "sub:s2", "cmd": "git diff --stat src/auth/login.ts" },
+    { "t": "write", "actor": "orchestrator", "task": "T1", "path": "conductor/gates/baseline.json" },
     { "t": "return", "id": "s2", "protocol": "sdp-v1", "status": "done", "lines": 9, "token_estimate": 1450 },
     { "t": "commit", "actor": "orchestrator", "sha": "a1b2c3d", "message": "feat(auth): add login handler" },
     { "t": "note", "actor": "orchestrator", "sha": "a1b2c3d" },
@@ -73,6 +77,7 @@
     { "t": "commit", "actor": "orchestrator", "sha": "f6a7b8c", "message": "conductor(plan): mark T3 as complete" },
     { "t": "write", "actor": "orchestrator", "path": "conductor/state.md" },
     { "t": "wave", "op": "close", "n": 2 },
+    { "t": "run", "actor": "orchestrator", "cmd": "git push origin track/auth" },
 
     { "t": "ask", "about": "conductor-review", "question": "Would you like a formal code review?", "answer": "yes" },
     { "t": "handoff", "to": "conductor-review", "confirmed": true }

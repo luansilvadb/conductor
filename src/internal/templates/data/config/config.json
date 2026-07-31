@@ -13,27 +13,34 @@
     "source_code": "src",
     "tracks_dir": "conductor/tracks",
     "styleguides_dir": "conductor/code_styleguides",
-    "skills_dir": "conductor/skills",
-    "archive_dir": "conductor/archive"
+    "skills_dir": "${config.tool_dir}/skills",
+    "archive_dir": "conductor/archive",
+    "drafts_dir": "conductor/.drafts"
   },
 
+  "drafts_policy": "Scratch space for output that is too large to travel in a subagent return (Subagent Rule 7) but is not yet an artifact. It exists because the alternative is worse: a subagent with nowhere legitimate to put a long draft writes it next to the governance documents at the conductor root, where nothing lists it, nothing reads it, and the next skill that resolves an artifact by name may find the wrong file. Nothing here is an artifact and nothing here is a control file — a draft becomes real only when the orchestrator promotes it to its destination. Add this directory to the project's ignore file at setup, and empty it when the track that produced it closes.",
+
   "files": {
+    "artifacts_policy": "A file name alone does not say where the file lives, and every artifact here has exactly one owning directory. `artifacts` are project-scoped: they resolve against `config.directories.conductor_root` and there is one of each per project. `track_artifacts` are track-scoped: they resolve against `config.directories.tracks_dir`/<track_id> and there is one of each PER TRACK. Resolving a track artifact against the conductor root produces a file that no registry lists and no index links — a plan at the root is not a project plan, it is an orphan, and the next skill that resolves `plan` by name may read it instead of the real one. When a name appears in both maps, as `index` does, the two are different documents with different scopes and MUST NOT be conflated.",
     "artifacts": {
       "product": "product.md",
       "product_guidelines": "product-guidelines.md",
       "tech_stack": "tech-stack.md",
       "decisions": "decisions.md",
       "workflow": "workflow.md",
-      "plan": "plan.md",
-      "spec": "spec.md",
       "index": "index.md",
       "tracks_registry": "tracks.md",
-      "track_metadata": "metadata.json",
       "state": "state.md",
       "lessons": "lessons.md",
       "design_system": "DESIGN.md"
     },
-    "context_files_policy": "These are the files a context load reads when they exist. An entry whose setup_chain step carries a `condition` is absent by design on a project the condition excludes — read it when present, say nothing when it is not, and never report its absence as an incomplete setup.",
+    "track_artifacts": {
+      "plan": "plan.md",
+      "spec": "spec.md",
+      "index": "index.md",
+      "track_metadata": "metadata.json"
+    },
+    "context_files_policy": "These are the PROJECT-scoped files a context load reads when they exist. Track-scoped artifacts are deliberately absent from this list: which plan and which spec are in scope depends on the active track, so they are resolved from `config.files.track_artifacts` against that track's directory, never from a bare file name at the conductor root. An entry whose setup_chain step carries a `condition` is absent by design on a project the condition excludes — read it when present, say nothing when it is not, and never report its absence as an incomplete setup.",
     "context_files": [
       "product.md",
       "product-guidelines.md",
@@ -41,11 +48,10 @@
       "tech-stack.md",
       "decisions.md",
       "workflow.md",
-      "plan.md",
-      "spec.md",
       "tracks.md",
       "lessons.md"
     ],
+    "control_files_policy": "Orchestrator-owned files, matched BY NAME at any scope — the project root and every track directory alike. This list is a deny-list for subagent writes, not a location map, which is why the track-scoped names stay here even though they are absent from `context_files[]`: a subagent must not write a track's plan any more than the project's registry. Never read a path out of this list.",
     "control_files": [
       "tracks.md",
       "plan.md",
@@ -214,22 +220,11 @@
     "token_estimate_field": "token_estimate"
   },
 
-  "subagent_types": {
-    "search": {
-      "id": "Explore",
-      "capabilities": ["read_files", "search_codebase", "glob", "grep"],
-      "description": "Read-only retrieval subagent for exploring codebases and reading files",
-      "write_forbidden": true
-    },
-    "general_purpose_task": {
-      "id": "general-purpose",
-      "capabilities": ["read_files", "write_files", "run_commands", "analysis"],
-      "description": "Multi-purpose subagent for analysis, code generation, and verification",
-      "write_forbidden": false
-    }
-  },
+  "dispatch_policy": "The two blocks below are written by `conductor generate` from the contract of the tool this scaffolding was generated for — they are not a list of every tool's names, and they are not editable guesses. An empty `subagent_types` or an empty `dispatch_tool_aliases` is a declaration, not an omission: this environment exposes no subagent dispatch, so the SDP runs in `config.protocol.degraded_mode` and every skill says so in its report. That is a supported way to work — it costs context isolation, never correctness. What is NOT supported is naming a dispatch tool or a subagent type the environment does not have: the dispatch then fails as a lookup miss instead of a declared absence, the framework lands in degraded mode anyway, and the prose keeps claiming an isolation that is not in force. If a tool gains a dispatch contract, declare it in the tool registry and regenerate — never by hand here.",
 
-  "dispatch_tool_aliases": ["invoke_subagent", "Task", "dispatch", "spawn", "delegate"],
+  "subagent_types": "${tool.subagent_types}",
+
+  "dispatch_tool_aliases": "${tool.dispatch_tool_aliases}",
 
   "user_interaction_tools": ["ask_question", "AskUserQuestion", "NotifyUser"],
 
@@ -438,8 +433,10 @@
         "iteration": "number",
         "issues": [{ "task_id": "string", "dimension": "string", "severity": "string", "fix_hint": "string" }],
         "blocker_count": "number",
-        "warning_count": "number"
-      }
+        "warning_count": "number",
+        "revised_path": "string"
+      },
+      "revised_path_contract": "The linter writes the corrected plan to a file and returns its path here — it never returns the text. Without this field the orchestrator has only fix hints, so the revision has to be reapplied from a draft the CIL already discarded, and the plan degrades on every iteration. The path MUST be the plan's real destination inside the track directory, which exists before the lint loop starts. Null when the iteration found no blocker and rewrote nothing."
     },
     "wave_index": {
       "type": "object",

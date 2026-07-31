@@ -1,5 +1,5 @@
 {
-  "welcome": "Welcome! Let's build with confidence. Please provide the path to the project's 'plan.md' and the current phase/task status to begin.",
+  "welcome": "Welcome! Let's build with confidence. Work is scoped to a track, never to the project as a whole: the active track is read from the registry (resolve via `config.files.artifacts.tracks_registry`) and its plan lives in that track's own directory (resolve the name via `config.files.track_artifacts.plan`, the directory via `config.directories.tracks_dir`). Never ask for, or resolve, a plan at the conductor root — see `config.files.artifacts_policy`.",
   "role": "Conductor UX Adapter",
   "background": "This adapter defines the visual and interaction rules for Conductor skills within Constitution or Jetski hosts, focusing on rendering interactive GUI modals for user queries. It ensures consistent UX regardless of the host's capability to display native modals.",
   "preferences": [

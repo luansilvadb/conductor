@@ -3059,7 +3059,45 @@ var init_esm = __esm({
   }
 });
 
+// src/internal/dispatch-contracts.json
+var dispatch_contracts_default;
+var init_dispatch_contracts = __esm({
+  "src/internal/dispatch-contracts.json"() {
+    dispatch_contracts_default = {
+      $comment: "Subagent dispatch contracts, keyed by tool id. Deliberately NOT under templates/data \u2014 nothing here is a template, and anything placed there is embedded and written into the user's project. This is the single source for `${tool.subagent_types}` and `${tool.dispatch_tool_aliases}`: the tool registry reads it to generate a project's config.json, and the trace evals read it to grade the rubrics against a real generated config rather than an unresolved template. A tool absent from this map has no declared contract \u2014 generation then writes an empty list and an empty object, which the SDP reads as `no dispatch available` and reports as degraded mode. That absence is deliberate and must not be filled in by guessing: a named subagent type the environment does not expose fails as a lookup miss instead of a declared absence, and the framework runs inline anyway while every generated document still claims isolation is in force.",
+      reference_tool: "claude-code",
+      reference_tool_comment: "The tool the trace evals grade against. Rubrics about write scope need a contract that actually distinguishes a retrieval type from a general one, and only a tool with a declared contract provides that.",
+      contracts: {
+        "claude-code": {
+          toolAliases: ["Task"],
+          subagentTypes: {
+            search: {
+              id: "Explore",
+              capabilities: ["read_files", "search_codebase", "glob", "grep"],
+              description: "Read-only retrieval subagent for exploring codebases and reading files",
+              write_forbidden: true
+            },
+            general_purpose_task: {
+              id: "general-purpose",
+              capabilities: ["read_files", "write_files", "run_commands", "analysis"],
+              description: "Multi-purpose subagent for analysis, code generation, and verification",
+              write_forbidden: false
+            }
+          }
+        },
+        antigravity: {
+          toolAliases: ["invoke_subagent"],
+          subagentTypes: {}
+        }
+      }
+    };
+  }
+});
+
 // src/internal/tool-registry.ts
+function findDispatch(id) {
+  return findDescriptor(id)?.dispatch ?? { toolAliases: [], subagentTypes: {} };
+}
 function findDescriptor(id) {
   return TOOL_REGISTRY.find((d3) => d3.id === id);
 }
@@ -3073,10 +3111,12 @@ function registeredToolsByPriority() {
 function parseToolFlag(flag) {
   return findDescriptorByFlag(flag)?.id ?? "unknown" /* Unknown */;
 }
-var TOOL_REGISTRY;
+var DISPATCH_CONTRACTS, TOOL_REGISTRY;
 var init_tool_registry = __esm({
   "src/internal/tool-registry.ts"() {
     "use strict";
+    init_dispatch_contracts();
+    DISPATCH_CONTRACTS = dispatch_contracts_default.contracts;
     TOOL_REGISTRY = [
       {
         id: "cursor" /* Cursor */,
@@ -3086,6 +3126,8 @@ var init_tool_registry = __esm({
         configBaseDir: ".cursor",
         signatures: [".cursor", ".cursorrules"],
         detectionPriority: 1
+        // No `dispatch`: Cursor's subagent contract is not known here. See ToolDispatch —
+        // an omission puts the SDP in declared degraded mode; a guess breaks it silently.
       },
       {
         id: "claude-code" /* ClaudeCode */,
@@ -3099,7 +3141,8 @@ var init_tool_registry = __esm({
           settingsPath: ".claude/settings.json",
           events: { beforeToolUse: "PreToolUse", afterResponse: "Stop" },
           permissions: true
-        }
+        },
+        dispatch: DISPATCH_CONTRACTS["claude-code"]
       },
       {
         id: "antigravity" /* Antigravity */,
@@ -3109,7 +3152,8 @@ var init_tool_registry = __esm({
         configBaseDir: ".agents",
         signatures: [".antigravity"],
         detectionPriority: 3,
-        categoryMapping: { commands: "workflows" }
+        categoryMapping: { commands: "workflows" },
+        dispatch: DISPATCH_CONTRACTS["antigravity"]
       },
       {
         id: "trae" /* Trae */,
@@ -3119,6 +3163,7 @@ var init_tool_registry = __esm({
         configBaseDir: ".trae",
         signatures: [".trae"],
         detectionPriority: 4
+        // No `dispatch`: Trae's subagent contract is not known here. See ToolDispatch.
       }
     ];
   }
@@ -3287,27 +3332,34 @@ var init_embedded = __esm({
     "source_code": "src",
     "tracks_dir": "conductor/tracks",
     "styleguides_dir": "conductor/code_styleguides",
-    "skills_dir": "conductor/skills",
-    "archive_dir": "conductor/archive"
+    "skills_dir": "\${config.tool_dir}/skills",
+    "archive_dir": "conductor/archive",
+    "drafts_dir": "conductor/.drafts"
   },
 
+  "drafts_policy": "Scratch space for output that is too large to travel in a subagent return (Subagent Rule 7) but is not yet an artifact. It exists because the alternative is worse: a subagent with nowhere legitimate to put a long draft writes it next to the governance documents at the conductor root, where nothing lists it, nothing reads it, and the next skill that resolves an artifact by name may find the wrong file. Nothing here is an artifact and nothing here is a control file \u2014 a draft becomes real only when the orchestrator promotes it to its destination. Add this directory to the project's ignore file at setup, and empty it when the track that produced it closes.",
+
   "files": {
+    "artifacts_policy": "A file name alone does not say where the file lives, and every artifact here has exactly one owning directory. \`artifacts\` are project-scoped: they resolve against \`config.directories.conductor_root\` and there is one of each per project. \`track_artifacts\` are track-scoped: they resolve against \`config.directories.tracks_dir\`/<track_id> and there is one of each PER TRACK. Resolving a track artifact against the conductor root produces a file that no registry lists and no index links \u2014 a plan at the root is not a project plan, it is an orphan, and the next skill that resolves \`plan\` by name may read it instead of the real one. When a name appears in both maps, as \`index\` does, the two are different documents with different scopes and MUST NOT be conflated.",
     "artifacts": {
       "product": "product.md",
       "product_guidelines": "product-guidelines.md",
       "tech_stack": "tech-stack.md",
       "decisions": "decisions.md",
       "workflow": "workflow.md",
-      "plan": "plan.md",
-      "spec": "spec.md",
       "index": "index.md",
       "tracks_registry": "tracks.md",
-      "track_metadata": "metadata.json",
       "state": "state.md",
       "lessons": "lessons.md",
       "design_system": "DESIGN.md"
     },
-    "context_files_policy": "These are the files a context load reads when they exist. An entry whose setup_chain step carries a \`condition\` is absent by design on a project the condition excludes \u2014 read it when present, say nothing when it is not, and never report its absence as an incomplete setup.",
+    "track_artifacts": {
+      "plan": "plan.md",
+      "spec": "spec.md",
+      "index": "index.md",
+      "track_metadata": "metadata.json"
+    },
+    "context_files_policy": "These are the PROJECT-scoped files a context load reads when they exist. Track-scoped artifacts are deliberately absent from this list: which plan and which spec are in scope depends on the active track, so they are resolved from \`config.files.track_artifacts\` against that track's directory, never from a bare file name at the conductor root. An entry whose setup_chain step carries a \`condition\` is absent by design on a project the condition excludes \u2014 read it when present, say nothing when it is not, and never report its absence as an incomplete setup.",
     "context_files": [
       "product.md",
       "product-guidelines.md",
@@ -3315,11 +3367,10 @@ var init_embedded = __esm({
       "tech-stack.md",
       "decisions.md",
       "workflow.md",
-      "plan.md",
-      "spec.md",
       "tracks.md",
       "lessons.md"
     ],
+    "control_files_policy": "Orchestrator-owned files, matched BY NAME at any scope \u2014 the project root and every track directory alike. This list is a deny-list for subagent writes, not a location map, which is why the track-scoped names stay here even though they are absent from \`context_files[]\`: a subagent must not write a track's plan any more than the project's registry. Never read a path out of this list.",
     "control_files": [
       "tracks.md",
       "plan.md",
@@ -3488,22 +3539,11 @@ var init_embedded = __esm({
     "token_estimate_field": "token_estimate"
   },
 
-  "subagent_types": {
-    "search": {
-      "id": "Explore",
-      "capabilities": ["read_files", "search_codebase", "glob", "grep"],
-      "description": "Read-only retrieval subagent for exploring codebases and reading files",
-      "write_forbidden": true
-    },
-    "general_purpose_task": {
-      "id": "general-purpose",
-      "capabilities": ["read_files", "write_files", "run_commands", "analysis"],
-      "description": "Multi-purpose subagent for analysis, code generation, and verification",
-      "write_forbidden": false
-    }
-  },
+  "dispatch_policy": "The two blocks below are written by \`conductor generate\` from the contract of the tool this scaffolding was generated for \u2014 they are not a list of every tool's names, and they are not editable guesses. An empty \`subagent_types\` or an empty \`dispatch_tool_aliases\` is a declaration, not an omission: this environment exposes no subagent dispatch, so the SDP runs in \`config.protocol.degraded_mode\` and every skill says so in its report. That is a supported way to work \u2014 it costs context isolation, never correctness. What is NOT supported is naming a dispatch tool or a subagent type the environment does not have: the dispatch then fails as a lookup miss instead of a declared absence, the framework lands in degraded mode anyway, and the prose keeps claiming an isolation that is not in force. If a tool gains a dispatch contract, declare it in the tool registry and regenerate \u2014 never by hand here.",
 
-  "dispatch_tool_aliases": ["invoke_subagent", "Task", "dispatch", "spawn", "delegate"],
+  "subagent_types": "\${tool.subagent_types}",
+
+  "dispatch_tool_aliases": "\${tool.dispatch_tool_aliases}",
 
   "user_interaction_tools": ["ask_question", "AskUserQuestion", "NotifyUser"],
 
@@ -3712,8 +3752,10 @@ var init_embedded = __esm({
         "iteration": "number",
         "issues": [{ "task_id": "string", "dimension": "string", "severity": "string", "fix_hint": "string" }],
         "blocker_count": "number",
-        "warning_count": "number"
-      }
+        "warning_count": "number",
+        "revised_path": "string"
+      },
+      "revised_path_contract": "The linter writes the corrected plan to a file and returns its path here \u2014 it never returns the text. Without this field the orchestrator has only fix hints, so the revision has to be reapplied from a draft the CIL already discarded, and the plan degrades on every iteration. The path MUST be the plan's real destination inside the track directory, which exists before the lint loop starts. Null when the iteration found no blocker and rewrote nothing."
     },
     "wave_index": {
       "type": "object",
@@ -4798,7 +4840,7 @@ main();
         subpath: "base",
         ext: ".json",
         content: `{
-  "welcome": "Welcome! Let's build with confidence. Please provide the path to the project's 'plan.md' and the current phase/task status to begin.",
+  "welcome": "Welcome! Let's build with confidence. Work is scoped to a track, never to the project as a whole: the active track is read from the registry (resolve via \`config.files.artifacts.tracks_registry\`) and its plan lives in that track's own directory (resolve the name via \`config.files.track_artifacts.plan\`, the directory via \`config.directories.tracks_dir\`). Never ask for, or resolve, a plan at the conductor root \u2014 see \`config.files.artifacts_policy\`.",
   "role": "Conductor UX Adapter",
   "background": "This adapter defines the visual and interaction rules for Conductor skills within Constitution or Jetski hosts, focusing on rendering interactive GUI modals for user queries. It ensures consistent UX regardless of the host's capability to display native modals.",
   "preferences": [
@@ -4912,7 +4954,7 @@ main();
     "When asking the user for information or decisions, you must provide either **single\u2011choice** or **multiple\u2011choice** options. Introduce the option list with \\"\${i18n.t(\\"common.choices.select_option\\")}\\" and \u2014 in plain-text chat \u2014 close it with \\"\${i18n.t(\\"common.choices.reply_with_number\\")}\\". If a particular choice is recommended based on best practices, list it first, mark it as \`\${i18n.t(\\"common.confirmations.recommended\\")}\`, and explain why. Yes/No questions use the labels \\"\${i18n.t(\\"common.confirmations.yes\\")}\\" and \\"\${i18n.t(\\"common.confirmations.no\\")}\\". Always include a custom or \`Other\` option.",
     "In standard text chat, \`ask_question\`s **strictly one at a time** and wait for the user's response before proceeding. Do not ask multiple \`question\` in a single response unless using a form or modal tool.",
     "**Context Isolation (SDP)**: All project file access MUST follow the [Subagent Dispatch Protocol](\${config.protocols.subagent_dispatch.path}) (resolve protocol path from conductor skills directory; the protocol itself references \`[config.json](\${config.directories.conductor_root}/config.json)\`). The orchestrator NEVER reads context files directly. Use the Dispatch Decision Matrix to determine whether to read inline or delegate.",
-    "**Plan Checkboxes**: You MUST physically update the checkboxes in the plan document (resolved via \`config.files.artifacts.plan\`) for EVERY task you execute. Mark as \`\${config.enums.task_statuses.in_progress}\` when starting and \`\${config.enums.task_statuses.done}\` when finished.",
+    "**Plan Checkboxes**: You MUST physically update the checkboxes in the plan document (resolved via \`config.files.track_artifacts.plan\`) for EVERY task you execute. Mark as \`\${config.enums.task_statuses.in_progress}\` when starting and \`\${config.enums.task_statuses.done}\` when finished.",
     "**Quality Gate (TDD)**: No task may be marked \`\${config.enums.task_statuses.done}\` without first: (1) writing the failing test, (2) watching it fail for the expected reason, (3) implementing the minimum needed to pass, (4) running EVERY gate in the manifest (resolve via \`config.gates.manifest\`) whose \`required\` is true, and (5) confirming each one exited zero. The gate result is the exit code and the output of the run you just performed \u2014 never a judgement about whether the code looks correct, and never a result carried over from an earlier run or an earlier task, per \`config.gates.exit_contract\`. On failure, retry at most \`\${config.thresholds.max_fix_attempts}\` times (via subagent) before stopping and reporting the blocker to the user \u2014 never mark a task done to work around a failure.",
     "**Ratchet, not absolute (CRITICAL)**: for every gate whose \`mode\` is the ratchet value, compare the measurement against \`config.ratchet.baseline_file\`, NOT against the target in \`config.thresholds\`. The gate fails only when the project got worse; falling short of the target is reported, never blocking. This is what lets the framework be adopted on a codebase with history instead of demanding it be perfect before the first task. When a measurement beats the baseline, update the baseline in the same commit as the work that earned it, following \`config.ratchet.rules\`. Never move a baseline in the worsening direction \u2014 not to unblock a task, not to close a track, not at the user's suggestion without an explicit and recorded decision. A baseline that follows the code downward is not a ratchet, it is a ratchet-shaped excuse.",
     "**Absent gates are declared, not skipped**: a gate whose \`cmd\` is null in the manifest has NOT passed \u2014 it was never run. Per \`config.gates.absent_policy\`, name every absent gate in the task report and state which checks therefore rest on human judgement. Never let the absence of a gate read as its success, and never invent a command to fill the hole mid-task. If the manifest itself is missing, follow \`config.gates.missing_manifest_policy\` \u2014 offer to configure it, continue with every check treated as absent, and say plainly in the report that nothing was machine-verified.",
@@ -4973,8 +5015,8 @@ main();
   "profile_description": "Plans a new track (feature or bug fix), generates spec/plan documents, and updates the registry.",
   "goals": [
     "Initiate a new development track by gathering its description and classifying its type (resolved from \`config.enums.track_types\` dynamically from the centralized config (\`[config.json](\${config.directories.conductor_root}/config.json)\`)).",
-    "Interactively build a comprehensive spec document \u2014 the single source of truth for what must be built, using context\u2011aware \`question\` seeds derived from the product and tech stack. The spec artifact path is resolved via \`config.files.artifacts.spec\` from the centralized config (\`[config.json](\${config.directories.conductor_root}/config.json)\`).",
-    "Generate an actionable plan document that maps the specification onto the project's workflow (e.g., TDD phases, checkpoints). The plan artifact path is resolved via \`config.files.artifacts.plan\` from the centralized config (\`[config.json](\${config.directories.conductor_root}/config.json)\`).",
+    "Interactively build a comprehensive spec document \u2014 the single source of truth for what must be built, using context\u2011aware \`question\` seeds derived from the product and tech stack. The spec artifact path is resolved via \`config.files.track_artifacts.spec\` from the centralized config (\`[config.json](\${config.directories.conductor_root}/config.json)\`).",
+    "Generate an actionable plan document that maps the specification onto the project's workflow (e.g., TDD phases, checkpoints). The plan artifact path is resolved via \`config.files.track_artifacts.plan\` from the centralized config (\`[config.json](\${config.directories.conductor_root}/config.json)\`).",
     "Analyse the track's skill needs, recommend relevant Conductor skills, and install approved ones.",
     "Create the track's directory, store all artifacts, update the central tracks registry, and commit the changes to version control.",
     "When a \`question\` seed answer resolves an architectural trade-off (not a routine scoping detail), append the chosen option and its reason to the decisions file (resolve path via \`config.files.artifacts.decisions\`) so the choice remains traceable across future tracks."
@@ -4999,16 +5041,17 @@ main();
     "**No placeholders in the plan (CRITICAL)**: write the plan for an engineer with zero context on this project. Never use any phrasing from \`config.enums.banned_plan_phrasings\` or any equivalent deferral \u2014 no \\"TBD\\", no \\"handle edge cases\\", no \\"same as the previous task\\". A task that defers its own definition is not a task; it is a decision postponed to the moment it is most expensive to make. Name the actual files, the actual function signatures, and the actual expected values.",
     "**Task granularity**: size each task so one engineer completes the full cycle \u2014 write the test, watch it fail, implement, verify, commit \u2014 in \`\${config.thresholds.task_minutes_min}\` to \`\${config.thresholds.task_minutes_max}\` minutes. A task that cannot be finished in one cycle is really several tasks sharing a checkbox, and it hides its own progress: it is either not started or not finished, never partially verifiable. Split it and let each half carry its own test.",
     "**Interface consistency**: when a task consumes something an earlier task produces, spell out the exact signature or shape at both ends and keep them identical. Mismatched interfaces between tasks are the defect that survives every per-task check and only surfaces at integration, when the cost of fixing it is highest.",
-    "**Plan self-review loop**: after drafting the plan and before presenting it, dispatch an analysis subagent to lint it against the two previous constraints, returning the schema defined in \`config.schemas.plan_lint\`. Revise and re-lint while blockers remain, for at most \`\${config.thresholds.plan_review_iterations}\` iterations. If the blocker count fails to decrease between two consecutive iterations, stop iterating \u2014 the approach itself is wrong; surface the remaining blockers to the user and ask whether to restructure the track or proceed knowingly."
+    "**Plan self-review loop**: after drafting the plan and before presenting it, dispatch an analysis subagent to lint it against the wave assignment rule and the two previous constraints, returning the schema defined in \`config.schemas.plan_lint\`. The plan is linted at its final path inside the track directory and revised in place; the subagent returns \`revised_path\`, never the text. Revise and re-lint while blockers remain, for at most \`\${config.thresholds.plan_review_iterations}\` iterations. If the blocker count fails to decrease between two consecutive iterations, stop iterating \u2014 the approach itself is wrong; surface the remaining blockers to the user and ask whether to restructure the track or proceed knowingly.",
+    "**The track directory is reserved before anything is drafted (CRITICAL)**: create it, and write nothing that belongs to a track anywhere else. A draft has no legitimate home until its destination exists, and the framework's own rules then leave no conforming path: the draft is too large to return (Subagent Rule 7), the orchestrator may not retain it (CIL Orchestrator Rule 3), and it may not be read back from disk (SDP Golden Rule). What that produces is a plan written to \`config.directories.conductor_root\` and later rebuilt from memory \u2014 measurably poorer than the one that was linted, and orphaned besides. NEVER write a name from \`config.files.track_artifacts\` to the conductor root: those names resolve against the track directory, and nothing else."
   ],
   "skills": [
     "**Project context verification** \u2013 locate the project index file (resolve via \`config.files.artifacts.index\` from the centralized config (\`[config.json](\${config.directories.conductor_root}/config.json)\`)) and confirm the existence of linked core files (product document via \`config.files.artifacts.product\`, tech\u2011stack document via \`config.files.artifacts.tech_stack\`, decisions document via \`config.files.artifacts.decisions\`, workflow document via \`config.files.artifacts.workflow\`).",
     "**Track classification** \u2013 infer track type from the user's description, resolved from \`config.enums.track_types\` dynamically from the centralized config (\`[config.json](\${config.directories.conductor_root}/config.json)\`).",
     "**Question seed generation** \u2013 dispatch a sub\u2011agent to cross\u2011reference the track description against product/tech\u2011stack; return a small set of plausible, context\u2011aware options for the interactive spec.",
-    "**Interactive spec drafting** \u2013 present those seeds as one\u2011at\u2011a\u2011time \`question\`, gather answers, then dispatch a sub\u2011agent to synthesise a complete spec document (resolved via \`config.files.artifacts.spec\` from the centralized config (\`[config.json](\${config.directories.conductor_root}/config.json)\`)); present for user approval with an Approve/Revise choice.",
-    "**Plan generation** \u2013 dispatch a sub\u2011agent that reads the workflow methodology and the approved spec to produce a plan document (resolved via \`config.files.artifacts.plan\` from the centralized config (\`[config.json](\${config.directories.conductor_root}/config.json)\`)) with hierarchical tasks, checkboxes, and phase verification steps; present for user approval.",
+    "**Interactive spec drafting** \u2013 present those seeds as one\u2011at\u2011a\u2011time \`question\`, gather answers, then dispatch a sub\u2011agent to synthesise a complete spec document (resolved via \`config.files.track_artifacts.spec\` from the centralized config (\`[config.json](\${config.directories.conductor_root}/config.json)\`)); present for user approval with an Approve/Revise choice.",
+    "**Plan generation** \u2013 dispatch a sub\u2011agent that reads the workflow methodology and the approved spec and writes the plan document to its final path in the track directory (resolved via \`config.files.track_artifacts.plan\` from the centralized config (\`[config.json](\${config.directories.conductor_root}/config.json)\`)) with hierarchical tasks, checkboxes, and phase verification steps; lint and revise it in place, then present for user approval.",
     "**Skill recommendation & installation** \u2013 dispatch a sub\u2011agent to match the spec/plan against the skill catalogs \u2014 [Community Skills Catalog](\${config.catalogs.community}) for external/third\u2011party skills and [Core Skills Catalog](\${config.catalogs.core}) for Conductor's own first\u2011party skills; recommend skills with trust levels resolved from \`config.enums.trust_levels\` dynamically from the centralized config (\`[config.json](\${config.directories.conductor_root}/config.json)\`), with trust disclosure, then install using the appropriate package manager or download tool for the environment upon user consent.",
-    "**Track directory creation** \u2013 generate a unique track ID, create the workspace under the tracks directory (resolved via \`config.directories.tracks_dir\` from the centralized config (\`[config.json](\${config.directories.conductor_root}/config.json)\`)), write the track metadata (resolved via \`config.files.artifacts.track_metadata\`), the spec document (resolved via \`config.files.artifacts.spec\`), the plan document (resolved via \`config.files.artifacts.plan\`), and a track\u2011level index document (resolved via \`config.files.artifacts.index\`).",
+    "**Track workspace reservation** \u2013 generate a unique track ID and create the workspace under the tracks directory (resolved via \`config.directories.tracks_dir\` from the centralized config (\`[config.json](\${config.directories.conductor_root}/config.json)\`)) as the FIRST filesystem action of the track, writing the track metadata (resolved via \`config.files.track_artifacts.track_metadata\`) immediately. The spec (resolved via \`config.files.track_artifacts.spec\`), the plan (resolved via \`config.files.track_artifacts.plan\`) and the track\u2011level index (resolved via \`config.files.track_artifacts.index\`) are then authored at their final paths in that directory, never staged elsewhere and moved.",
     "**Registry & handshake updates** \u2013 append a new entry to the tracks registry (resolved via \`config.files.artifacts.tracks_registry\` from the centralized config (\`[config.json](\${config.directories.conductor_root}/config.json)\`)) \u2014 with a relative link \u2014 and ensure the project index document (resolved via \`config.files.artifacts.index\`) points to the tracks directory and registry.",
     "**Git commit** \u2013 stage all conductor changes and commit with a standardised message."
   ],
@@ -5019,11 +5062,12 @@ main();
   "output_format": [
     "**Handshake & context check** \u2013 locate the project index document (resolved via \`config.files.artifacts.index\` from the centralized config (\`[config.json](\${config.directories.conductor_root}/config.json)\`)); if missing, offer setup. Verify core file paths (health check only), including the decisions file (resolved via \`config.files.artifacts.decisions\`).",
     "**Acquire track description** \u2013 if not provided, ask openly; infer type (resolved from \`config.enums.track_types\` dynamically) and confirm with a Yes/No \`question\`.",
-    "**Interactive spec generation** (spec document, resolved via \`config.files.artifacts.spec\`):\\n   - Dispatch a subagent of type resolved via \`config.subagent_types\` using capability\u2011based lookup (\`resolveSubagentByCapability(\\"read_files\\", config)\` from the [Subagent Dispatch Protocol](\${config.protocols.subagent_dispatch.path})) (SDP) to cross-reference the track description against product/tech-stack. Subagent returns schema as defined in \`config.schemas.question_seeds\` from the centralized config (\`[config.json](\${config.directories.conductor_root}/config.json)\`), validated via \`\${config.protocol.protocol_field}: \${config.protocol.version_string}\` with data under \`\${config.protocol.data_envelope}.*\`.\\n   - \`ask_question\`s one at a time, using the seeds as suggestion bases; loop until user says information is sufficient.\\n   - Dispatch a subagent of type resolved via \`config.subagent_types\` using capability\u2011based lookup (\`resolveSubagentByCapability(\\"analysis\\", config)\` from the [Subagent Dispatch Protocol](\${config.protocols.subagent_dispatch.path})) (SDP) to synthesize the complete spec document from collected answers. Subagent returns schema as defined in \`config.schemas.spec_plan_draft\` from the centralized config (\`[config.json](\${config.directories.conductor_root}/config.json)\`), validated via \`\${config.protocol.protocol_field}: \${config.protocol.version_string}\` with data under \`\${config.protocol.data_envelope}.*\`.\\n   - Show draft; user chooses Approve or Revise; iterate if needed.",
-    "**Interactive plan generation** (plan document, resolved via \`config.files.artifacts.plan\`):\\n   - Dispatch a subagent of type resolved via \`config.subagent_types\` using capability\u2011based lookup (\`resolveSubagentByCapability(\\"analysis\\", config)\` from the [Subagent Dispatch Protocol](\${config.protocols.subagent_dispatch.path})) (SDP) to read workflow + approved spec and generate the plan document with checkboxes and phase verification tasks. Returns schema as defined in \`config.schemas.spec_plan_draft\` from the centralized config (\`[config.json](\${config.directories.conductor_root}/config.json)\`), validated via \`\${config.protocol.protocol_field}: \${config.protocol.version_string}\` with data under \`\${config.protocol.data_envelope}.*\`.\\n   - Every task MUST be written in the task block format below, carrying all fields from \`config.plan_task_fields\`:\\n     \`\`\`markdown\\n     - \${config.enums.task_statuses.pending} 1.2 Validate the session token\\n       - wave: 1\\n       - depends_on: []\\n       - files: [src/auth/token.ts, tests/auth/token.test.ts]\\n       - accept:\\n         - \`src/auth/token.ts\` exports \`verifyToken\`\\n         - \`verifyToken\` on an expired token returns \`{ valid: false, reason: \\"expired\\" }\`\\n         - \`npm test -- token\` exits 0\\n     \`\`\`\\n   - **Lint before presenting**: dispatch an analysis subagent to check the draft against the scope sanity gate and the empirical acceptance criteria rule, returning \`config.schemas.plan_lint\`. Revise while blockers remain, up to \`\${config.thresholds.plan_review_iterations}\` iterations; stop early if the blocker count stops decreasing and escalate to the user.\\n   - Show draft (including the wave grouping and any splits made to satisfy the scope gate); user chooses Approve or Revise.",
+    "**Reserve the track workspace (BEFORE any drafting)** \u2013 generate the track ID, check for name collisions via a sub\u2011agent, create the directory under the tracks directory (resolved via \`config.directories.tracks_dir\`), and write the track metadata (resolved via \`config.files.track_artifacts.track_metadata\`) with the classification just confirmed. Nothing is drafted before this step exists on disk. Every draft that follows is written to its FINAL path inside this directory and revised in place \u2014 the spec at \`config.files.track_artifacts.spec\`, the plan at \`config.files.track_artifacts.plan\`. This ordering is not cosmetic: a draft is too large to travel in a subagent return (Subagent Rule 7) and the orchestrator may not hold it in context (CIL Orchestrator Rule 3), so without a destination the only remaining move is to write it at the conductor root and later reconstruct it from memory \u2014 which silently loses acceptance criteria and produces an orphan the registry never lists. The directory reserved here is what makes the lint loop below possible at all. The track is not yet registered: the registry entry and the commit come at the end, so an abandoned track leaves an unlisted directory and never a phantom entry.",
+    "**Interactive spec generation** (spec document, written directly to \`config.files.track_artifacts.spec\` inside the reserved directory):\\n   - Dispatch a subagent of type resolved via \`config.subagent_types\` using capability\u2011based lookup (\`resolveSubagentByCapability(\\"read_files\\", config)\` from the [Subagent Dispatch Protocol](\${config.protocols.subagent_dispatch.path})) (SDP) to cross-reference the track description against product/tech-stack. Subagent returns schema as defined in \`config.schemas.question_seeds\` from the centralized config (\`[config.json](\${config.directories.conductor_root}/config.json)\`), validated via \`\${config.protocol.protocol_field}: \${config.protocol.version_string}\` with data under \`\${config.protocol.data_envelope}.*\`.\\n   - \`ask_question\`s one at a time, using the seeds as suggestion bases; loop until user says information is sufficient.\\n   - Dispatch a subagent of type resolved via \`config.subagent_types\` using capability\u2011based lookup (\`resolveSubagentByCapability(\\"analysis\\", config)\` from the [Subagent Dispatch Protocol](\${config.protocols.subagent_dispatch.path})) (SDP) to synthesize the complete spec document from collected answers. Subagent returns schema as defined in \`config.schemas.spec_plan_draft\` from the centralized config (\`[config.json](\${config.directories.conductor_root}/config.json)\`), validated via \`\${config.protocol.protocol_field}: \${config.protocol.version_string}\` with data under \`\${config.protocol.data_envelope}.*\`.\\n   - Show draft; user chooses Approve or Revise; iterate if needed.",
+    "**Interactive plan generation** (plan document, written directly to \`config.files.track_artifacts.plan\` inside the reserved directory):\\n   - Dispatch a subagent of type resolved via \`config.subagent_types\` using capability\u2011based lookup (\`resolveSubagentByCapability(\\"analysis\\", config)\` from the [Subagent Dispatch Protocol](\${config.protocols.subagent_dispatch.path})) (SDP) to read workflow + approved spec and generate the plan document with checkboxes and phase verification tasks. Returns schema as defined in \`config.schemas.spec_plan_draft\` from the centralized config (\`[config.json](\${config.directories.conductor_root}/config.json)\`), validated via \`\${config.protocol.protocol_field}: \${config.protocol.version_string}\` with data under \`\${config.protocol.data_envelope}.*\`.\\n   - Every task MUST be written in the task block format below, carrying all fields from \`config.plan_task_fields\`:\\n     \`\`\`markdown\\n     - \${config.enums.task_statuses.pending} 1.2 Validate the session token\\n       - wave: 1\\n       - depends_on: []\\n       - files: [src/auth/token.ts, tests/auth/token.test.ts]\\n       - accept:\\n         - \`src/auth/token.ts\` exports \`verifyToken\`\\n         - \`verifyToken\` on an expired token returns \`{ valid: false, reason: \\"expired\\" }\`\\n         - \`npm test -- token\` exits 0\\n     \`\`\`\\n   - **Lint before presenting**: dispatch an analysis subagent, giving it the plan's path inside the track directory, to check it against the wave assignment rule, the scope sanity gate and the empirical acceptance criteria rule. The subagent revises the file IN PLACE and returns \`config.schemas.plan_lint\`, whose \`revised_path\` is the file it wrote. It never returns the plan text, and the orchestrator never holds it: each iteration reads its input from the previous iteration's \`revised_path\`, so the document that reaches the user is the one every revision was applied to. Revise while blockers remain, up to \`\${config.thresholds.plan_review_iterations}\` iterations; stop early if the blocker count stops decreasing and escalate to the user.\\n   - Never reconstruct the plan from memory to \\"copy it into place\\" \u2014 it is already in place. A plan rewritten from recollection loses exactly what the lint loop added, and loses it silently, because the reconstruction always looks like a plan.\\n   - Show draft (including the wave grouping and any splits made to satisfy the scope gate); user chooses Approve or Revise. On Revise, the revision is applied to the same file.",
     "**Persist architectural choices** \u2013 for any \`question\` seed answer that resolved an architectural trade-off (not a routine scoping detail), append a dated entry (option chosen + reason) to the decisions file (resolved via \`config.files.artifacts.decisions\`); before the spec is finalised, cross-check it against existing entries and surface any conflict to the user for explicit confirmation.",
     "**Skill recommendation**:\\n   - Dispatch a subagent of type resolved via \`config.subagent_types\` using capability\u2011based lookup (\`resolveSubagentByCapability(\\"read_files\\", config)\` from the [Subagent Dispatch Protocol](\${config.protocols.subagent_dispatch.path})) (SDP) to scan the skill catalogs \u2014 [Community Skills Catalog](\${config.catalogs.community}) (external/third\u2011party skills) and [Core Skills Catalog](\${config.catalogs.core}) (first\u2011party Conductor skills). Returns schema as defined in \`config.schemas.skill_catalog_match\` from the centralized config (\`[config.json](\${config.directories.conductor_root}/config.json)\`), validated via \`\${config.protocol.protocol_field}: \${config.protocol.version_string}\` with data under \`\${config.protocol.data_envelope}.*\`.\\n   - Present missing skills with trust disclosure \u2014 trust levels resolved from \`config.enums.trust_levels\` dynamically from the centralized config (\`[config.json](\${config.directories.conductor_root}/config.json)\`) \u2014 with frozen commit warning for community skills.\\n   - User selects skills to install; execute installation using the appropriate package manager or download tool for the environment.\\n   - Advise user to refresh their agent environment.",
-    "**Create track artifacts & update registry**:\\n   - Resolve tracks directory from config; check for name collisions via sub\u2011agent.\\n   - Generate track ID, create directory under the tracks directory (resolved via \`config.directories.tracks_dir\`).\\n   - Write the track metadata (resolved via \`config.files.artifacts.track_metadata\`), the spec document (resolved via \`config.files.artifacts.spec\`), the plan document (resolved via \`config.files.artifacts.plan\`), and the track\u2011level index document (resolved via \`config.files.artifacts.index\`).\\n   - Append entry to the tracks registry (resolved via \`config.files.artifacts.tracks_registry\`); ensure the project index document (resolved via \`config.files.artifacts.index\`) links to registry and directory.\\n   - Commit all changes.",
+    "**Finalise the track & update registry**:\\n   - The spec and the plan are already at their final paths in the reserved directory \u2014 this step registers them, it does not rewrite them. Copying either document here would discard the approved version in favour of a remembered one.\\n   - Verify the reserved directory holds the approved spec (resolved via \`config.files.track_artifacts.spec\`) and the approved plan (resolved via \`config.files.track_artifacts.plan\`), and that neither name exists at \`config.directories.conductor_root\` \u2014 per \`config.files.artifacts_policy\`, a track artifact at the project root is an orphan, and its presence means an earlier step wrote to the wrong scope. Report it and resolve it before committing rather than leaving both copies in place.\\n   - Write the track\u2011level index document (resolved via \`config.files.track_artifacts.index\`) listing every artifact in the directory, and complete the track metadata (resolved via \`config.files.track_artifacts.track_metadata\`).\\n   - Append entry to the tracks registry (resolved via \`config.files.artifacts.tracks_registry\`); ensure the project index document (resolved via \`config.files.artifacts.index\`) links to registry and directory.\\n   - Commit all changes with the prefix resolved from \`config.commit_conventions.new_track_prefix\`, and commit the track's documents separately from any source change \u2014 a plan that can only be reverted by reverting code is a plan nobody can revert.",
     "**Completion** \u2013 inform user; ask if they want to start implementation immediately (Yes/No); if yes, internally invoke \`\${config.skills.names.implement}\`."
   ],
   "completion": "Track successfully created! Would you like to start implementation now? (\${i18n.t(\\"common.confirmations.yes\\")}/\${i18n.t(\\"common.confirmations.no\\")})"
@@ -5066,7 +5110,7 @@ main();
     "**History is the record this skill reads (CRITICAL):** the commits and the git notes are not a side effect of the work \u2014 they are the only reconstruction of what a track did, and this skill is their primary reader. Every command listed in \`config.gate_hooks.guarded_invariants[]\` destroys that record: \`git reset --hard\`, \`git checkout --\` over tracked files, forced pushes, and \`git notes\` removal. Treat them as guarded, not merely as risky. A hard reset is therefore never the recommended strategy and never the default: offer it only for commits that exist nowhere but this working copy, state in the same breath what it deletes and that it cannot be undone by this skill or any later one, and execute it only after the user chooses it against that stated cost. Never pair it with a note removal or a forced push to \\"finish the cleanup\\" \u2014 that turns a local rollback into an unrecoverable one for everyone else. When the commits have been pushed or the history is ambiguous, the safe strategy is the only one on offer, and saying why is part of the answer."
   ],
   "skills": [
-    "Interpreting Conductor project files (resolving artifact paths from \`config.files.artifacts.*\` in the centralized config \u2014 e.g., \`config.files.artifacts.tracks_registry\`, \`config.files.artifacts.plan\`) to understand task/phase/track structure.",
+    "Interpreting Conductor project files (resolving artifact paths from \`config.files.artifacts.*\` in the centralized config \u2014 e.g., \`config.files.artifacts.tracks_registry\`, \`config.files.track_artifacts.plan\`) to understand task/phase/track structure.",
     "Advanced Git log interrogation: locating commits by SHA, searching commit messages and file diffs, detecting rewritten history (\\"ghost commits\\").",
     "Interactive menu building: constructing hierarchical, filtered lists of revert candidates.",
     "Strategic Git operations: \`git revert\` as the default strategy, \`git reset --hard\` only as the guarded exception described in the constraints, and conflict handling.",
@@ -5082,7 +5126,7 @@ main();
     "**Interactive Target Selection:** If a target is provided, confirm directly; otherwise, dispatch a subagent (SDP) \u2014 resolved via capability-based lookup (\`resolveSubagentByCapability(\\"read_files\\", config)\` from the [Subagent Dispatch Protocol](\${config.protocols.subagent_dispatch.path})) \u2014 to find in-progress/recently completed candidates, present a single-choice menu, and confirm.",
     "**Git Reconciliation & Verification:** Dispatch a subagent (SDP) \u2014 resolved via capability-based lookup (\`resolveSubagentByCapability(\\"analysis\\", config)\` from the [Subagent Dispatch Protocol](\${config.protocols.subagent_dispatch.path})) \u2014 to find all implementation, plan-update, and creation commits. Subagent returns schema as defined in \`config.schemas.git_commit_list\` \u2014 validate envelope via \`\${config.protocol.protocol_field}\`. Validate schema, consume only the \`\${config.protocol.data_envelope}.*\` schema per config.json, discard the rest.",
     "**Execution Plan Confirmation:** Summarize the target and list the commits to revert, naming for each one whether it carries a git note and whether it has been pushed. Then ask the user to choose a revert strategy as a single choice, with the safe \`git revert\` listed first and marked \\"\${i18n.t(\\"common.confirmations.recommended\\")}\\". Offer the hard reset only when every listed commit is local-only, and present it with what it destroys stated in the option itself, per the history constraint. Never present the two strategies as equivalent alternatives.",
-    "**Execution & Verification:** Execute the chosen Git commands, handle conflicts, then dispatch a subagent (SDP) \u2014 resolved via capability-based lookup (\`resolveSubagentByCapability(\\"analysis\\", config)\` from the [Subagent Dispatch Protocol](\${config.protocols.subagent_dispatch.path})) \u2014 to verify and synchronize the Implementation Plan (resolved via \`config.files.artifacts.plan\`). Announce completion, then **hand off**: offer, as a single-choice \`question\` with the options labelled \\"\${i18n.t(\\"common.confirmations.yes\\")}\\" and \\"\${i18n.t(\\"common.confirmations.no\\")}\\" (recommended first, prefixed \\"\${i18n.t(\\"common.confirmations.recommended\\")}\\"), to resume work by invoking the \`\${config.skills.names.implement}\` skill from the synchronized plan \u2014 the reverted tasks are pending again. If declined, mention that the \`\${config.skills.names.status}\` skill can be invoked at any time to review the post-revert progress."
+    "**Execution & Verification:** Execute the chosen Git commands, handle conflicts, then dispatch a subagent (SDP) \u2014 resolved via capability-based lookup (\`resolveSubagentByCapability(\\"analysis\\", config)\` from the [Subagent Dispatch Protocol](\${config.protocols.subagent_dispatch.path})) \u2014 to verify and synchronize the Implementation Plan (resolved via \`config.files.track_artifacts.plan\`). Announce completion, then **hand off**: offer, as a single-choice \`question\` with the options labelled \\"\${i18n.t(\\"common.confirmations.yes\\")}\\" and \\"\${i18n.t(\\"common.confirmations.no\\")}\\" (recommended first, prefixed \\"\${i18n.t(\\"common.confirmations.recommended\\")}\\"), to resume work by invoking the \`\${config.skills.names.implement}\` skill from the synchronized plan \u2014 the reverted tasks are pending again. If declined, mention that the \`\${config.skills.names.status}\` skill can be invoked at any time to review the post-revert progress."
   ]
 }
 `
@@ -5129,7 +5173,7 @@ main();
   ],
   "skills": [
     "Git diff and log analysis to pinpoint relevant changes.",
-    "Interpreting the plan and spec artifacts (as defined in \`config.files.artifacts.plan\` and \`config.files.artifacts.spec\` from \`[config.json](\${config.directories.conductor_root}/config.json)\`) to verify intent.",
+    "Interpreting the plan and spec artifacts (as defined in \`config.files.track_artifacts.plan\` and \`config.files.track_artifacts.spec\` from \`[config.json](\${config.directories.conductor_root}/config.json)\`) to verify intent.",
     "Checking code against guidelines (\`config.files.artifacts.product_guidelines\`) and styleguides (\`config.directories.styleguides_dir\`), as defined in \`[config.json](\${config.directories.conductor_root}/config.json)\`.",
     "Cross-checking the diff against the decisions file (\`config.files.artifacts.decisions\`) and flagging any contradiction of a recorded architectural decision as a \`\${config.enums.finding_categories[8]}\` finding.",
     "Security scanning for hardcoded secrets, PII, and unsafe input handling.",
@@ -5143,10 +5187,10 @@ main();
   "output_format": [
     "**Handshake**: Locate the index file via \`config.directories.conductor_root\` / \`config.files.artifacts.index\` from \`[config.json](\${config.directories.conductor_root}/config.json)\`, verify existence of all core files as defined in \`config.files.context_files[]\` and \`config.files.artifacts.*\`. Halt if missing.",
     "**Identify Scope**: Check user input for a track name; else auto-detect the in-progress track from the tracks registry (\`config.directories.conductor_root\` / \`config.files.artifacts.tracks_registry\`) via a subagent \u2014 resolve subagent type via \`config.subagent_types\` using capability-based lookup (\`resolveSubagentByCapability(\\"read_files\\", config)\` from the Subagent Dispatch Protocol). Confirm scope with user.",
-    "**Retrieve Context (SDP)**: Dispatch subagents \u2014 resolve subagent type via \`config.subagent_types\` using capability-based lookup (\`resolveSubagentByCapability(\\"read_files\\", config)\` from the Subagent Dispatch Protocol) \u2014 to load rules from guidelines (\`config.files.artifacts.product_guidelines\`), tech-stack (\`config.files.artifacts.tech_stack\`), decisions (\`config.files.artifacts.decisions\`), styleguides (\`config.directories.styleguides_dir\`), and installed skills. Dispatch a subagent to load the track's plan (\`config.files.artifacts.plan\`) and extract the commit range. Dispatch subagent(s) \u2014 resolve subagent type via \`config.subagent_types\` using capability-based lookup (\`resolveSubagentByCapability(\\"analysis\\", config)\` from the Subagent Dispatch Protocol) \u2014 to analyze the git diff (plan compliance, style, correctness, security, coverage). Dispatch a subagent to execute every required gate in \`config.gates.manifest\` and return \`config.schemas.gate_execution\`, including the baseline comparison from \`config.ratchet.baseline_file\` and the list of absent gates. When loading styleguides, request only the judgement layer (\`config.styleguide_layers.judgment.heading\`). Every return MUST contain the protocol field as \`\${config.protocol.protocol_field}: \${config.protocol.version_string}\` as defined in \`[config.json](\${config.directories.conductor_root}/config.json)\`. The orchestrator consumes only the \`\${config.protocol.data_envelope}.findings[]\` \u2014 schema defined in \`config.schemas.diff_analysis\`. Discard history.",
+    "**Retrieve Context (SDP)**: Dispatch subagents \u2014 resolve subagent type via \`config.subagent_types\` using capability-based lookup (\`resolveSubagentByCapability(\\"read_files\\", config)\` from the Subagent Dispatch Protocol) \u2014 to load rules from guidelines (\`config.files.artifacts.product_guidelines\`), tech-stack (\`config.files.artifacts.tech_stack\`), decisions (\`config.files.artifacts.decisions\`), styleguides (\`config.directories.styleguides_dir\`), and installed skills. Dispatch a subagent to load the track's plan (\`config.files.track_artifacts.plan\`) and extract the commit range. Dispatch subagent(s) \u2014 resolve subagent type via \`config.subagent_types\` using capability-based lookup (\`resolveSubagentByCapability(\\"analysis\\", config)\` from the Subagent Dispatch Protocol) \u2014 to analyze the git diff (plan compliance, style, correctness, security, coverage). Dispatch a subagent to execute every required gate in \`config.gates.manifest\` and return \`config.schemas.gate_execution\`, including the baseline comparison from \`config.ratchet.baseline_file\` and the list of absent gates. When loading styleguides, request only the judgement layer (\`config.styleguide_layers.judgment.heading\`). Every return MUST contain the protocol field as \`\${config.protocol.protocol_field}: \${config.protocol.version_string}\` as defined in \`[config.json](\${config.directories.conductor_root}/config.json)\`. The orchestrator consumes only the \`\${config.protocol.data_envelope}.findings[]\` \u2014 schema defined in \`config.schemas.diff_analysis\`. Discard history.",
     "**Output Findings**: Format a report with Summary, Verification Checks (checklist), and detailed Findings with severity, file, lines, context, and diff suggestion. Returns schema as defined in \`config.schemas.*\` \u2014 validate envelope via \`\${config.protocol.protocol_field}\` as defined in \`[config.json](\${config.directories.conductor_root}/config.json)\`.",
     "**Verdict**: state one status from \`config.enums.review_statuses\`, followed by the counts that justify it \u2014 findings by severity, and the number of behaviours changed by the track but not covered by an executed test. Add a **Needs Human Verification** section listing every item a machine could not confirm; if that section is non-empty, the verdict MUST be the human value from \`config.enums.review_statuses\`, never the pass value. An empty section is what earns a pass \u2014 say so explicitly rather than leaving it implied.",
-    "**Completion**: Determine recommendation based on findings. If issues, ask user to apply fixes, manually fix, or ignore. Apply selected action, committing code and updating the plan (\`config.files.artifacts.plan\`) automatically. Then update the tracks registry to reflect the completed review. **Handoff**: close by proactively offering the next step as a single-choice \`question\` (options labelled \\"\${i18n.t(\\"common.confirmations.yes\\")}\\" / \\"\${i18n.t(\\"common.confirmations.no\\")}\\", recommended first, prefixed \\"\${i18n.t(\\"common.confirmations.recommended\\")}\\"): if the review is approved and no \`\${config.enums.finding_severities[0]}\` severity findings remain, offer to hand off to the \`\${config.skills.names.new_track}\` skill to plan the next track; if \`\${config.enums.finding_severities[0]}\` severity findings make the delivered work unsafe to keep, offer instead to hand off to the \`\${config.skills.names.revert}\` skill to roll the work back safely. Invoke the chosen skill only after explicit user confirmation."
+    "**Completion**: Determine recommendation based on findings. If issues, ask user to apply fixes, manually fix, or ignore. Apply selected action, committing code and updating the plan (\`config.files.track_artifacts.plan\`) automatically. Then update the tracks registry to reflect the completed review. **Handoff**: close by proactively offering the next step as a single-choice \`question\` (options labelled \\"\${i18n.t(\\"common.confirmations.yes\\")}\\" / \\"\${i18n.t(\\"common.confirmations.no\\")}\\", recommended first, prefixed \\"\${i18n.t(\\"common.confirmations.recommended\\")}\\"): if the review is approved and no \`\${config.enums.finding_severities[0]}\` severity findings remain, offer to hand off to the \`\${config.skills.names.new_track}\` skill to plan the next track; if \`\${config.enums.finding_severities[0]}\` severity findings make the delivered work unsafe to keep, offer instead to hand off to the \`\${config.skills.names.revert}\` skill to roll the work back safely. Invoke the chosen skill only after explicit user confirmation."
   ],
   "completion": "Review completed. Would you like to apply the suggested fixes, manually fix, or ignore the findings?"
 }
@@ -5266,7 +5310,7 @@ main();
     "Configure the Workflow by offering Default or Customize modes, explaining the strategic value, copying from assets, and applying user choices to the workflow file (resolve path via \`config.directories.conductor_root\`/\`config.files.artifacts.workflow\` \u2014 see centralized config [\`config.json\`](\${config.directories.conductor_root}/config.json)).",
     "Optionally recommend Agent Skills by dispatching a catalog analysis subagent that reads [Core Skills Catalog](\${config.catalogs.core}) (first-party Conductor skills) and [Community Skills Catalog](\${config.catalogs.community}) (external/third-party skills) (resolve type via \`config.subagent_types\` using capability-based lookup \u2014 \`resolveSubagentByCapability(\\"analysis\\", config)\` from the [Subagent Dispatch Protocol](\${config.protocols.subagent_dispatch.path})), disclosing trust levels (resolve from \`config.enums.trust_levels\`), installing selected skills via curl, and prompting environment refresh.",
     "Create the Lessons Ledger at the path resolved from \`config.directories.conductor_root\`/\`config.files.artifacts.lessons\`. Explain what it is for before writing it: the triggers in \`config.lessons_document.triggers\` fire during implementation and review, and without this file the project relearns the same failure every track. Write it with its heading and an explicit empty state \u2014 never with invented example entries, which later read as real history. It is a control file (\`config.files.control_files[]\`), so only the orchestrator ever writes to it.",
-    "Configure Quality Gates. Explain the strategic value first: every rule a command can decide should be decided by that command, because prose is interpreted and an exit code is not. Dispatch an analysis subagent (resolve type via \`config.subagent_types\` using capability-based lookup \u2014 \`resolveSubagentByCapability(\\"analysis\\", config)\` from the [Subagent Dispatch Protocol](\${config.protocols.subagent_dispatch.path})) to discover which of \`config.gates.kinds\` this project already has, then RUN each candidate command yourself and keep only the ones that executed. Present the discovered set to the user for confirmation, disclosing every kind found absent and what will therefore go unverified per \`config.gates.absent_policy\`. Offer \u2014 as a single Yes/No \`question\`, never as an assumption \u2014 to author the structure script at \`config.gates.structure_script\` from the project-specific invariants gathered during product definition and the technology stack; include a check that no file exceeds \`\${config.thresholds.file_max_lines}\` lines. Write the confirmed set to \`config.gates.manifest\` using \`config.gates.entry_fields\`. Then measure every metric in \`config.ratchet.metrics\` from those same runs and write \`config.ratchet.baseline_file\`, recording the commit measured at. State the baseline and the target from \`config.thresholds\` side by side so the gap is visible from day one.",
+    "Configure Quality Gates. Explain the strategic value first: every rule a command can decide should be decided by that command, because prose is interpreted and an exit code is not. Dispatch an analysis subagent (resolve type via \`config.subagent_types\` using capability-based lookup \u2014 \`resolveSubagentByCapability(\\"analysis\\", config)\` from the [Subagent Dispatch Protocol](\${config.protocols.subagent_dispatch.path})) to discover which of \`config.gates.kinds\` this project already has, then RUN each candidate command yourself and keep only the ones that executed. Present the discovered set to the user for confirmation, disclosing every kind found absent and what will therefore go unverified per \`config.gates.absent_policy\`. A gate is recorded ONLY if you ran it and it executed \u2014 a \`cmd\` that was never invoked is a declaration about a tool nobody has verified exists, and it will first be discovered at the moment it blocks a task. Capture each exit code directly from the process; never read it through a pipe, because the pipeline reports the exit of its LAST command and a gate piped into \`tail\` or \`head\` reports success no matter how it exited. Where a coverage command exists \u2014 commonly the test runner in a coverage mode \u2014 record it as the \`coverage\` gate rather than leaving \`cmd\` null: a coverage gate with no command makes \`config.thresholds.coverage_min_percent\` a number in a document instead of a threshold, and the ratchet has nothing to measure against.\\n   - When the project has a formatter, exclude \`config.directories.conductor_root\` from it before recording the gate: add the framework's markdown and \`config.directories.drafts_dir\` to the formatter's ignore file, and show the user the one-line change. A formatter is free to rewrite prose it owns, but Conductor's documents are data \u2014 the plan's \`files:\` entries drive the file-overlap check that decides whether a wave runs in parallel, and its \`test_command:\` entries are executed verbatim. A markdown formatter reads \`__tests__\` as strong emphasis and normalises it to \`**tests**\`, which silently rewrites every such path into one that matches nothing. The failure is invisible in review, because the document still looks exactly like a plan. Left unexcluded, the required \`format\` gate corrupts the artifact that the other gates depend on, every time it is run in write mode.\\n   - Offer \u2014 as a single Yes/No \`question\`, never as an assumption \u2014 to author the structure script at \`config.gates.structure_script\` from the project-specific invariants gathered during product definition and the technology stack. Two checks are not optional and go in regardless: that no file exceeds \`\${config.thresholds.file_max_lines}\` lines, and that no name from \`config.files.track_artifacts\` exists directly under \`config.directories.conductor_root\`. The second one exists because a track artifact at the project root is an orphan by construction \u2014 no registry lists it, no index links it \u2014 and the skill that resolves that name by mistake reads a document nobody is maintaining. A rule that only lives in prose is re-decided by every future run; this one is decidable by a command, so it belongs to a command.\\n   - Write the confirmed set to \`config.gates.manifest\` using \`config.gates.entry_fields\`. Then measure every metric in \`config.ratchet.metrics\` from those same runs and write \`config.ratchet.baseline_file\`, recording the commit measured at. State the baseline and the target from \`config.thresholds\` side by side so the gap is visible from day one.",
     "Offer to wire the gate hooks, and only if the active tool exposes lifecycle events. Explain honestly what this buys: the hooks in \`config.gate_hooks.bindings\` invoke the SAME gates the skills already invoke, so declining costs automation and nothing else. Present the guarded invariants from \`config.gate_hooks.guarded_invariants\` and state the limitation in \`config.gate_hooks.limits\` \u2014 these protect the framework's own traceability from an agent acting in good faith, and are not a security boundary. Author the two scripts under \`config.gates.scripts_dir\`. Then, if and only if the user accepts, MERGE the hook entries into the tool's existing settings file: read it first, preserve every key already there, and show the resulting diff before writing. Never overwrite that file wholesale and never create it from a template \u2014 it is the user's editor configuration, not Conductor's. If the tool exposes no lifecycle events, skip this step in silence rather than reporting it as a gap; the gates are fully functional without it.",
     "Generate the Index by explaining its role as the single source of truth, writing the index file (resolve path via \`config.directories.conductor_root\`/\`config.files.artifacts.index\` \u2014 see centralized config [\`config.json\`](\${config.directories.conductor_root}/config.json)) with path mappings, verifying all linked files (resolve core file list from \`config.files.context_files[]\` dynamically), staging the conductor directory (resolve root from \`config.directories.conductor_root\`), and committing with a standardized message (resolve prefix from \`config.commit_conventions.setup_prefix\`).",
     "Announce completion with a summary and proactively suggest the next action, offering to hand off to the \${config.skills.names.new_track} skill if the user agrees."
@@ -5320,7 +5364,7 @@ main();
   ],
   "output_format": [
     "**Handshake & Context Initialization:**\\n   - Check for the project index document (resolved via \`config.files.artifacts.index\` from [config.json](\${config.directories.conductor_root}/config.json)). If missing, announce and offer to run setup.\\n   - Read the index file, locate core file links \u2014 resolve core files from \`config.files.context_files[]\` dynamically via [config.json](\${config.directories.conductor_root}/config.json).\\n   - Verify all linked files exist (via listing/stat, not reading contents). Halt if any missing and prompt to repair.",
-    "**Read and Summarize (SDP Dispatch):**\\n   - Dispatch a subagent (resolve subagent type via \`config.subagent_types\` using capability-based lookup \u2014 \`resolveSubagentByCapability(\\"read_files\\", config)\` from the [Subagent Dispatch Protocol](\${config.protocols.subagent_dispatch.path}); resolve protocol asset path from centralized config \u2014 \`[config.json](\${config.directories.conductor_root}/config.json)\`) to parse the Tracks Registry and all track \`\${config.files.artifacts.plan}\` files.\\n   - Subagent returns EXCLUSIVELY the schema as defined in \`config.schemas.status_report\` \u2014 validate envelope via \`\${config.protocol.protocol_field}: \${config.protocol.version_string}\` per [config.json](\${config.directories.conductor_root}/config.json).\\n   - Validate the \`\${config.protocol.protocol_field}\` field per [config.json](\${config.directories.conductor_root}/config.json). Consume only the \`\${config.protocol.data_envelope}.*\` schema. Discard the rest of the return.\\n   - If the dispatch tool (detected via \`config.dispatch_tool_aliases[]\` dynamic capability check) is not available: run in \`\${config.protocol.degraded_mode}\` mode per the Initialization Contract section of the [Subagent Dispatch Protocol](\${config.protocols.subagent_dispatch.path}) (resolve protocol asset path from centralized config \u2014 \`[config.json](\${config.directories.conductor_root}/config.json)\`), parsing inline with a warning.",
+    "**Read and Summarize (SDP Dispatch):**\\n   - Dispatch a subagent (resolve subagent type via \`config.subagent_types\` using capability-based lookup \u2014 \`resolveSubagentByCapability(\\"read_files\\", config)\` from the [Subagent Dispatch Protocol](\${config.protocols.subagent_dispatch.path}); resolve protocol asset path from centralized config \u2014 \`[config.json](\${config.directories.conductor_root}/config.json)\`) to parse the Tracks Registry and all track \`\${config.files.track_artifacts.plan}\` files.\\n   - Subagent returns EXCLUSIVELY the schema as defined in \`config.schemas.status_report\` \u2014 validate envelope via \`\${config.protocol.protocol_field}: \${config.protocol.version_string}\` per [config.json](\${config.directories.conductor_root}/config.json).\\n   - Validate the \`\${config.protocol.protocol_field}\` field per [config.json](\${config.directories.conductor_root}/config.json). Consume only the \`\${config.protocol.data_envelope}.*\` schema. Discard the rest of the return.\\n   - If the dispatch tool (detected via \`config.dispatch_tool_aliases[]\` dynamic capability check) is not available: run in \`\${config.protocol.degraded_mode}\` mode per the Initialization Contract section of the [Subagent Dispatch Protocol](\${config.protocols.subagent_dispatch.path}) (resolve protocol asset path from centralized config \u2014 \`[config.json](\${config.directories.conductor_root}/config.json)\`), parsing inline with a warning.",
     "**Present Status Overview:**\\n   - Using the returned schema, format a summary including current date/time, project status (e.g., On Track, Behind, Blocked), current phase and task, next action, blockers, total phases, total tasks, and progress percentage.\\n   - Present to user clearly, then prompt for next input."
   ]
 }
@@ -5334,7 +5378,7 @@ main();
         content: `{
   "welcome": "Hello, I am the Project Conductor. I execute the tasks in your track plan following a strict TDD cycle: I write the failing test first, implement the minimum needed to pass, refactor, and only then mark the task done. For every task I verify coverage and linting, make an atomic commit, attach the task summary as a git note, and update the plan with the commit SHA. At the end of each phase I run the full verification protocol and record an auditable checkpoint before moving on. I will announce the next task from the plan and will only proceed through manual verification steps after your explicit confirmation.",
   "role": "Dev Workflow Orchestrator",
-  "background": "You are an AI agent specialized in executing a structured, test-driven project workflow. You work with a plan file (refer to the centralized config (\`[config.json](../../config.json)\`) \u2014 resolve path via \`config.files.artifacts.plan\`) that defines tasks and phases, a tech stack file (resolve path via \`config.files.artifacts.tech_stack\`) for architectural decisions, and a strict lifecycle that emphasizes quality gates, continuous verification, and precise Git history. The workflow is CI-aware and non-interactive, preferring single-run commands over watch modes.",
+  "background": "You are an AI agent specialized in executing a structured, test-driven project workflow. You work with the active track's plan file (refer to the centralized config (\`[config.json](\${config.directories.conductor_root}/config.json)\`) \u2014 resolve the file name via \`config.files.track_artifacts.plan\` and the directory it lives in via \`config.directories.tracks_dir\`) that defines tasks and phases, a tech stack file (resolve path via \`config.files.artifacts.tech_stack\`) for architectural decisions, and a strict lifecycle that emphasizes quality gates, continuous verification, and precise Git history. The workflow is CI-aware and non-interactive, preferring single-run commands over watch modes.",
   "preferences": [
     "Non-interactive commands (use \`CI=true\` for tools)",
     "Test-driven development (Red-Green-Refactor cycle)",
@@ -5678,23 +5722,7 @@ Rules for entries:
    than a missing one, because it will be recommended to the user as installable.
 2. Keep \`Detection Signals\` narrow. Broad keywords cause false recommendations.
 3. Recommendations are always presented to the user for approval; a skill in this
-   catalog is never installed automatically.
-
-## Firebase Skills
-
-Skills focused on setting up, managing, and using various Firebase services.
-
-### firebase-ai-logic-basics
-
-- **Description**: Official skill for integrating Firebase AI Logic (Gemini API)
-  into web applications. Covers setup, multimodal inference, structured output,
-  and security.
-- **URL**: https://raw.githubusercontent.com/firebase/agent-skills/main/skills/firebase-ai-logic-basics/
-- **Party**: \${config.enums.trust_levels[1]}
-- **Detection Signals**:
-  - **Dependencies**: \`firebase\`, \`firebase-admin\`
-  - **Keywords**: \`Firebase\`, \`AI Logic\`, \`Gemini API\`, \`GenAI\`
-`
+   catalog is never installed automatically.`
       },
       {
         sourcePath: "D:/conductor/src/internal/templates/data/skills/conductor-revert/SKILL.md",
@@ -6723,7 +6751,8 @@ Conductor Subagent Protocol Engine
 This protocol defines the formal contract for all subagent delegation within the Conductor framework. All dispatch decisions are resolved **dynamically** from the centralized configuration (\`config.json\`) \u2014 there are **zero hardcoded** file paths, subagent type names, thresholds, schema fields, or tool names in this protocol. The orchestrator (main agent) MUST NOT read project context files directly \u2014 it delegates everything and only receives condensed schemas. Intermediate subagent history is **auto-discarded** by the Context Isolation Layer (CIL) after schema extraction.
 
 ## Notes:
-- The dispatch tool in the Antigravity environment is \`invoke_subagent\`. It is the first entry in \`config.dispatch_tool_aliases[]\` and MUST be used when available.
+- The dispatch tool is whatever \`config.dispatch_tool_aliases[]\` names, checked in order \u2014 that list is written for the tool this scaffolding was generated for. Never assume a name from another environment.
+- Both \`config.dispatch_tool_aliases[]\` and \`config.subagent_types\` may be **empty**, and an empty list is a statement, not a defect: this environment exposes no subagent dispatch. See \`config.dispatch_policy\`. Run in \`\${config.protocol.degraded_mode}\`, say so once, and continue \u2014 the work is unchanged, the isolation is not available.
 
 ## Profile:
 - version: \${config.framework.version}
@@ -6766,9 +6795,12 @@ Every dispatch decision follows this matrix. The orchestrator MUST consult it BE
 | Parallelism is possible (tasks with no dependencies) | **DELEGATE** in parallel via multiple subagents (max: \`\${config.thresholds.max_parallel_subagents}\`) |
 | Task writes any file listed in \`config.files.control_files[]\` | **ORCHESTRATOR** executes inline (subagents NEVER write control files) |
 | Task is trivial: 1-step operation with no file reading | **ORCHESTRATOR** executes inline |
-| No dispatch tool from \`config.dispatch_tool_aliases[]\` is available in the environment | **ORCHESTRATOR** executes inline with \`\${config.protocol.degraded_mode}\` warning |
+| \`config.dispatch_tool_aliases[]\` is empty, or no tool it names is available in the environment | **ORCHESTRATOR** executes inline with \`\${config.protocol.degraded_mode}\` warning |
+| \`config.subagent_types\` is empty, or no entry carries the required capability | **ORCHESTRATOR** executes inline with \`\${config.protocol.degraded_mode}\` warning |
 
-> **Tool name resolution:** \`config.dispatch_tool_aliases[]\` is checked in order. For Antigravity, \`invoke_subagent\` (index 0) matches first. For Cursor/Claude Code environments that expose a \`Task\` tool, \`Task\` (index 1) is used. Never assume a tool name \u2014 always check the toolset at runtime.
+> **Tool name resolution:** \`config.dispatch_tool_aliases[]\` is checked in order against the toolset present at runtime, and the first match wins. The list is generated from the tool registry for this environment specifically \u2014 it is not a menu of every tool's names. An empty list means dispatch is unavailable here by declaration; see \`config.dispatch_policy\`. Never assume a tool name, and never substitute one from another environment when the declared name is absent: a dispatch that misses is reported as degraded, and a dispatch invented to avoid reporting it is a silent failure.
+
+> **Degraded mode is a supported mode, and it changes what may be claimed.** The orchestrator reads inline exactly what it would have delegated, so the Golden Rule and the CIL are suspended for the duration \u2014 they describe a boundary that does not exist here. Every skill that ran degraded states it in its report. What must never happen is prose asserting isolation while the work ran inline: the rest of this protocol is only true when dispatch is available.
 
 ### Task Classification Algorithm (Dynamic)
 
@@ -6807,8 +6839,10 @@ FUNCTION resolveSubagentByCapability(capability, config):
   FOR EACH type IN config.subagent_types:
     IF capability IN type.capabilities:
       RETURN type.id
-  RETURN FALLBACK type.id  // default from config: first registered type with "analysis"
+  RETURN NULL  // no type carries it \u2014 see below
 \`\`\`
+
+\`resolveSubagentByCapability\` returns **NULL** when nothing matches, and the caller MUST treat that as "dispatch unavailable for this capability": run the operation inline and mark the run \`\${config.protocol.degraded_mode}\`. It never falls back to another type's id. A retrieval type substituted for an analysis type is dispatched with the wrong permissions, and an id invented to keep the call site simple is dispatched to nothing at all \u2014 both fail as a lookup miss somewhere downstream, where the cause is no longer visible. An empty \`config.subagent_types\` makes NULL the answer for every capability, which is exactly right for an environment with no typed subagents.
 
 ---
 
@@ -6833,7 +6867,7 @@ The CIL is an architectural boundary between the orchestrator and subagents. It 
 4. **MANDATORY** to return ONLY the JSON schema. No conversational text.
 5. **MANDATORY** to include approximate \`\${config.protocol.token_estimate_field}\` of own consumption.
 6. **FORBIDDEN** to reproduce file contents in the return. A subagent that reads a file returns findings *about* it \u2014 assertions, counts, paths, line references \u2014 never the text it read. Quoting a file back to the orchestrator defeats the entire isolation layer: the tokens the delegation was meant to keep out land in the orchestrator anyway.
-7. **MANDATORY** to keep the whole return under \`\${config.thresholds.subagent_return_max_lines}\` lines. A subagent whose findings genuinely exceed that budget writes the detail to a file under \`config.directories.conductor_root\`, returns the path in the data envelope, and sets \`\${config.protocol.status_field}\` to \`done_with_concerns\` with an explanatory entry in \`\${config.protocol.warnings_field}\`.
+7. **MANDATORY** to keep the whole return under \`\${config.thresholds.subagent_return_max_lines}\` lines. A subagent whose findings genuinely exceed that budget writes the detail to a file, returns the path in the data envelope, and sets \`\${config.protocol.status_field}\` to \`done_with_concerns\` with an explanatory entry in \`\${config.protocol.warnings_field}\`. **Where it writes is part of the rule.** When the subagent was dispatched to produce or revise a specific document, it writes to that document's own path \u2014 the one the orchestrator gave it \u2014 and returns that path. Otherwise it writes under \`config.directories.drafts_dir\`, per \`config.drafts_policy\`. It NEVER writes to \`config.directories.conductor_root\` itself: the root holds the project's governance documents, resolved by name, and an overflow file landing there is indistinguishable from the artifact whose name it borrows. This escape hatch exists so a long result survives the return budget, not so it acquires a new identity on the way out.
 8. **FORBIDDEN** to write any file at all when dispatched as a type whose \`config.subagent_types[].write_forbidden\` is true. The retrieval type is the one the orchestrator dispatches most, precisely because it cannot change anything, and the DDM routes every read-only operation to it. A write from inside it edits the project through a channel nobody reviews: the dispatch still reads as a lookup, and the change arrives with no task, no gate, and no commit attached to it. A retrieval subagent that finds a defect reports it in \`\${config.protocol.summary_field}\` and \`\${config.protocol.warnings_field}\` \u2014 fixing what it was sent to read is outside its scope even when the fix is obvious and correct. If the task genuinely requires a write, that is a misclassification: return \`\${config.protocol.status_field}\` as \`needs_context\` so the orchestrator re-dispatches it to a type whose capabilities include writing.
 
 ### Subagent Lifecycle (Auto-Cleanup)
@@ -6916,33 +6950,33 @@ FUNCTION executePhaseCompletion(phaseContext, config):
 
   // 1. Coverage: only dispatch if there are new files
   changedFiles = dispatchSubagent(
-    config.subagent_types.search.id,
+    resolveSubagentByCapability("read_files", config),
     "Run git diff to find changed files",
     config.schemas.diff_analysis
   )
   IF changedFiles[config.protocol.data_envelope].files_changed.length > 0:
     subagents.push({
-      type: config.subagent_types.general_purpose_task.id,
+      type: resolveSubagentByCapability("analysis", config),
       prompt: "Run coverage for files: " + changedFiles[config.protocol.data_envelope].files_changed,
       schema: config.schemas.test_execution
     })
 
   // 2. Test Suite: only dispatch if test files exist
   testFiles = dispatchSubagent(
-    config.subagent_types.search.id,
+    resolveSubagentByCapability("read_files", config),
     "Find all test files in the project",
     config.schemas.document_parse  // returns file list
   )
   IF testFiles[config.protocol.data_envelope].key_points.length > 0:
     subagents.push({
-      type: config.subagent_types.general_purpose_task.id,
+      type: resolveSubagentByCapability("analysis", config),
       prompt: "Run test suite with max " + config.thresholds.max_fix_attempts + " fix attempts",
       schema: config.schemas.test_execution
     })
 
   // 3. Manual Verification: always dispatch
   subagents.push({
-    type: config.subagent_types.general_purpose_task.id,
+    type: resolveSubagentByCapability("analysis", config),
     prompt: "Generate manual verification steps for phase",
     schema: config.schemas.manual_verification
   })
@@ -7196,26 +7230,32 @@ var init_config = __esm({
         source_code: "src",
         tracks_dir: "conductor/tracks",
         styleguides_dir: "conductor/code_styleguides",
-        skills_dir: "conductor/skills",
-        archive_dir: "conductor/archive"
+        skills_dir: "${config.tool_dir}/skills",
+        archive_dir: "conductor/archive",
+        drafts_dir: "conductor/.drafts"
       },
+      drafts_policy: "Scratch space for output that is too large to travel in a subagent return (Subagent Rule 7) but is not yet an artifact. It exists because the alternative is worse: a subagent with nowhere legitimate to put a long draft writes it next to the governance documents at the conductor root, where nothing lists it, nothing reads it, and the next skill that resolves an artifact by name may find the wrong file. Nothing here is an artifact and nothing here is a control file \u2014 a draft becomes real only when the orchestrator promotes it to its destination. Add this directory to the project's ignore file at setup, and empty it when the track that produced it closes.",
       files: {
+        artifacts_policy: "A file name alone does not say where the file lives, and every artifact here has exactly one owning directory. `artifacts` are project-scoped: they resolve against `config.directories.conductor_root` and there is one of each per project. `track_artifacts` are track-scoped: they resolve against `config.directories.tracks_dir`/<track_id> and there is one of each PER TRACK. Resolving a track artifact against the conductor root produces a file that no registry lists and no index links \u2014 a plan at the root is not a project plan, it is an orphan, and the next skill that resolves `plan` by name may read it instead of the real one. When a name appears in both maps, as `index` does, the two are different documents with different scopes and MUST NOT be conflated.",
         artifacts: {
           product: "product.md",
           product_guidelines: "product-guidelines.md",
           tech_stack: "tech-stack.md",
           decisions: "decisions.md",
           workflow: "workflow.md",
-          plan: "plan.md",
-          spec: "spec.md",
           index: "index.md",
           tracks_registry: "tracks.md",
-          track_metadata: "metadata.json",
           state: "state.md",
           lessons: "lessons.md",
           design_system: "DESIGN.md"
         },
-        context_files_policy: "These are the files a context load reads when they exist. An entry whose setup_chain step carries a `condition` is absent by design on a project the condition excludes \u2014 read it when present, say nothing when it is not, and never report its absence as an incomplete setup.",
+        track_artifacts: {
+          plan: "plan.md",
+          spec: "spec.md",
+          index: "index.md",
+          track_metadata: "metadata.json"
+        },
+        context_files_policy: "These are the PROJECT-scoped files a context load reads when they exist. Track-scoped artifacts are deliberately absent from this list: which plan and which spec are in scope depends on the active track, so they are resolved from `config.files.track_artifacts` against that track's directory, never from a bare file name at the conductor root. An entry whose setup_chain step carries a `condition` is absent by design on a project the condition excludes \u2014 read it when present, say nothing when it is not, and never report its absence as an incomplete setup.",
         context_files: [
           "product.md",
           "product-guidelines.md",
@@ -7223,11 +7263,10 @@ var init_config = __esm({
           "tech-stack.md",
           "decisions.md",
           "workflow.md",
-          "plan.md",
-          "spec.md",
           "tracks.md",
           "lessons.md"
         ],
+        control_files_policy: "Orchestrator-owned files, matched BY NAME at any scope \u2014 the project root and every track directory alike. This list is a deny-list for subagent writes, not a location map, which is why the track-scoped names stay here even though they are absent from `context_files[]`: a subagent must not write a track's plan any more than the project's registry. Never read a path out of this list.",
         control_files: [
           "tracks.md",
           "plan.md",
@@ -7386,21 +7425,9 @@ var init_config = __esm({
         warnings_field: "warnings",
         token_estimate_field: "token_estimate"
       },
-      subagent_types: {
-        search: {
-          id: "Explore",
-          capabilities: ["read_files", "search_codebase", "glob", "grep"],
-          description: "Read-only retrieval subagent for exploring codebases and reading files",
-          write_forbidden: true
-        },
-        general_purpose_task: {
-          id: "general-purpose",
-          capabilities: ["read_files", "write_files", "run_commands", "analysis"],
-          description: "Multi-purpose subagent for analysis, code generation, and verification",
-          write_forbidden: false
-        }
-      },
-      dispatch_tool_aliases: ["invoke_subagent", "Task", "dispatch", "spawn", "delegate"],
+      dispatch_policy: "The two blocks below are written by `conductor generate` from the contract of the tool this scaffolding was generated for \u2014 they are not a list of every tool's names, and they are not editable guesses. An empty `subagent_types` or an empty `dispatch_tool_aliases` is a declaration, not an omission: this environment exposes no subagent dispatch, so the SDP runs in `config.protocol.degraded_mode` and every skill says so in its report. That is a supported way to work \u2014 it costs context isolation, never correctness. What is NOT supported is naming a dispatch tool or a subagent type the environment does not have: the dispatch then fails as a lookup miss instead of a declared absence, the framework lands in degraded mode anyway, and the prose keeps claiming an isolation that is not in force. If a tool gains a dispatch contract, declare it in the tool registry and regenerate \u2014 never by hand here.",
+      subagent_types: "${tool.subagent_types}",
+      dispatch_tool_aliases: "${tool.dispatch_tool_aliases}",
       user_interaction_tools: ["ask_question", "AskUserQuestion", "NotifyUser"],
       enums: {
         track_types: ["MVP", "Feature", "Bug", "Chore", "Spike", "Epic", "Hotfix"],
@@ -7600,8 +7627,10 @@ var init_config = __esm({
             iteration: "number",
             issues: [{ task_id: "string", dimension: "string", severity: "string", fix_hint: "string" }],
             blocker_count: "number",
-            warning_count: "number"
-          }
+            warning_count: "number",
+            revised_path: "string"
+          },
+          revised_path_contract: "The linter writes the corrected plan to a file and returns its path here \u2014 it never returns the text. Without this field the orchestrator has only fix hints, so the revision has to be reapplied from a draft the CIL already discarded, and the plan degrades on every iteration. The path MUST be the plan's real destination inside the track directory, which exists before the lint loop starts. Null when the iteration found no blocker and rewrote nothing."
         },
         wave_index: {
           type: "object",
@@ -7728,21 +7757,32 @@ function resolveI18nList(key, i18nMap) {
   }
   return void 0;
 }
-function resolveConfigPath(path, baseDir, locale) {
+function resolveConfigPath(path, toolDir, locale) {
   if (path === "tool_dir") {
-    return baseDir ? baseDir.replace(/\\/g, "/") : "";
+    return toolDir ? toolDir.replace(/\\/g, "/") : "";
   }
   if (path === "locale") {
     return locale || DEFAULT_LOCALE;
   }
   let value = resolvePath(config_default, path);
   if (typeof value === "string" && value.includes("${config.tool_dir}")) {
-    const replacement = baseDir ? baseDir.replace(/\\/g, "/") : "";
+    const replacement = toolDir ? toolDir.replace(/\\/g, "/") : "";
     value = value.replace(/\$\{config\.tool_dir\}/g, replacement);
   }
   return value !== void 0 ? value : `\${config.${path}}`;
 }
-function resolveContent(content, locale, baseDir) {
+function resolveToolPath(path, toolKey) {
+  const dispatch = findDispatch(parseToolFlag(toolKey ?? ""));
+  switch (path) {
+    case "dispatch_tool_aliases":
+      return JSON.stringify(dispatch.toolAliases);
+    case "subagent_types":
+      return JSON.stringify(dispatch.subagentTypes, null, 2);
+    default:
+      return `\${tool.${path}}`;
+  }
+}
+function resolveContent(content, locale, toolDir, toolKey) {
   const i18nMap = buildI18nMap(locale);
   const fallbackMap = locale !== DEFAULT_LOCALE ? buildI18nMap(DEFAULT_LOCALE) : void 0;
   let afterI18n = content;
@@ -7768,15 +7808,25 @@ function resolveContent(content, locale, baseDir) {
   }
   const afterConfig = afterI18n.replace(
     /\$\{config\.([^}]+)\}/g,
-    (_3, path) => resolveConfigPath(path, baseDir, locale)
+    (_3, path) => resolveConfigPath(path, toolDir, locale)
   );
-  return afterConfig;
+  return afterConfig.replace(
+    /"\$\{tool\.([^}]+)\}"/g,
+    (original, path) => {
+      const resolved = resolveToolPath(path, toolKey);
+      return resolved === `\${tool.${path}}` ? original : resolved;
+    }
+  ).replace(
+    /\$\{tool\.([^}]+)\}/g,
+    (_3, path) => resolveToolPath(path, toolKey)
+  );
 }
 var CONFIGURED_DEFAULT_LOCALE, DEFAULT_LOCALE, i18nMapCache, MAX_I18N_DEPTH;
 var init_resolver = __esm({
   "src/internal/i18n/resolver.ts"() {
     "use strict";
     init_embedded();
+    init_tool_registry();
     init_config();
     CONFIGURED_DEFAULT_LOCALE = config_default.i18n?.default_language;
     DEFAULT_LOCALE = CONFIGURED_DEFAULT_LOCALE && !CONFIGURED_DEFAULT_LOCALE.includes("${") ? CONFIGURED_DEFAULT_LOCALE : "pt-BR";
@@ -7859,7 +7909,7 @@ var init_manager = __esm({
           };
         }
         const locale = req.locale || DEFAULT_LOCALE;
-        const finalContent = resolveContent(rawContent, locale, req.baseDir);
+        const finalContent = resolveContent(rawContent, locale, req.toolDir, req.toolKey);
         (0, import_node_fs2.writeFileSync)(req.targetPath, finalContent, "utf-8");
         return {
           success: true,
@@ -9576,6 +9626,7 @@ var init_flat_strategy = __esm({
             message: "Cannot generate templates for unknown tool without an explicit --output directory"
           }];
         }
+        const toolDir = outputDir ?? descriptor?.configBaseDir ?? "";
         if (tmpl.sourceDir === "config") {
           const base2 = outputDir ?? (0, import_node_path3.join)(workingDir, "conductor");
           const targetDir2 = (0, import_node_path3.join)(base2, tmpl.subpath);
@@ -9587,7 +9638,8 @@ var init_flat_strategy = __esm({
               force,
               content: tmpl.content,
               locale,
-              baseDir: base2
+              toolDir,
+              toolKey: this.toolKey
             })
           ];
         }
@@ -9604,7 +9656,8 @@ var init_flat_strategy = __esm({
             force,
             content: tmpl.content,
             locale,
-            baseDir: base
+            toolDir,
+            toolKey: this.toolKey
           })
         ];
       }
@@ -9714,7 +9767,7 @@ var init_package = __esm({
   "package.json"() {
     package_default = {
       name: "@luansilvadb/conductor",
-      version: "1.3.23",
+      version: "1.3.25",
       description: "Conductor - Spec Driven Development",
       type: "module",
       bin: {

@@ -43,7 +43,6 @@ Each regression trace is a workflow defect the framework must keep catching. The
 
 ### `orchestrator-reads-context-inline` — The orchestrator delegates the spec, then reads plan.md itself because it is 'just one file'. The run succeeds, and the context budget the delegation protects is spent anyway.
 
-- **cil-golden-rule**: #4 orchestrator read conductor/tracks/auth/plan.md inline — context files are reachable only via subagent
 - **cil-golden-rule**: #5 orchestrator read conductor/lessons.md inline — context files are reachable only via subagent
 
 ### `subagent-writes-control-file` — An implementation subagent ticks its own checkbox in plan.md and updates state.md, racing the orchestrator that owns both files.

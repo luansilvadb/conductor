@@ -29,6 +29,18 @@ export class FlatMarkdownStrategy implements GenerationStrategy {
       }];
     }
 
+    // Where the generated skills land, project-relative. This is what
+    // `${config.tool_dir}` resolves to, and it must stay relative: an absolute
+    // path is baked into every generated file and breaks on the first clone.
+    //
+    // It is the TOOL directory for every category, including "config". A
+    // generated config.json addresses the protocol and catalog assets, and those
+    // sit beside the skills — resolving them against the conductor root instead
+    // yields `conductor/skills/...`, a directory the installer never creates, so
+    // the protocol that governs every dispatch becomes unreachable from the very
+    // config that is supposed to be the single source of truth.
+    const toolDir = outputDir ?? descriptor?.configBaseDir ?? '';
+
     // The "config" category is project-root data (conductor/config.json), not
     // tool-specific — every generated skill references it at a fixed path
     // regardless of which AI tool is targeted. It bypasses configBaseDir/categoryMapping.
@@ -43,7 +55,8 @@ export class FlatMarkdownStrategy implements GenerationStrategy {
           force,
           content: tmpl.content,
           locale,
-          baseDir: base,
+          toolDir,
+          toolKey: this.toolKey,
         }),
       ];
     }
@@ -70,7 +83,8 @@ export class FlatMarkdownStrategy implements GenerationStrategy {
         force,
         content: tmpl.content,
         locale,
-        baseDir: base,
+        toolDir,
+        toolKey: this.toolKey,
       }),
     ];
   }

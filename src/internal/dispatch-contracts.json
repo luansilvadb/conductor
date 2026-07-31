@@ -1,0 +1,28 @@
+{
+  "$comment": "Subagent dispatch contracts, keyed by tool id. Deliberately NOT under templates/data — nothing here is a template, and anything placed there is embedded and written into the user's project. This is the single source for `${tool.subagent_types}` and `${tool.dispatch_tool_aliases}`: the tool registry reads it to generate a project's config.json, and the trace evals read it to grade the rubrics against a real generated config rather than an unresolved template. A tool absent from this map has no declared contract — generation then writes an empty list and an empty object, which the SDP reads as `no dispatch available` and reports as degraded mode. That absence is deliberate and must not be filled in by guessing: a named subagent type the environment does not expose fails as a lookup miss instead of a declared absence, and the framework runs inline anyway while every generated document still claims isolation is in force.",
+  "reference_tool": "claude-code",
+  "reference_tool_comment": "The tool the trace evals grade against. Rubrics about write scope need a contract that actually distinguishes a retrieval type from a general one, and only a tool with a declared contract provides that.",
+  "contracts": {
+    "claude-code": {
+      "toolAliases": ["Task"],
+      "subagentTypes": {
+        "search": {
+          "id": "Explore",
+          "capabilities": ["read_files", "search_codebase", "glob", "grep"],
+          "description": "Read-only retrieval subagent for exploring codebases and reading files",
+          "write_forbidden": true
+        },
+        "general_purpose_task": {
+          "id": "general-purpose",
+          "capabilities": ["read_files", "write_files", "run_commands", "analysis"],
+          "description": "Multi-purpose subagent for analysis, code generation, and verification",
+          "write_forbidden": false
+        }
+      }
+    },
+    "antigravity": {
+      "toolAliases": ["invoke_subagent"],
+      "subagentTypes": {}
+    }
+  }
+}

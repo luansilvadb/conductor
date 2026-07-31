@@ -1,4 +1,5 @@
 import { TEMPLATES } from '../templates/embedded.js';
+import { findDispatch, parseToolFlag } from '../tool-registry.js';
 import configData from '../templates/data/config/config.json' with { type: 'json' };
 
 /**
@@ -195,22 +196,48 @@ function resolveI18nList(key: string, i18nMap: Map<string, JsonObject>): string 
  * Resolve a config path such as "framework.version" or "user_interaction_tools[2]".
  * Uses the bundled config.json imported statically.
  */
-function resolveConfigPath(path: string, baseDir?: string, locale?: string): string {
+function resolveConfigPath(path: string, toolDir?: string, locale?: string): string {
   if (path === 'tool_dir') {
-    return baseDir ? baseDir.replace(/\\/g, '/') : '';
+    return toolDir ? toolDir.replace(/\\/g, '/') : '';
   }
   if (path === 'locale') {
     return locale || DEFAULT_LOCALE;
   }
 
   let value = resolvePath(configData as unknown as JsonValue, path);
-  
+
   if (typeof value === 'string' && value.includes('${config.tool_dir}')) {
-    const replacement = baseDir ? baseDir.replace(/\\/g, '/') : '';
+    const replacement = toolDir ? toolDir.replace(/\\/g, '/') : '';
     value = value.replace(/\$\{config\.tool_dir\}/g, replacement);
   }
 
   return value !== undefined ? value : `\${config.${path}}`;
+}
+
+/**
+ * Resolve `${tool.*}` — the host tool's dispatch contract, injected as JSON.
+ *
+ * These values cannot live in config.json as literals: which subagent types
+ * exist, and what the dispatch tool is called, is a property of the tool the
+ * scaffolding was generated for. A single hardcoded set means every other tool
+ * receives ids nothing answers to, and its capability lookups fail silently
+ * into degraded mode while the generated prose still promises isolation.
+ *
+ * A tool with no declared contract yields an empty list / empty object, which
+ * the SDP reads as "no dispatch available" and reports as degraded mode. That
+ * is the honest output, and it is why these are never filled in by guessing.
+ */
+function resolveToolPath(path: string, toolKey?: string): string {
+  const dispatch = findDispatch(parseToolFlag(toolKey ?? ''));
+
+  switch (path) {
+    case 'dispatch_tool_aliases':
+      return JSON.stringify(dispatch.toolAliases);
+    case 'subagent_types':
+      return JSON.stringify(dispatch.subagentTypes, null, 2);
+    default:
+      return `\${tool.${path}}`;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -239,7 +266,7 @@ const MAX_I18N_DEPTH = 8;
  *   - `{param}` style (no dollar sign) — runtime parameters resolved by the agent
  *   - Any unrecognised `${...}` pattern — preserved verbatim
  */
-export function resolveContent(content: string, locale: string, baseDir?: string): string {
+export function resolveContent(content: string, locale: string, toolDir?: string, toolKey?: string): string {
   const i18nMap = buildI18nMap(locale);
   const fallbackMap = locale !== DEFAULT_LOCALE ? buildI18nMap(DEFAULT_LOCALE) : undefined;
 
@@ -274,8 +301,29 @@ export function resolveContent(content: string, locale: string, baseDir?: string
   // Pass 2 — config (covers originals + any introduced by i18n pass)
   const afterConfig = afterI18n.replace(
     /\$\{config\.([^}]+)\}/g,
-    (_, path: string) => resolveConfigPath(path, baseDir, locale),
+    (_, path: string) => resolveConfigPath(path, toolDir, locale),
   );
 
-  return afterConfig;
+  // Pass 3 — tool: the host's dispatch contract, which config.json cannot hold
+  // as a literal without being wrong for every tool but one.
+  //
+  // The quoted form is consumed first, and the surrounding quotes go with it.
+  // These placeholders expand to an array or an object, but the template that
+  // carries them is itself JSON and is imported statically by this module — a
+  // bare `${tool.x}` sitting where a value belongs makes the source config
+  // unparseable, so the template writes `"${tool.x}"` and the quotes are
+  // stripped here, on the way out.
+  return afterConfig
+    .replace(
+      /"\$\{tool\.([^}]+)\}"/g,
+      (original, path: string) => {
+        const resolved = resolveToolPath(path, toolKey);
+        // Unresolvable: keep it quoted, so the output stays valid JSON.
+        return resolved === `\${tool.${path}}` ? original : resolved;
+      },
+    )
+    .replace(
+      /\$\{tool\.([^}]+)\}/g,
+      (_, path: string) => resolveToolPath(path, toolKey),
+    );
 }

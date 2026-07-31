@@ -7,7 +7,8 @@ Conductor Subagent Protocol Engine
 This protocol defines the formal contract for all subagent delegation within the Conductor framework. All dispatch decisions are resolved **dynamically** from the centralized configuration (`config.json`) — there are **zero hardcoded** file paths, subagent type names, thresholds, schema fields, or tool names in this protocol. The orchestrator (main agent) MUST NOT read project context files directly — it delegates everything and only receives condensed schemas. Intermediate subagent history is **auto-discarded** by the Context Isolation Layer (CIL) after schema extraction.
 
 ## Notes:
-- The dispatch tool in the Antigravity environment is `invoke_subagent`. It is the first entry in `config.dispatch_tool_aliases[]` and MUST be used when available.
+- The dispatch tool is whatever `config.dispatch_tool_aliases[]` names, checked in order — that list is written for the tool this scaffolding was generated for. Never assume a name from another environment.
+- Both `config.dispatch_tool_aliases[]` and `config.subagent_types` may be **empty**, and an empty list is a statement, not a defect: this environment exposes no subagent dispatch. See `config.dispatch_policy`. Run in `${config.protocol.degraded_mode}`, say so once, and continue — the work is unchanged, the isolation is not available.
 
 ## Profile:
 - version: ${config.framework.version}
@@ -50,9 +51,12 @@ Every dispatch decision follows this matrix. The orchestrator MUST consult it BE
 | Parallelism is possible (tasks with no dependencies) | **DELEGATE** in parallel via multiple subagents (max: `${config.thresholds.max_parallel_subagents}`) |
 | Task writes any file listed in `config.files.control_files[]` | **ORCHESTRATOR** executes inline (subagents NEVER write control files) |
 | Task is trivial: 1-step operation with no file reading | **ORCHESTRATOR** executes inline |
-| No dispatch tool from `config.dispatch_tool_aliases[]` is available in the environment | **ORCHESTRATOR** executes inline with `${config.protocol.degraded_mode}` warning |
+| `config.dispatch_tool_aliases[]` is empty, or no tool it names is available in the environment | **ORCHESTRATOR** executes inline with `${config.protocol.degraded_mode}` warning |
+| `config.subagent_types` is empty, or no entry carries the required capability | **ORCHESTRATOR** executes inline with `${config.protocol.degraded_mode}` warning |
 
-> **Tool name resolution:** `config.dispatch_tool_aliases[]` is checked in order. For Antigravity, `invoke_subagent` (index 0) matches first. For Cursor/Claude Code environments that expose a `Task` tool, `Task` (index 1) is used. Never assume a tool name — always check the toolset at runtime.
+> **Tool name resolution:** `config.dispatch_tool_aliases[]` is checked in order against the toolset present at runtime, and the first match wins. The list is generated from the tool registry for this environment specifically — it is not a menu of every tool's names. An empty list means dispatch is unavailable here by declaration; see `config.dispatch_policy`. Never assume a tool name, and never substitute one from another environment when the declared name is absent: a dispatch that misses is reported as degraded, and a dispatch invented to avoid reporting it is a silent failure.
+
+> **Degraded mode is a supported mode, and it changes what may be claimed.** The orchestrator reads inline exactly what it would have delegated, so the Golden Rule and the CIL are suspended for the duration — they describe a boundary that does not exist here. Every skill that ran degraded states it in its report. What must never happen is prose asserting isolation while the work ran inline: the rest of this protocol is only true when dispatch is available.
 
 ### Task Classification Algorithm (Dynamic)
 
@@ -91,8 +95,10 @@ FUNCTION resolveSubagentByCapability(capability, config):
   FOR EACH type IN config.subagent_types:
     IF capability IN type.capabilities:
       RETURN type.id
-  RETURN FALLBACK type.id  // default from config: first registered type with "analysis"
+  RETURN NULL  // no type carries it — see below
 ```
+
+`resolveSubagentByCapability` returns **NULL** when nothing matches, and the caller MUST treat that as "dispatch unavailable for this capability": run the operation inline and mark the run `${config.protocol.degraded_mode}`. It never falls back to another type's id. A retrieval type substituted for an analysis type is dispatched with the wrong permissions, and an id invented to keep the call site simple is dispatched to nothing at all — both fail as a lookup miss somewhere downstream, where the cause is no longer visible. An empty `config.subagent_types` makes NULL the answer for every capability, which is exactly right for an environment with no typed subagents.
 
 ---
 
@@ -117,7 +123,7 @@ The CIL is an architectural boundary between the orchestrator and subagents. It 
 4. **MANDATORY** to return ONLY the JSON schema. No conversational text.
 5. **MANDATORY** to include approximate `${config.protocol.token_estimate_field}` of own consumption.
 6. **FORBIDDEN** to reproduce file contents in the return. A subagent that reads a file returns findings *about* it — assertions, counts, paths, line references — never the text it read. Quoting a file back to the orchestrator defeats the entire isolation layer: the tokens the delegation was meant to keep out land in the orchestrator anyway.
-7. **MANDATORY** to keep the whole return under `${config.thresholds.subagent_return_max_lines}` lines. A subagent whose findings genuinely exceed that budget writes the detail to a file under `config.directories.conductor_root`, returns the path in the data envelope, and sets `${config.protocol.status_field}` to `done_with_concerns` with an explanatory entry in `${config.protocol.warnings_field}`.
+7. **MANDATORY** to keep the whole return under `${config.thresholds.subagent_return_max_lines}` lines. A subagent whose findings genuinely exceed that budget writes the detail to a file, returns the path in the data envelope, and sets `${config.protocol.status_field}` to `done_with_concerns` with an explanatory entry in `${config.protocol.warnings_field}`. **Where it writes is part of the rule.** When the subagent was dispatched to produce or revise a specific document, it writes to that document's own path — the one the orchestrator gave it — and returns that path. Otherwise it writes under `config.directories.drafts_dir`, per `config.drafts_policy`. It NEVER writes to `config.directories.conductor_root` itself: the root holds the project's governance documents, resolved by name, and an overflow file landing there is indistinguishable from the artifact whose name it borrows. This escape hatch exists so a long result survives the return budget, not so it acquires a new identity on the way out.
 8. **FORBIDDEN** to write any file at all when dispatched as a type whose `config.subagent_types[].write_forbidden` is true. The retrieval type is the one the orchestrator dispatches most, precisely because it cannot change anything, and the DDM routes every read-only operation to it. A write from inside it edits the project through a channel nobody reviews: the dispatch still reads as a lookup, and the change arrives with no task, no gate, and no commit attached to it. A retrieval subagent that finds a defect reports it in `${config.protocol.summary_field}` and `${config.protocol.warnings_field}` — fixing what it was sent to read is outside its scope even when the fix is obvious and correct. If the task genuinely requires a write, that is a misclassification: return `${config.protocol.status_field}` as `needs_context` so the orchestrator re-dispatches it to a type whose capabilities include writing.
 
 ### Subagent Lifecycle (Auto-Cleanup)
@@ -200,33 +206,33 @@ FUNCTION executePhaseCompletion(phaseContext, config):
 
   // 1. Coverage: only dispatch if there are new files
   changedFiles = dispatchSubagent(
-    config.subagent_types.search.id,
+    resolveSubagentByCapability("read_files", config),
     "Run git diff to find changed files",
     config.schemas.diff_analysis
   )
   IF changedFiles[config.protocol.data_envelope].files_changed.length > 0:
     subagents.push({
-      type: config.subagent_types.general_purpose_task.id,
+      type: resolveSubagentByCapability("analysis", config),
       prompt: "Run coverage for files: " + changedFiles[config.protocol.data_envelope].files_changed,
       schema: config.schemas.test_execution
     })
 
   // 2. Test Suite: only dispatch if test files exist
   testFiles = dispatchSubagent(
-    config.subagent_types.search.id,
+    resolveSubagentByCapability("read_files", config),
     "Find all test files in the project",
     config.schemas.document_parse  // returns file list
   )
   IF testFiles[config.protocol.data_envelope].key_points.length > 0:
     subagents.push({
-      type: config.subagent_types.general_purpose_task.id,
+      type: resolveSubagentByCapability("analysis", config),
       prompt: "Run test suite with max " + config.thresholds.max_fix_attempts + " fix attempts",
       schema: config.schemas.test_execution
     })
 
   // 3. Manual Verification: always dispatch
   subagents.push({
-    type: config.subagent_types.general_purpose_task.id,
+    type: resolveSubagentByCapability("analysis", config),
     prompt: "Generate manual verification steps for phase",
     schema: config.schemas.manual_verification
   })

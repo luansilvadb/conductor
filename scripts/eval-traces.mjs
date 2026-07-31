@@ -27,10 +27,45 @@ import { graders, graderIds, eventTypes } from '../evals/graders.mjs';
 
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const configPath = path.join(root, 'src', 'internal', 'templates', 'data', 'config', 'config.json');
+const contractsPath = path.join(root, 'src', 'internal', 'dispatch-contracts.json');
 const tracesDir = path.join(root, 'evals', 'traces');
 const reportPath = path.join(root, 'evals', 'report.md');
 
-const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+/**
+ * The shipped config.json is a template, not a config: the dispatch block is
+ * written per tool at generation time and sits here as a `${tool.*}` placeholder.
+ * Graded unresolved, a rubric that reads `config.subagent_types` iterates a
+ * string and finds no type to hold anything to — so it reports every trace as
+ * clean and stops protecting anything, which is the one failure mode an eval
+ * suite must not have.
+ *
+ * So resolve the placeholders the way generation does, from the same source the
+ * tool registry reads, and grade the config a project actually receives. The
+ * reference tool is the one whose contract distinguishes a retrieval type from a
+ * general one; without that distinction the write-scope rubrics have no contract
+ * to enforce.
+ */
+function loadConfig() {
+  const contracts = JSON.parse(fs.readFileSync(contractsPath, 'utf8'));
+  const reference = contracts.contracts[contracts.reference_tool];
+  if (!reference) {
+    throw new Error(
+      `dispatch-contracts.json names "${contracts.reference_tool}" as the reference tool but declares no contract for it`,
+    );
+  }
+
+  const raw = fs.readFileSync(configPath, 'utf8')
+    .replace('"${tool.subagent_types}"', JSON.stringify(reference.subagentTypes))
+    .replace('"${tool.dispatch_tool_aliases}"', JSON.stringify(reference.toolAliases));
+
+  const parsed = JSON.parse(raw);
+  if (typeof parsed.subagent_types !== 'object' || Object.keys(parsed.subagent_types).length === 0) {
+    throw new Error('config.subagent_types did not resolve — the placeholder in config.json was renamed or removed');
+  }
+  return parsed;
+}
+
+const config = loadConfig();
 
 function loadTraces() {
   if (!fs.existsSync(tracesDir)) return [];

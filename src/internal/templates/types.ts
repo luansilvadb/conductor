@@ -32,8 +32,22 @@ export interface GenerateRequest {
   content: string;
   /** BCP-47 locale override. Defaults to config.i18n.default_language (pt-BR). */
   locale?: string;
-  /** Base output directory (e.g. .trae) */
-  baseDir?: string;
+  /**
+   * Directory holding the generated skills, as `${config.tool_dir}` resolves to
+   * inside the templates — e.g. `.trae`.
+   *
+   * PROJECT-RELATIVE, always. An absolute path here is baked into every
+   * generated skill, so the scaffolding stops working the moment the repository
+   * is cloned, moved, or opened on another machine — and it contradicts the
+   * SDP's own "zero hardcoded file paths" premise while doing it.
+   *
+   * This is the tool directory specifically, never the conductor root: it is how
+   * a generated file addresses the protocol and catalog assets, which live
+   * beside the skills.
+   */
+  toolDir?: string;
+  /** Active tool, used to resolve `${tool.*}` from the registry's dispatch contract. */
+  toolKey?: string;
 }
 
 /** Result of a template generation operation */

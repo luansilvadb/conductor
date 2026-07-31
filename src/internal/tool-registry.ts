@@ -1,3 +1,5 @@
+import dispatchContracts from './dispatch-contracts.json' with { type: 'json' };
+
 /**
  * Single source of truth for all supported AI coding tools.
  *
@@ -49,6 +51,43 @@ export interface ToolLifecycle {
 }
 
 // ---------------------------------------------------------------------------
+// ToolDispatch — optional subagent dispatch contract
+// ---------------------------------------------------------------------------
+
+/** A subagent type the host tool actually exposes, described by capability. */
+export interface SubagentType {
+  /** The tool-native type id, spelled exactly as the dispatch tool expects it. */
+  id: string;
+  /** Capability tags the SDP matches against via resolveSubagentByCapability. */
+  capabilities: string[];
+  description: string;
+  /** True for retrieval types that must never write (SDP Subagent Rule 8). */
+  write_forbidden: boolean;
+}
+
+/**
+ * How a tool exposes subagent dispatch, when it exposes one at all.
+ *
+ * Deliberately optional, and deliberately empty-by-default. Conductor's SDP
+ * treats "no dispatch tool available" as a first-class mode
+ * (`config.protocol.degraded_mode`): the orchestrator runs inline and says so.
+ * That is a supported way to work — losing isolation, never correctness.
+ *
+ * Shipping a guessed tool name is strictly worse than shipping none. The
+ * generated config would name a dispatch tool the environment does not have,
+ * every capability lookup would resolve to an id nothing answers to, and the
+ * framework would land in degraded mode anyway — but silently, through a failed
+ * dispatch, with prose everywhere still claiming isolation is in force. Only
+ * fill this in for a tool whose contract is known.
+ */
+export interface ToolDispatch {
+  /** Dispatch tool names, checked in order. First match wins. */
+  toolAliases: string[];
+  /** Subagent types keyed by Conductor's role names. */
+  subagentTypes: Record<string, SubagentType>;
+}
+
+// ---------------------------------------------------------------------------
 // ToolDescriptor — complete per-tool specification
 // ---------------------------------------------------------------------------
 
@@ -91,7 +130,24 @@ export interface ToolDescriptor {
    * when its contract is not known with certainty — see {@link ToolLifecycle}.
    */
   lifecycle?: ToolLifecycle;
+  /**
+   * Optional subagent dispatch contract. Omit when the tool exposes no subagent
+   * dispatch, or when its contract is not known with certainty — the generated
+   * config then declares dispatch absent and the SDP runs in degraded mode,
+   * which is honest. See {@link ToolDispatch}.
+   */
+  dispatch?: ToolDispatch;
 }
+
+/**
+ * Declared dispatch contracts, by tool id.
+ *
+ * Kept in JSON rather than inline here because the trace evals read the same
+ * file: a rubric about write scope must grade the contract that is actually
+ * generated, and a second copy of these ids would let the two drift until the
+ * evals pass against a config no project has.
+ */
+const DISPATCH_CONTRACTS = dispatchContracts.contracts as Record<string, ToolDispatch>;
 
 // ---------------------------------------------------------------------------
 // TOOL_REGISTRY — add new tools here only
@@ -106,6 +162,8 @@ export const TOOL_REGISTRY: readonly ToolDescriptor[] = [
     configBaseDir: '.cursor',
     signatures: ['.cursor', '.cursorrules'],
     detectionPriority: 1,
+    // No `dispatch`: Cursor's subagent contract is not known here. See ToolDispatch —
+    // an omission puts the SDP in declared degraded mode; a guess breaks it silently.
   },
   {
     id: AIToolType.ClaudeCode,
@@ -120,6 +178,7 @@ export const TOOL_REGISTRY: readonly ToolDescriptor[] = [
       events: { beforeToolUse: 'PreToolUse', afterResponse: 'Stop' },
       permissions: true,
     },
+    dispatch: DISPATCH_CONTRACTS['claude-code'],
   },
   {
     id: AIToolType.Antigravity,
@@ -130,6 +189,7 @@ export const TOOL_REGISTRY: readonly ToolDescriptor[] = [
     signatures: ['.antigravity'],
     detectionPriority: 3,
     categoryMapping: { commands: 'workflows' },
+    dispatch: DISPATCH_CONTRACTS['antigravity'],
   },
   {
     id: AIToolType.Trae,
@@ -139,8 +199,14 @@ export const TOOL_REGISTRY: readonly ToolDescriptor[] = [
     configBaseDir: '.trae',
     signatures: ['.trae'],
     detectionPriority: 4,
+    // No `dispatch`: Trae's subagent contract is not known here. See ToolDispatch.
   },
 ];
+
+/** Dispatch contract for a tool, or an explicitly empty one when it has none. */
+export function findDispatch(id: AIToolType): ToolDispatch {
+  return findDescriptor(id)?.dispatch ?? { toolAliases: [], subagentTypes: {} };
+}
 
 // ---------------------------------------------------------------------------
 // Lookup helpers

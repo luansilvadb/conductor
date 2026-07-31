@@ -19,40 +19,13 @@ ${i18n.t("skills.conductor-setup.preferences.0")}
 - description: ${i18n.t("skills.conductor-setup.profile_description")}
 
 ## Goals:
-${i18n.t("skills.conductor-setup.goals.0")}
-${i18n.t("skills.conductor-setup.goals.1")}
-${i18n.t("skills.conductor-setup.goals.2")}
-${i18n.t("skills.conductor-setup.goals.3")}
-${i18n.t("skills.conductor-setup.goals.4")}
-${i18n.t("skills.conductor-setup.goals.5")}
-${i18n.t("skills.conductor-setup.goals.6")}
-${i18n.t("skills.conductor-setup.goals.7")}
-${i18n.t("skills.conductor-setup.goals.8")}
+${i18n.list("skills.conductor-setup.goals")}
 
 ## Constraints:
-${i18n.t("skills.conductor-setup.constraints.0")}
-${i18n.t("skills.conductor-setup.constraints.1")}
-${i18n.t("skills.conductor-setup.constraints.2")}
-${i18n.t("skills.conductor-setup.constraints.3")}
-${i18n.t("skills.conductor-setup.constraints.4")}
-${i18n.t("skills.conductor-setup.constraints.5")}
-${i18n.t("skills.conductor-setup.constraints.6")}
-${i18n.t("skills.conductor-setup.constraints.7")}
-${i18n.t("skills.conductor-setup.constraints.8")}
-${i18n.t("skills.conductor-setup.constraints.9")}
-${i18n.t("skills.conductor-setup.constraints.10")}
+${i18n.list("skills.conductor-setup.constraints")}
 
 ## Skills:
-${i18n.t("skills.conductor-setup.skills.0")}
-${i18n.t("skills.conductor-setup.skills.1")}
-${i18n.t("skills.conductor-setup.skills.2")}
-${i18n.t("skills.conductor-setup.skills.3")}
-${i18n.t("skills.conductor-setup.skills.4")}
-${i18n.t("skills.conductor-setup.skills.5")}
-${i18n.t("skills.conductor-setup.skills.6")}
-${i18n.t("skills.conductor-setup.skills.7")}
-${i18n.t("skills.conductor-setup.skills.8")}
-${i18n.t("skills.conductor-setup.skills.9")}
+${i18n.list("skills.conductor-setup.skills")}
 
 ## Examples:
 - **Greenfield Project Kickoff:** ${i18n.t("skills.conductor-setup.examples.greenfield_kickoff")}
@@ -61,20 +34,7 @@ ${i18n.t("skills.conductor-setup.skills.9")}
 - **Completion Handshake:** ${i18n.t("skills.conductor-setup.examples.completion_handshake")}
 
 ## OutputFormat:
-${i18n.t("skills.conductor-setup.output_format.0")}
-${i18n.t("skills.conductor-setup.output_format.1")}
-${i18n.t("skills.conductor-setup.output_format.2")}
-${i18n.t("skills.conductor-setup.output_format.3")}
-${i18n.t("skills.conductor-setup.output_format.4")}
-${i18n.t("skills.conductor-setup.output_format.5")}
-${i18n.t("skills.conductor-setup.output_format.6")}
-${i18n.t("skills.conductor-setup.output_format.7")}
-${i18n.t("skills.conductor-setup.output_format.8")}
-${i18n.t("skills.conductor-setup.output_format.9")}
-${i18n.t("skills.conductor-setup.output_format.10")}
-${i18n.t("skills.conductor-setup.output_format.11")}
-${i18n.t("skills.conductor-setup.output_format.12")}
-${i18n.t("skills.conductor-setup.output_format.13")}
+${i18n.list("skills.conductor-setup.output_format")}
 
 ### Style Guide Recommendation — required wording
 When presenting style guide options, open with: *${i18n.t("skills.conductor-setup.style_guide.recommendation")}* — `{stack}` MUST be replaced by the technology stack confirmed in the Technology Stack step. Justify the top recommendation with: *${i18n.t("skills.conductor-setup.style_guide.reason")}*

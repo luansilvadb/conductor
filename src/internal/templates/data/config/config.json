@@ -28,7 +28,8 @@
       "spec": "spec.md",
       "index": "index.md",
       "tracks_registry": "tracks.md",
-      "track_metadata": "metadata.json"
+      "track_metadata": "metadata.json",
+      "state": "state.md"
     },
     "context_files": [
       "product.md",
@@ -44,7 +45,8 @@
       "tracks.md",
       "plan.md",
       "index.md",
-      "metadata.json"
+      "metadata.json",
+      "state.md"
     ],
     "setup_chain": [
       { "file": "product.md", "step": "Product Definition" },
@@ -87,7 +89,17 @@
     "max_fix_attempts": 2,
     "max_parallel_subagents": 5,
     "subagent_timeout_seconds": 120,
-    "token_warning_threshold": 5000
+    "token_warning_threshold": 5000,
+    "state_max_lines": 100,
+    "tasks_per_phase_warn": 4,
+    "tasks_per_phase_block": 6,
+    "files_per_task_warn": 10,
+    "files_per_task_block": 15,
+    "plan_review_iterations": 3,
+    "subagent_return_max_lines": 15,
+    "fixes_before_architecture_review": 3,
+    "task_minutes_min": 2,
+    "task_minutes_max": 5
   },
 
   "protocol": {
@@ -133,6 +145,67 @@
       "in_progress": "[~]",
       "done": "[x]",
       "checkpoint": "[checkpoint: <sha>]"
+    },
+    "acceptance_criteria_kinds": ["source_assertion", "behavior_assertion", "test_command", "cli_output"],
+    "banned_acceptance_phrasings": ["looks correct", "works properly", "properly configured", "consistent with", "as expected", "good quality", "well structured"],
+    "review_statuses": ["passed", "gaps_found", "needs_human"],
+    "state_statuses": ["planning", "implementing", "reviewing", "blocked", "paused", "done"],
+    "banned_completion_phrasings": ["should work", "should pass", "probably", "seems to", "looks like it works", "appears to work", "I think it's fixed", "must be working now"],
+    "banned_plan_phrasings": ["TBD", "to be defined", "handle edge cases", "similar to the previous task", "and so on", "etc. as needed", "adjust as necessary"],
+    "subagent_report_statuses": {
+      "done": "Task complete; the return carries the evidence that proves it.",
+      "done_with_concerns": "Task complete, but the subagent recorded doubts the orchestrator must weigh before moving on.",
+      "needs_context": "The prompt lacked information the task required. The orchestrator supplies it and re-dispatches the SAME task — this is not a failure and MUST NOT consume a fix attempt.",
+      "blocked": "The task cannot proceed as scoped. Escalate: split it, re-plan it, or hand it to the user — never retry it unchanged."
+    }
+  },
+
+  "debugging_protocol": {
+    "description": "Ordered phases every fix attempt must follow. A fix proposed before phase 1 completes is a symptom fix, and symptom fixes are failures even when the test goes green.",
+    "phases": [
+      "Root cause: read the full error, reproduce it consistently, check what changed recently, and trace the bad value back to where it originates. Never propose a fix before this phase is complete.",
+      "Pattern analysis: find code in this project that already does this correctly, read it completely rather than skimming, and list every difference between the working and the broken path.",
+      "Hypothesis: state the theory explicitly as 'X is the root cause because Y', then make the smallest change that tests it. One variable at a time — never change two things and see what happens.",
+      "Implementation: write the failing test first, apply a single fix addressing the root cause, and confirm it neither leaves the test red nor breaks another test."
+    ],
+    "restart_signals": ["quick fix for now, investigate later", "just try changing this and see", "I don't fully understand this but it might work", "one more attempt and it should work"]
+  },
+
+  "state_document": {
+    "path": "${config.directories.conductor_root}/${config.files.artifacts.state}",
+    "description": "Session digest: the one file that tells a fresh session where the work stands. Written only by the orchestrator, never by a subagent. It is a digest, not a log — when it approaches config.thresholds.state_max_lines, drop the oldest resolved entries rather than growing the file.",
+    "frontmatter_fields": {
+      "status": "One of config.enums.state_statuses. Never free text.",
+      "track": "Id of the active track, or null when none is active.",
+      "phase": "Name of the plan phase currently open, or null.",
+      "task": "Id of the task currently in progress, or null.",
+      "wave": "Wave number currently executing, or null.",
+      "last_commit": "SHA of the last commit produced by Conductor.",
+      "updated_at": "ISO-8601 timestamp of the last write."
+    },
+    "body_sections": ["Current Position", "Open Decisions", "Blockers", "Resume Hint"]
+  },
+
+  "plan_task_fields": {
+    "wave": {
+      "type": "number",
+      "required": true,
+      "description": "Execution wave. Tasks in the same wave may run in parallel; wave N+1 starts only after every task in wave N is done."
+    },
+    "depends_on": {
+      "type": "string[]",
+      "required": true,
+      "description": "Task ids this task depends on. A task MUST be placed in a wave strictly greater than the wave of every id listed here."
+    },
+    "files": {
+      "type": "string[]",
+      "required": true,
+      "description": "Project-relative paths this task will create or modify. Drives the file-overlap check that downgrades a wave to sequential execution."
+    },
+    "accept": {
+      "type": "string[]",
+      "required": true,
+      "description": "Empirically checkable acceptance criteria; each entry MUST match one of config.enums.acceptance_criteria_kinds."
     }
   },
 
@@ -202,6 +275,35 @@
         "draft": "string",
         "task_count": "number",
         "estimated_hours": "number"
+      }
+    },
+    "state_digest": {
+      "type": "object",
+      "fields": {
+        "status": "string",
+        "track": "string",
+        "phase": "string",
+        "task": "string",
+        "wave": "number",
+        "last_commit": "string",
+        "blockers": "string[]",
+        "resume_hint": "string"
+      }
+    },
+    "plan_lint": {
+      "type": "object",
+      "fields": {
+        "iteration": "number",
+        "issues": [{ "task_id": "string", "dimension": "string", "severity": "string", "fix_hint": "string" }],
+        "blocker_count": "number",
+        "warning_count": "number"
+      }
+    },
+    "wave_index": {
+      "type": "object",
+      "fields": {
+        "waves": [{ "wave": "number", "task_ids": "string[]", "parallel": "boolean", "downgrade_reason": "string" }],
+        "conflicts": [{ "task_a": "string", "task_b": "string", "shared_files": "string[]" }]
       }
     },
     "skill_catalog_match": {

@@ -115,6 +115,8 @@ The CIL is an architectural boundary between the orchestrator and subagents. It 
 3. **FORBIDDEN** to make commits.
 4. **MANDATORY** to return ONLY the JSON schema. No conversational text.
 5. **MANDATORY** to include approximate `${config.protocol.token_estimate_field}` of own consumption.
+6. **FORBIDDEN** to reproduce file contents in the return. A subagent that reads a file returns findings *about* it — assertions, counts, paths, line references — never the text it read. Quoting a file back to the orchestrator defeats the entire isolation layer: the tokens the delegation was meant to keep out land in the orchestrator anyway.
+7. **MANDATORY** to keep the whole return under `${config.thresholds.subagent_return_max_lines}` lines. A subagent whose findings genuinely exceed that budget writes the detail to a file under `config.directories.conductor_root`, returns the path in the data envelope, and sets `${config.protocol.status_field}` to `done_with_concerns` with an explanatory entry in `${config.protocol.warnings_field}`.
 
 ### Subagent Lifecycle (Auto-Cleanup)
 
@@ -140,7 +142,7 @@ Every subagent MUST return EXACTLY this JSON structure. Schema definitions come 
 ```json
 {
   "${config.protocol.protocol_field}": "${config.protocol.version_string}",
-  "${config.protocol.status_field}": "success" | "partial" | "failed",
+  "${config.protocol.status_field}": "done" | "done_with_concerns" | "needs_context" | "blocked",
   "${config.protocol.summary_field}": "<single sentence summarizing the result>",
   "${config.protocol.data_envelope}": {
     // operation-specific schema from config.schemas
@@ -149,6 +151,19 @@ Every subagent MUST return EXACTLY this JSON structure. Schema definitions come 
   "${config.protocol.token_estimate_field}": <number>
 }
 ```
+
+### Status Values — Canonical Meanings
+
+The four values of `${config.protocol.status_field}` are defined in `config.enums.subagent_report_statuses`. They are not interchangeable, and the orchestrator's reaction differs for each:
+
+| Status | Subagent means | Orchestrator MUST |
+|---|---|---|
+| `done` | Task complete, evidence included | Consume the schema and continue |
+| `done_with_concerns` | Complete, but with recorded doubts | Continue, and carry the concerns into the review — never drop them because the task "passed" |
+| `needs_context` | The prompt was missing something the task required | Supply the missing input and re-dispatch the SAME task. **This is not a failure and MUST NOT consume a fix attempt** — counting it as one burns the retry budget on the orchestrator's own incomplete prompt |
+| `blocked` | The task cannot proceed as scoped | Escalate: split it, re-plan it, or raise it to the user. Never re-dispatch it unchanged — an identical prompt yields an identical block |
+
+The distinction that matters most is `needs_context` versus `blocked`. Treating a missing input as a block wastes attempts and hides the real problem, which was the dispatch, not the task.
 
 ### Operation-Specific Schemas
 
@@ -164,6 +179,12 @@ All schemas below reference their canonical definitions in `config.schemas`.
 #### Manual Verification → `config.schemas.manual_verification`
 #### Git Commit List → `config.schemas.git_commit_list`
 #### Status Report → `config.schemas.status_report`
+#### Plan Lint → `config.schemas.plan_lint`
+#### Wave Index → `config.schemas.wave_index`
+
+### Return Size Budget
+
+The envelope is capped at `${config.thresholds.subagent_return_max_lines}` lines (Subagent Rule 7). The orchestrator MUST treat an oversized or content-bearing return as a protocol violation: consume the schema fields it needs, discard the rest immediately, and record a warning. Never let an oversized return sit in orchestrator context "just in case".
 
 ---
 

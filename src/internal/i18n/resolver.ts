@@ -1,9 +1,21 @@
 import { TEMPLATES } from '../templates/embedded.js';
 import configData from '../templates/data/config/config.json' with { type: 'json' };
 
-/** Default locale derived from the bundled config. All code should use this constant. */
+/**
+ * Default locale derived from the bundled config. All code should use this constant.
+ *
+ * `i18n.default_language` in config.json is itself a template: it holds
+ * `${config.locale}` so the *generated* config.json records whichever locale the
+ * user picked. The bundled (unresolved) copy read here therefore still contains
+ * that placeholder, which is not a locale — fall back to the hardcoded default
+ * rather than propagating `"${config.locale}"` as if it were one.
+ */
+const CONFIGURED_DEFAULT_LOCALE = (configData as { i18n?: { default_language?: string } }).i18n
+  ?.default_language;
 export const DEFAULT_LOCALE: string =
-  (configData as { i18n?: { default_language?: string } }).i18n?.default_language ?? 'pt-BR';
+  CONFIGURED_DEFAULT_LOCALE && !CONFIGURED_DEFAULT_LOCALE.includes('${')
+    ? CONFIGURED_DEFAULT_LOCALE
+    : 'pt-BR';
 
 // ---------------------------------------------------------------------------
 // JSON navigation helpers
@@ -18,7 +30,7 @@ type JsonObject = { [key: string]: JsonValue };
  * (e.g. "goals.0", "user_interaction_tools[2]", "thresholds.coverage_min_percent").
  * Returns the string representation of the resolved value, or undefined if not found.
  */
-function resolvePath(root: JsonValue, path: string): string | undefined {
+function resolvePathRaw(root: JsonValue, path: string): JsonValue | undefined {
   // Normalise bracket notation to dot notation: user_interaction_tools[2] → user_interaction_tools.2
   const parts = path.replace(/\[(\d+)\]/g, '.$1').split('.');
   let current: JsonValue = root;
@@ -36,9 +48,25 @@ function resolvePath(root: JsonValue, path: string): string | undefined {
     }
   }
 
+  return current ?? undefined;
+}
+
+function resolvePath(root: JsonValue, path: string): string | undefined {
+  const current = resolvePathRaw(root, path);
   if (typeof current === 'string') return current;
   if (typeof current === 'number' || typeof current === 'boolean') return String(current);
   return undefined;
+}
+
+/**
+ * Resolve a dot-path to an array of strings, for `${i18n.list("...")}` expansion.
+ * Returns undefined when the path is missing or is not an all-string array.
+ */
+function resolvePathList(root: JsonValue, path: string): string[] | undefined {
+  const current = resolvePathRaw(root, path);
+  if (!Array.isArray(current)) return undefined;
+  if (!current.every((x) => typeof x === 'string')) return undefined;
+  return current as string[];
 }
 
 // ---------------------------------------------------------------------------
@@ -139,6 +167,31 @@ function resolveI18nKey(key: string, i18nMap: Map<string, JsonObject>): string {
 }
 
 /**
+ * Resolve `${i18n.list("skills.x.constraints")}` — expand a whole string array,
+ * one entry per line, in declaration order.
+ *
+ * This exists so a template never has to enumerate `constraints.0 … constraints.N`
+ * by hand. Hand-written indices silently drop every entry added past the last one
+ * spelled out in the template: the array grows, the generated skill does not, and
+ * nothing fails loudly. Listing by name makes the array its own source of truth.
+ */
+function resolveI18nList(key: string, i18nMap: Map<string, JsonObject>): string | undefined {
+  const parts = key.split('.');
+
+  // Same decreasing-prefix strategy as resolveI18nKey: most specific namespace wins
+  for (let nsLen = parts.length - 1; nsLen >= 1; nsLen--) {
+    const ns = parts.slice(0, nsLen).join('.');
+    const data = i18nMap.get(ns);
+    if (!data) continue;
+
+    const list = resolvePathList(data, parts.slice(nsLen).join('.'));
+    if (list !== undefined) return list.join('\n');
+  }
+
+  return undefined;
+}
+
+/**
  * Resolve a config path such as "framework.version" or "user_interaction_tools[2]".
  * Uses the bundled config.json imported statically.
  */
@@ -190,10 +243,20 @@ export function resolveContent(content: string, locale: string, baseDir?: string
   const i18nMap = buildI18nMap(locale);
   const fallbackMap = locale !== DEFAULT_LOCALE ? buildI18nMap(DEFAULT_LOCALE) : undefined;
 
-  // Phase 1 — i18n, iterated to a fixpoint so nested keys expand too
+  // Phase 1 — i18n, iterated to a fixpoint so nested keys expand too.
+  // Lists expand first: their entries may themselves contain `${i18n.t(...)}`,
+  // which the same loop then resolves on a later round.
   let afterI18n = content;
   for (let round = 0; round < MAX_I18N_DEPTH; round++) {
-    const next = afterI18n.replace(
+    const next = afterI18n
+      .replace(
+        /\$\{i18n\.list\("([^"]+)"\)\}/g,
+        (original, key: string) => {
+          const val = resolveI18nList(key, i18nMap) ?? (fallbackMap ? resolveI18nList(key, fallbackMap) : undefined);
+          return val ?? original;
+        }
+      )
+      .replace(
       /\$\{i18n\.t\("([^"]+)"\)\}/g,
       (_, key: string) => {
         let val = resolveI18nKey(key, i18nMap);

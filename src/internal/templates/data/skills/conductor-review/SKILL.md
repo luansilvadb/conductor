@@ -19,39 +19,19 @@ ${i18n.t("skills.conductor-review.preferences.0")}
 - description: ${i18n.t("skills.conductor-review.profile_description")}
 
 ## Goals:
-${i18n.t("skills.conductor-review.goals.0")}
-${i18n.t("skills.conductor-review.goals.1")}
-${i18n.t("skills.conductor-review.goals.2")}
-${i18n.t("skills.conductor-review.goals.3")}
-${i18n.t("skills.conductor-review.goals.4")}
-${i18n.t("skills.conductor-review.goals.5")}
+${i18n.list("skills.conductor-review.goals")}
 
 ## Constraints:
-${i18n.t("skills.conductor-review.constraints.0")}
-${i18n.t("skills.conductor-review.constraints.1")}
-${i18n.t("skills.conductor-review.constraints.2")}
-${i18n.t("skills.conductor-review.constraints.3")}
-${i18n.t("skills.conductor-review.constraints.4")}
+${i18n.list("skills.conductor-review.constraints")}
 
 ## Skills:
-${i18n.t("skills.conductor-review.skills.0")}
-${i18n.t("skills.conductor-review.skills.1")}
-${i18n.t("skills.conductor-review.skills.2")}
-${i18n.t("skills.conductor-review.skills.3")}
-${i18n.t("skills.conductor-review.skills.4")}
-${i18n.t("skills.conductor-review.skills.5")}
-${i18n.t("skills.conductor-review.skills.6")}
-${i18n.t("skills.conductor-review.skills.7")}
+${i18n.list("skills.conductor-review.skills")}
 
 ## Examples:
 ${i18n.t("skills.conductor-review.examples.0")}
 
 ## OutputFormat:
-${i18n.t("skills.conductor-review.output_format.0")}
-${i18n.t("skills.conductor-review.output_format.1")}
-${i18n.t("skills.conductor-review.output_format.2")}
-${i18n.t("skills.conductor-review.output_format.3")}
-${i18n.t("skills.conductor-review.output_format.4")}
+${i18n.list("skills.conductor-review.output_format")}
 - **Completion**: Close the interaction by reporting to the user: *${i18n.t("skills.conductor-review.completion")}*
 
 ## Initialization:

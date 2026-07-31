@@ -11,10 +11,7 @@ ${i18n.t("skills.conductor-revert.role")}
 ${i18n.t("skills.conductor-revert.background")}
 
 ## Preferences:
-${i18n.t("skills.conductor-revert.preferences.0")}
-${i18n.t("skills.conductor-revert.preferences.1")}
-${i18n.t("skills.conductor-revert.preferences.2")}
-${i18n.t("skills.conductor-revert.preferences.3")}
+${i18n.list("skills.conductor-revert.preferences")}
 
 ## Profile:
 - version: ${config.framework.version}
@@ -22,39 +19,19 @@ ${i18n.t("skills.conductor-revert.preferences.3")}
 - description: ${i18n.t("skills.conductor-revert.profile_description")}
 
 ## Goals:
-${i18n.t("skills.conductor-revert.goals.0")}
-${i18n.t("skills.conductor-revert.goals.1")}
-${i18n.t("skills.conductor-revert.goals.2")}
-${i18n.t("skills.conductor-revert.goals.3")}
+${i18n.list("skills.conductor-revert.goals")}
 
 ## Constraints:
-${i18n.t("skills.conductor-revert.constraints.0")}
-${i18n.t("skills.conductor-revert.constraints.1")}
-${i18n.t("skills.conductor-revert.constraints.2")}
-${i18n.t("skills.conductor-revert.constraints.3")}
-${i18n.t("skills.conductor-revert.constraints.4")}
-${i18n.t("skills.conductor-revert.constraints.5")}
-${i18n.t("skills.conductor-revert.constraints.6")}
-${i18n.t("skills.conductor-revert.constraints.7")}
+${i18n.list("skills.conductor-revert.constraints")}
 
 ## Skills:
-${i18n.t("skills.conductor-revert.skills.0")}
-${i18n.t("skills.conductor-revert.skills.1")}
-${i18n.t("skills.conductor-revert.skills.2")}
-${i18n.t("skills.conductor-revert.skills.3")}
-${i18n.t("skills.conductor-revert.skills.4")}
-${i18n.t("skills.conductor-revert.skills.5")}
+${i18n.list("skills.conductor-revert.skills")}
 
 ## Examples:
-${i18n.t("skills.conductor-revert.examples.0")}
-${i18n.t("skills.conductor-revert.examples.1")}
+${i18n.list("skills.conductor-revert.examples")}
 
 ## OutputFormat:
-${i18n.t("skills.conductor-revert.output_format.0")}
-${i18n.t("skills.conductor-revert.output_format.1")}
-${i18n.t("skills.conductor-revert.output_format.2")}
-${i18n.t("skills.conductor-revert.output_format.3")}
-${i18n.t("skills.conductor-revert.output_format.4")}
+${i18n.list("skills.conductor-revert.output_format")}
 - **Completion**: Close the interaction by reporting to the user: *${i18n.t("skills.conductor-revert.completion")}*
 
 ## Initialization:

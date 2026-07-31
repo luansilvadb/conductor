@@ -3297,7 +3297,8 @@ var init_embedded = __esm({
       "spec": "spec.md",
       "index": "index.md",
       "tracks_registry": "tracks.md",
-      "track_metadata": "metadata.json"
+      "track_metadata": "metadata.json",
+      "state": "state.md"
     },
     "context_files": [
       "product.md",
@@ -3313,7 +3314,8 @@ var init_embedded = __esm({
       "tracks.md",
       "plan.md",
       "index.md",
-      "metadata.json"
+      "metadata.json",
+      "state.md"
     ],
     "setup_chain": [
       { "file": "product.md", "step": "Product Definition" },
@@ -3356,7 +3358,17 @@ var init_embedded = __esm({
     "max_fix_attempts": 2,
     "max_parallel_subagents": 5,
     "subagent_timeout_seconds": 120,
-    "token_warning_threshold": 5000
+    "token_warning_threshold": 5000,
+    "state_max_lines": 100,
+    "tasks_per_phase_warn": 4,
+    "tasks_per_phase_block": 6,
+    "files_per_task_warn": 10,
+    "files_per_task_block": 15,
+    "plan_review_iterations": 3,
+    "subagent_return_max_lines": 15,
+    "fixes_before_architecture_review": 3,
+    "task_minutes_min": 2,
+    "task_minutes_max": 5
   },
 
   "protocol": {
@@ -3402,6 +3414,67 @@ var init_embedded = __esm({
       "in_progress": "[~]",
       "done": "[x]",
       "checkpoint": "[checkpoint: <sha>]"
+    },
+    "acceptance_criteria_kinds": ["source_assertion", "behavior_assertion", "test_command", "cli_output"],
+    "banned_acceptance_phrasings": ["looks correct", "works properly", "properly configured", "consistent with", "as expected", "good quality", "well structured"],
+    "review_statuses": ["passed", "gaps_found", "needs_human"],
+    "state_statuses": ["planning", "implementing", "reviewing", "blocked", "paused", "done"],
+    "banned_completion_phrasings": ["should work", "should pass", "probably", "seems to", "looks like it works", "appears to work", "I think it's fixed", "must be working now"],
+    "banned_plan_phrasings": ["TBD", "to be defined", "handle edge cases", "similar to the previous task", "and so on", "etc. as needed", "adjust as necessary"],
+    "subagent_report_statuses": {
+      "done": "Task complete; the return carries the evidence that proves it.",
+      "done_with_concerns": "Task complete, but the subagent recorded doubts the orchestrator must weigh before moving on.",
+      "needs_context": "The prompt lacked information the task required. The orchestrator supplies it and re-dispatches the SAME task \u2014 this is not a failure and MUST NOT consume a fix attempt.",
+      "blocked": "The task cannot proceed as scoped. Escalate: split it, re-plan it, or hand it to the user \u2014 never retry it unchanged."
+    }
+  },
+
+  "debugging_protocol": {
+    "description": "Ordered phases every fix attempt must follow. A fix proposed before phase 1 completes is a symptom fix, and symptom fixes are failures even when the test goes green.",
+    "phases": [
+      "Root cause: read the full error, reproduce it consistently, check what changed recently, and trace the bad value back to where it originates. Never propose a fix before this phase is complete.",
+      "Pattern analysis: find code in this project that already does this correctly, read it completely rather than skimming, and list every difference between the working and the broken path.",
+      "Hypothesis: state the theory explicitly as 'X is the root cause because Y', then make the smallest change that tests it. One variable at a time \u2014 never change two things and see what happens.",
+      "Implementation: write the failing test first, apply a single fix addressing the root cause, and confirm it neither leaves the test red nor breaks another test."
+    ],
+    "restart_signals": ["quick fix for now, investigate later", "just try changing this and see", "I don't fully understand this but it might work", "one more attempt and it should work"]
+  },
+
+  "state_document": {
+    "path": "\${config.directories.conductor_root}/\${config.files.artifacts.state}",
+    "description": "Session digest: the one file that tells a fresh session where the work stands. Written only by the orchestrator, never by a subagent. It is a digest, not a log \u2014 when it approaches config.thresholds.state_max_lines, drop the oldest resolved entries rather than growing the file.",
+    "frontmatter_fields": {
+      "status": "One of config.enums.state_statuses. Never free text.",
+      "track": "Id of the active track, or null when none is active.",
+      "phase": "Name of the plan phase currently open, or null.",
+      "task": "Id of the task currently in progress, or null.",
+      "wave": "Wave number currently executing, or null.",
+      "last_commit": "SHA of the last commit produced by Conductor.",
+      "updated_at": "ISO-8601 timestamp of the last write."
+    },
+    "body_sections": ["Current Position", "Open Decisions", "Blockers", "Resume Hint"]
+  },
+
+  "plan_task_fields": {
+    "wave": {
+      "type": "number",
+      "required": true,
+      "description": "Execution wave. Tasks in the same wave may run in parallel; wave N+1 starts only after every task in wave N is done."
+    },
+    "depends_on": {
+      "type": "string[]",
+      "required": true,
+      "description": "Task ids this task depends on. A task MUST be placed in a wave strictly greater than the wave of every id listed here."
+    },
+    "files": {
+      "type": "string[]",
+      "required": true,
+      "description": "Project-relative paths this task will create or modify. Drives the file-overlap check that downgrades a wave to sequential execution."
+    },
+    "accept": {
+      "type": "string[]",
+      "required": true,
+      "description": "Empirically checkable acceptance criteria; each entry MUST match one of config.enums.acceptance_criteria_kinds."
     }
   },
 
@@ -3471,6 +3544,35 @@ var init_embedded = __esm({
         "draft": "string",
         "task_count": "number",
         "estimated_hours": "number"
+      }
+    },
+    "state_digest": {
+      "type": "object",
+      "fields": {
+        "status": "string",
+        "track": "string",
+        "phase": "string",
+        "task": "string",
+        "wave": "number",
+        "last_commit": "string",
+        "blockers": "string[]",
+        "resume_hint": "string"
+      }
+    },
+    "plan_lint": {
+      "type": "object",
+      "fields": {
+        "iteration": "number",
+        "issues": [{ "task_id": "string", "dimension": "string", "severity": "string", "fix_hint": "string" }],
+        "blocker_count": "number",
+        "warning_count": "number"
+      }
+    },
+    "wave_index": {
+      "type": "object",
+      "fields": {
+        "waves": [{ "wave": "number", "task_ids": "string[]", "parallel": "boolean", "downgrade_reason": "string" }],
+        "conflicts": [{ "task_a": "string", "task_b": "string", "shared_files": "string[]" }]
       }
     },
     "skill_catalog_match": {
@@ -3630,7 +3732,18 @@ var init_embedded = __esm({
     "In standard text chat, \`ask_question\`s **strictly one at a time** and wait for the user's response before proceeding. Do not ask multiple \`question\` in a single response unless using a form or modal tool.",
     "**Context Isolation (SDP)**: All project file access MUST follow the [Subagent Dispatch Protocol](\${config.protocols.subagent_dispatch.path}) (resolve protocol path from conductor skills directory; the protocol itself references \`[config.json](\${config.directories.conductor_root}/config.json)\`). The orchestrator NEVER reads context files directly. Use the Dispatch Decision Matrix to determine whether to read inline or delegate.",
     "**Plan Checkboxes**: You MUST physically update the checkboxes in the plan document (resolved via \`config.files.artifacts.plan\`) for EVERY task you execute. Mark as \`\${config.enums.task_statuses.in_progress}\` when starting and \`\${config.enums.task_statuses.done}\` when finished.",
-    "**Test & Coverage Gate (TDD)**: No task may be marked \`\${config.enums.task_statuses.done}\` without first: (1) writing the failing test, (2) implementing the minimum needed to pass, (3) running the full test suite via subagent and confirming 100% pass, (4) verifying coverage meets the \`\${config.thresholds.coverage_min_percent}%\` threshold from config.json. On failure, retry at most \`\${config.thresholds.max_fix_attempts}\` times (via subagent) before stopping and reporting the blocker to the user \u2014 never mark a task done to work around a failure."
+    "**Test & Coverage Gate (TDD)**: No task may be marked \`\${config.enums.task_statuses.done}\` without first: (1) writing the failing test, (2) implementing the minimum needed to pass, (3) running the full test suite via subagent and confirming 100% pass, (4) verifying coverage meets the \`\${config.thresholds.coverage_min_percent}%\` threshold from config.json. On failure, retry at most \`\${config.thresholds.max_fix_attempts}\` times (via subagent) before stopping and reporting the blocker to the user \u2014 never mark a task done to work around a failure.",
+    "**Wave execution**: execute the plan wave by wave, in ascending wave order, reading the \`wave\` and \`depends_on\` fields defined in \`config.plan_task_fields\`. Tasks within a wave are dispatched in parallel, capped at \`\${config.thresholds.max_parallel_subagents}\` concurrent subagents. A wave starts only after every task of the previous wave is \`\${config.enums.task_statuses.done}\` and has passed the test & coverage gate. Never run a task whose dependencies are unmet, even if its wave number would allow it \u2014 a plan whose waves contradict its \`depends_on\` fields is defective; report it and stop.",
+    "**File-overlap check (CRITICAL, before every wave)**: before dispatching any subagent for a wave, compare the \`files\` list of every pair of tasks in that wave. If two tasks share even one path, they carry an implicit dependency and MUST NOT run in parallel \u2014 downgrade that wave alone to sequential execution and state the reason. This downgrade is per-wave and never disables parallelism for the remaining waves. Concurrent writes to one file lose work silently, so this check runs even when the plan explicitly claims the tasks are independent.",
+    "**Wave failure handling**: if a task in a wave fails after \`\${config.thresholds.max_fix_attempts}\` fix attempts, let the other tasks of that wave finish, then stop before the next wave. Report which tasks completed, which failed, and which are now blocked by the failure \u2014 never start a dependent wave on top of a failed one.",
+    "**Session state (CRITICAL)**: keep the state document (resolve path via \`config.files.artifacts.state\`, under \`config.directories.conductor_root\`) current \u2014 it is what lets a fresh session resume this work without re-reading the whole track. Rewrite it when you start a track, when you open or close a wave, when you stop on a blocker, and when you finish. The \`status\` field MUST be one of \`config.enums.state_statuses\`; never invent a value and never write prose there. Keep the whole document under \`\${config.thresholds.state_max_lines}\` lines by dropping resolved entries \u2014 it is a digest of where the work stands, not a history of how it got there. It is listed in \`config.files.control_files[]\`, so the orchestrator writes it inline and subagents never touch it.",
+    "**Evidence before claims (IRON LAW)**: never state that anything is done, fixed, passing, or working without having just run the command that proves it and read its output. The gate is five steps, in order: (1) identify the command that would prove the claim, (2) run it fresh and in full \u2014 never reuse an earlier run, (3) read the complete output and the exit code, (4) confirm the output actually supports the claim, (5) only then state it, quoting the evidence. A claim you cannot back with output from step 2 is not a claim you may make.",
+    "**Forbidden completion language**: never use hedging from \`config.enums.banned_completion_phrasings\` \u2014 or any equivalent \u2014 to describe work as finished. Hedged completion is how a failure reaches the user disguised as a success. Equally, do not celebrate before verifying: no \\"done\\", \\"perfect\\", or \\"all set\\" until step 5 of the iron law has been reached. If verification has not run, say exactly that: what remains unverified, and which command would settle it.",
+    "**Never trust a subagent's word for completion**: a subagent reporting success is a claim, not evidence. Before accepting it, confirm the artefact it claims to have produced \u2014 the file exists, the test runs, the symbol is exported. A report is a request to verify, never a substitute for verifying.",
+    "**Systematic debugging (CRITICAL)**: when something fails, follow the phases in \`config.debugging_protocol.phases[]\` in order. Never propose a fix before the root-cause phase is complete: a fix that removes the symptom without explaining the cause is a failure even if tests turn green, because it relocates the bug instead of removing it. Change one variable at a time. If you catch yourself thinking any of \`config.debugging_protocol.restart_signals[]\`, that is the signal to return to the first phase, not to proceed.",
+    "**Architecture gate on repeated failure**: after \`\${config.thresholds.fixes_before_architecture_review}\` failed fixes on the same problem, STOP. Do not attempt another fix. Repeated failure at one point means the design is wrong, not that the next attempt will be luckier \u2014 report the pattern to the user, state which assumption of the plan it contradicts, and ask whether to re-plan the affected phase. The two limits count different things and neither replaces the other: \`config.thresholds.max_fix_attempts\` caps retries *within one task* and stops that task; this gate counts failed fixes *on the same underlying problem across the whole track* \u2014 including attempts made in earlier tasks, earlier waves, and earlier sessions recorded in the state document. A problem that keeps resurfacing in different places is precisely the case this gate exists for, and it is invisible if you only count within the current task.",
+    "**Watch the test fail**: a test that passes the moment it is written proves nothing \u2014 it may assert something already true, or nothing at all. Run every new test BEFORE the implementation exists and confirm it fails for the expected reason. If production code got written before its test, delete that code and restart the cycle; a test written afterwards is shaped by the code it was meant to judge.",
+    "**Resume before acting**: at the start of every run, read the state document (resolve via \`config.files.artifacts.state\`) before anything else. If it reports an unfinished track, open its \`Resume Hint\` and any \`Blockers\` and offer to continue from there instead of starting over. If it disagrees with the tracks registry or with \`git status\`, surface the divergence to the user and let them decide which is authoritative \u2014 never silently overwrite state that describes work you cannot account for."
   ],
   "skills": [
     "File system operations: checking existence, reading/writing files using relative paths.",
@@ -3641,14 +3754,14 @@ var init_embedded = __esm({
   ],
   "examples": [
     "**User:** implement login  \\n**Assistant:** I found track \`login\` with status \`\${config.enums.task_statuses.pending}\` (pending). Should I begin implementing it? (Yes/No)",
-    "**User:** Yes  \\n**Assistant:** Starting implementation of track \`login\`. First, I'll mark it as in progress\u2026 [updates tracks.md] Committed. Now I'll load the track context via subagents\u2026 The plan contains 3 tasks. Task 1 (create controller) is independent; I'll dispatch a subagent for it. Task 2 (write tests) depends on task 1; I'll queue it. Task 3 (update docs) is trivial and will be done inline. Proceed with task 1? (Yes/No)"
+    "**User:** Yes  \\n**Assistant:** Starting implementation of track \`login\`. First, I'll mark it as in progress\u2026 [updates tracks.md] Committed. Now I'll load the track context via subagents\u2026 The plan contains 3 tasks across 2 waves. Wave 1: task 1 (create controller) and task 3 (update docs) \u2014 no shared files, so they run in parallel, with task 3 inline since it touches no context file. Wave 2: task 2 (write tests), which depends on task 1. Proceed with wave 1? (Yes/No)"
   ],
   "output_format": [
-    "**Handshake & Context Initialization:** Verify existence of \`\${config.directories.conductor_root}/\${config.files.artifacts.index}\` and core files (resolve core files from \`config.files.context_files[]\` dynamically). Halt or offer to run setup if missing.",
+    "**Handshake & Context Initialization:** Verify existence of \`\${config.directories.conductor_root}/\${config.files.artifacts.index}\` and core files (resolve core files from \`config.files.context_files[]\` dynamically). Halt or offer to run setup if missing. Then read the state document (resolve via \`config.files.artifacts.state\`): if it reports unfinished work, summarise where it stopped and offer to resume before proposing anything new; if it is missing, create it with \`status\` set to the value of \`config.enums.state_statuses\` that matches what you are about to do.",
     "**Track Selection:** Check user input for a track name. Parse the tracks registry via a subagent, obtain compact schema. Present the next pending track (or the requested one) and ask for confirmation with a yes/no \`question\`.",
-    "**Track Implementation:**\\n   a. Announce the track being implemented.\\n   b. Update its status to \`\${config.enums.task_statuses.in_progress}\` in the tracks registry and commit.\\n   c. **Load track context via SDP**: Dispatch a subagent (resolve subagent type via \`config.subagent_types\` using capability-based lookup \u2014 \`resolveSubagentByCapability(\\"read_files\\", config)\` from the [Subagent Dispatch Protocol](\${config.protocols.subagent_dispatch.path})) to read spec, plan, and workflow. Apply \`classifyTask()\` from the [Subagent Dispatch Protocol](\${config.protocols.subagent_dispatch.path}) (resolve protocol path from conductor skills directory; the protocol itself references \`[config.json](\${config.directories.conductor_root}/config.json)\`) to classify each task deterministically. Subagent returns schema as defined in \`config.schemas.*\` \u2014 validate envelope via \`\${config.protocol.protocol_field}\`; field names defined in \`config.protocol\` and resolved by \`classifyTask()\`.\\n   d. Execute tasks in plan order following the classification:\\n      - \`SUBAGENT\` with parallelizable field (field names defined in \`config.protocol\` and resolved by \`classifyTask()\`): dispatch in parallel via independent subagents (resolve subagent type via \`config.subagent_types\` using capability-based lookup \u2014 \`resolveSubagentByCapability(\\"analysis\\", config)\` from the [Subagent Dispatch Protocol](\${config.protocols.subagent_dispatch.path})).\\n      - \`SUBAGENT\` with non-parallelizable field (has dependencies): dispatch sequentially, each in its own subagent (resolve subagent type via \`config.subagent_types\` using capability-based lookup \u2014 \`resolveSubagentByCapability(\\"analysis\\", config)\` from the [Subagent Dispatch Protocol](\${config.protocols.subagent_dispatch.path})).\\n      - \`INLINE\`: execute directly in the orchestrator (trivial tasks only, no context file access).\\n      - Validate every subagent return contains \`\${config.protocol.protocol_field}: \${config.protocol.version_string}\` as defined in config.json. Consume only \`\${config.protocol.data_envelope}.*\` schema per config.json. Discard history.\\n      - Before starting each task, explicitly update its checkbox in the plan document to \`\${config.enums.task_statuses.in_progress}\`.\\n      - **Test & coverage gate**: before marking any task done, dispatch an analysis subagent to run the test suite and report \`config.schemas.test_execution\` (total, passed, failed, coverage_percent). Only proceed if \`failed == 0\` and \`coverage_percent >= config.thresholds.coverage_min_percent\`. On failure, allow at most \`config.thresholds.max_fix_attempts\` further fix attempts via subagent before stopping and reporting the blocker to the user.\\n      - After the task is done and the test/coverage gate passes, explicitly update its checkbox in the plan document to \`\${config.enums.task_statuses.done}\` and commit changes.\\n      - Conduct human-in-the-loop checks (yes/no, multiple-choice) as defined by the workflow.\\n   e. After all tasks are done, mark the track as \`\${config.enums.task_statuses.done}\` in the tracks registry and commit.",
+    "**Track Implementation:**\\n   a. Announce the track being implemented.\\n   b. Update its status to \`\${config.enums.task_statuses.in_progress}\` in the tracks registry and commit.\\n   c. **Load track context via SDP**: Dispatch a subagent (resolve subagent type via \`config.subagent_types\` using capability-based lookup \u2014 \`resolveSubagentByCapability(\\"read_files\\", config)\` from the [Subagent Dispatch Protocol](\${config.protocols.subagent_dispatch.path})) to read spec, plan, and workflow. Apply \`classifyTask()\` from the [Subagent Dispatch Protocol](\${config.protocols.subagent_dispatch.path}) (resolve protocol path from conductor skills directory; the protocol itself references \`[config.json](\${config.directories.conductor_root}/config.json)\`) to classify each task deterministically. Subagent returns schema as defined in \`config.schemas.*\` \u2014 validate envelope via \`\${config.protocol.protocol_field}\`; field names defined in \`config.protocol\` and resolved by \`classifyTask()\`.\\n   d. **Build the wave index**: group the plan's tasks by their \`wave\` field (see \`config.plan_task_fields\`), then for each wave compare the \`files\` lists of every pair of tasks in it. Any shared path downgrades that wave to sequential execution. Record the result as \`config.schemas.wave_index\` and show the user the wave grouping \u2014 including any downgrade and the files that caused it \u2014 before execution starts.\\n   e. Execute wave by wave in ascending order. Within a wave, follow the classification:\\n      - \`SUBAGENT\`, wave not downgraded: dispatch all its tasks in parallel via independent subagents (resolve subagent type via \`config.subagent_types\` using capability-based lookup \u2014 \`resolveSubagentByCapability(\\"analysis\\", config)\` from the [Subagent Dispatch Protocol](\${config.protocols.subagent_dispatch.path})), at most \`\${config.thresholds.max_parallel_subagents}\` at a time.\\n      - \`SUBAGENT\`, wave downgraded by file overlap (or task with unmet dependencies): dispatch sequentially, each in its own subagent (same capability-based lookup).\\n      - \`INLINE\`: execute directly in the orchestrator (trivial tasks only, no context file access).\\n      - Close each wave before opening the next: every task \`\${config.enums.task_statuses.done}\`, test & coverage gate passed, changes committed. On failure, finish the remaining tasks of the current wave, then stop and report what is blocked.\\n      - Validate every subagent return contains \`\${config.protocol.protocol_field}: \${config.protocol.version_string}\` as defined in config.json. Consume only \`\${config.protocol.data_envelope}.*\` schema per config.json. Discard history.\\n      - Before starting each task, explicitly update its checkbox in the plan document to \`\${config.enums.task_statuses.in_progress}\`.\\n      - **Test & coverage gate**: before marking any task done, dispatch an analysis subagent to run the test suite and report \`config.schemas.test_execution\` (total, passed, failed, coverage_percent). Only proceed if \`failed == 0\` and \`coverage_percent >= config.thresholds.coverage_min_percent\` \u2014 read those numbers from the current run, never from an earlier one. On failure, work the phases in \`config.debugging_protocol.phases[]\` before each attempt, allowing at most \`config.thresholds.max_fix_attempts\` attempts; a subagent returning the \`needs_context\` status from \`config.enums.subagent_report_statuses\` does NOT consume an attempt \u2014 complete its prompt and re-dispatch the same task.\\n      - After the task is done and the test/coverage gate passes, explicitly update its checkbox in the plan document to \`\${config.enums.task_statuses.done}\` and commit changes.\\n      - Conduct human-in-the-loop checks (yes/no, multiple-choice) as defined by the workflow.\\n   f. After all waves are done, mark the track as \`\${config.enums.task_statuses.done}\` in the tracks registry and commit.\\n   g. **Write the state document** (resolve via \`config.files.artifacts.state\`) at every boundary \u2014 track start, wave open, wave close, blocker, completion \u2014 using the fields in \`config.state_document.frontmatter_fields\` and the sections in \`config.state_document.body_sections\`. On a blocker, set \`status\` to the blocked value from \`config.enums.state_statuses\` and make \`Resume Hint\` a concrete next action, not a restatement of the failure.",
     "**Synchronize Project Documentation:**\\n   a. Resolve paths to product definition, tech stack, and product guidelines (do not read).\\n   b. Dispatch a subagent to analyse the completed track's specification against those docs.\\n   c. Present proposed diffs for each document separately, ask for approval with yes/no before editing.\\n   d. Stage and commit any changed documents.",
-    "**Completion and Handoff:** Summarise actions taken, then ask the user if they want a formal code review as a single-choice \`question\` with the options labelled \\"\${i18n.t(\\"common.confirmations.yes\\")}\\" and \\"\${i18n.t(\\"common.confirmations.no\\")}\\" (recommended first, prefixed \\"\${i18n.t(\\"common.confirmations.recommended\\")}\\"). If yes, invoke the \`\${config.skills.names.review}\` skill; otherwise, suggest they can run it later. Also mention that the \`\${config.skills.names.status}\` skill can be invoked at any time for a read-only progress overview of the track and the project, and that the \`\${config.skills.names.revert}\` skill can safely roll back the work just delivered if it turns out to be wrong."
+    "**Completion and Handoff:** State the verification evidence before the summary \u2014 the test command that was run, its exit code, the pass count, and the coverage figure, all from the final run. If any task closed with unverified behaviour, list it here rather than in the summary. Then summarise actions taken and ask the user if they want a formal code review as a single-choice \`question\` with the options labelled \\"\${i18n.t(\\"common.confirmations.yes\\")}\\" and \\"\${i18n.t(\\"common.confirmations.no\\")}\\" (recommended first, prefixed \\"\${i18n.t(\\"common.confirmations.recommended\\")}\\"). If yes, invoke the \`\${config.skills.names.review}\` skill; otherwise, suggest they can run it later. Also mention that the \`\${config.skills.names.status}\` skill can be invoked at any time for a read-only progress overview of the track and the project, and that the \`\${config.skills.names.revert}\` skill can safely roll back the work just delivered if it turns out to be wrong."
   ],
   "completion": "Implementation completed. Would you like a formal code review? (\${i18n.t(\\"common.confirmations.yes\\")}/\${i18n.t(\\"common.confirmations.no\\")})"
 }
@@ -3690,7 +3803,15 @@ var init_embedded = __esm({
     "**Context isolation (SDP)**: All access to the product document, tech\u2011stack document, workflow document, or any file under the conductor root directory \u2014 resolve paths via \`config.files.artifacts.product\`, \`config.files.artifacts.tech_stack\`, \`config.files.artifacts.workflow\`, and \`config.directories.conductor_root\` from the centralized config (\`[config.json](\${config.directories.conductor_root}/config.json)\`) \u2014 MUST follow the [Subagent Dispatch Protocol](\${config.protocols.subagent_dispatch.path}) (protocol values resolved via the centralized config (\`[config.json](\${config.directories.conductor_root}/config.json)\`)). The orchestrator NEVER reads these files directly. Dispatch subagents of type resolved via \`config.subagent_types\` using capability\u2011based lookup (\`resolveSubagentByCapability(\\"read_files\\", config)\` from the [Subagent Dispatch Protocol](\${config.protocols.subagent_dispatch.path})) with closed prompts. Validate return via \`\${config.protocol.protocol_field}: \${config.protocol.version_string}\` as defined in config.json. Consume only \`\${config.protocol.data_envelope}.*\` per config.json. Immediately discard intermediate history.",
     "**Data retention**: only keep the minimally required schema from sub-agent results; explicitly discard all other intermediate data once consumed.",
     "**Collision avoidance**: before creating a new track, check for name collisions via a sub\u2011agent (or inline listing, then discard the listing) and resolve conflicts with the user.",
-    "**Respect negative space**: before proposing to change, remove, or revert anything recorded in the decisions file (resolve path via \`config.files.artifacts.decisions\`), surface the relevant entry to the user and require explicit confirmation before proceeding."
+    "**Respect negative space**: before proposing to change, remove, or revert anything recorded in the decisions file (resolve path via \`config.files.artifacts.decisions\`), surface the relevant entry to the user and require explicit confirmation before proceeding.",
+    "**Empirical acceptance criteria (CRITICAL)**: every task in the plan MUST carry at least one acceptance criterion, and every criterion MUST be checkable without human judgement \u2014 it must fall into one of the kinds listed in \`config.enums.acceptance_criteria_kinds\` from the centralized config (\`[config.json](\${config.directories.conductor_root}/config.json)\`): a source assertion (a named symbol exists in a named file), a behaviour assertion (a concrete input produces a concrete observable output), a test command (a command that exits zero), or a CLI output (a command prints a specific string). NEVER write a criterion using any phrasing listed in \`config.enums.banned_acceptance_phrasings\` or any equivalent subjective wording \u2014 such a criterion is invalid output and MUST be rewritten before the plan is presented to the user.",
+    "**Task metadata is mandatory**: every task in the plan document MUST declare all fields defined in \`config.plan_task_fields\` from the centralized config (\`[config.json](\${config.directories.conductor_root}/config.json)\`) \u2014 the execution wave, the task ids it depends on, the project-relative files it will touch, and its acceptance criteria. A task missing any of these fields is invalid output; the plan cannot be presented to the user until every task is complete. The \`files\` field is what allows the implementer to detect write conflicts before parallelising, so listing files a task will not touch is as harmful as omitting files it will.",
+    "**Wave assignment**: assign each task the lowest wave number consistent with its dependencies \u2014 a task whose \`depends_on\` is empty belongs to wave 1, and any other task belongs to a wave strictly greater than the highest wave among its dependencies. Do not serialise tasks that have no real dependency between them; unnecessary sequencing is the single most expensive defect in a plan.",
+    "**Scope sanity gate**: keep each phase within \`\${config.thresholds.tasks_per_phase_warn}\` tasks and each task within \`\${config.thresholds.files_per_task_warn}\` files. A phase reaching \`\${config.thresholds.tasks_per_phase_block}\` tasks, or a task reaching \`\${config.thresholds.files_per_task_block}\` files, is a blocker: split it before presenting the plan. Report any split you made and why.",
+    "**No placeholders in the plan (CRITICAL)**: write the plan for an engineer with zero context on this project. Never use any phrasing from \`config.enums.banned_plan_phrasings\` or any equivalent deferral \u2014 no \\"TBD\\", no \\"handle edge cases\\", no \\"same as the previous task\\". A task that defers its own definition is not a task; it is a decision postponed to the moment it is most expensive to make. Name the actual files, the actual function signatures, and the actual expected values.",
+    "**Task granularity**: size each task so one engineer completes the full cycle \u2014 write the test, watch it fail, implement, verify, commit \u2014 in \`\${config.thresholds.task_minutes_min}\` to \`\${config.thresholds.task_minutes_max}\` minutes. A task that cannot be finished in one cycle is really several tasks sharing a checkbox, and it hides its own progress: it is either not started or not finished, never partially verifiable. Split it and let each half carry its own test.",
+    "**Interface consistency**: when a task consumes something an earlier task produces, spell out the exact signature or shape at both ends and keep them identical. Mismatched interfaces between tasks are the defect that survives every per-task check and only surfaces at integration, when the cost of fixing it is highest.",
+    "**Plan self-review loop**: after drafting the plan and before presenting it, dispatch an analysis subagent to lint it against the two previous constraints, returning the schema defined in \`config.schemas.plan_lint\`. Revise and re-lint while blockers remain, for at most \`\${config.thresholds.plan_review_iterations}\` iterations. If the blocker count fails to decrease between two consecutive iterations, stop iterating \u2014 the approach itself is wrong; surface the remaining blockers to the user and ask whether to restructure the track or proceed knowingly."
   ],
   "skills": [
     "**Project context verification** \u2013 locate the project index file (resolve via \`config.files.artifacts.index\` from the centralized config (\`[config.json](\${config.directories.conductor_root}/config.json)\`)) and confirm the existence of linked core files (product document via \`config.files.artifacts.product\`, tech\u2011stack document via \`config.files.artifacts.tech_stack\`, decisions document via \`config.files.artifacts.decisions\`, workflow document via \`config.files.artifacts.workflow\`).",
@@ -3711,7 +3832,7 @@ var init_embedded = __esm({
     "**Handshake & context check** \u2013 locate the project index document (resolved via \`config.files.artifacts.index\` from the centralized config (\`[config.json](\${config.directories.conductor_root}/config.json)\`)); if missing, offer setup. Verify core file paths (health check only), including the decisions file (resolved via \`config.files.artifacts.decisions\`).",
     "**Acquire track description** \u2013 if not provided, ask openly; infer type (resolved from \`config.enums.track_types\` dynamically) and confirm with a Yes/No \`question\`.",
     "**Interactive spec generation** (spec document, resolved via \`config.files.artifacts.spec\`):\\n   - Dispatch a subagent of type resolved via \`config.subagent_types\` using capability\u2011based lookup (\`resolveSubagentByCapability(\\"read_files\\", config)\` from the [Subagent Dispatch Protocol](\${config.protocols.subagent_dispatch.path})) (SDP) to cross-reference the track description against product/tech-stack. Subagent returns schema as defined in \`config.schemas.question_seeds\` from the centralized config (\`[config.json](\${config.directories.conductor_root}/config.json)\`), validated via \`\${config.protocol.protocol_field}: \${config.protocol.version_string}\` with data under \`\${config.protocol.data_envelope}.*\`.\\n   - \`ask_question\`s one at a time, using the seeds as suggestion bases; loop until user says information is sufficient.\\n   - Dispatch a subagent of type resolved via \`config.subagent_types\` using capability\u2011based lookup (\`resolveSubagentByCapability(\\"analysis\\", config)\` from the [Subagent Dispatch Protocol](\${config.protocols.subagent_dispatch.path})) (SDP) to synthesize the complete spec document from collected answers. Subagent returns schema as defined in \`config.schemas.spec_plan_draft\` from the centralized config (\`[config.json](\${config.directories.conductor_root}/config.json)\`), validated via \`\${config.protocol.protocol_field}: \${config.protocol.version_string}\` with data under \`\${config.protocol.data_envelope}.*\`.\\n   - Show draft; user chooses Approve or Revise; iterate if needed.",
-    "**Interactive plan generation** (plan document, resolved via \`config.files.artifacts.plan\`):\\n   - Dispatch a subagent of type resolved via \`config.subagent_types\` using capability\u2011based lookup (\`resolveSubagentByCapability(\\"analysis\\", config)\` from the [Subagent Dispatch Protocol](\${config.protocols.subagent_dispatch.path})) (SDP) to read workflow + approved spec and generate the plan document with checkboxes and phase verification tasks. Returns schema as defined in \`config.schemas.spec_plan_draft\` from the centralized config (\`[config.json](\${config.directories.conductor_root}/config.json)\`), validated via \`\${config.protocol.protocol_field}: \${config.protocol.version_string}\` with data under \`\${config.protocol.data_envelope}.*\`.\\n   - Show draft; user chooses Approve or Revise.",
+    "**Interactive plan generation** (plan document, resolved via \`config.files.artifacts.plan\`):\\n   - Dispatch a subagent of type resolved via \`config.subagent_types\` using capability\u2011based lookup (\`resolveSubagentByCapability(\\"analysis\\", config)\` from the [Subagent Dispatch Protocol](\${config.protocols.subagent_dispatch.path})) (SDP) to read workflow + approved spec and generate the plan document with checkboxes and phase verification tasks. Returns schema as defined in \`config.schemas.spec_plan_draft\` from the centralized config (\`[config.json](\${config.directories.conductor_root}/config.json)\`), validated via \`\${config.protocol.protocol_field}: \${config.protocol.version_string}\` with data under \`\${config.protocol.data_envelope}.*\`.\\n   - Every task MUST be written in the task block format below, carrying all fields from \`config.plan_task_fields\`:\\n     \`\`\`markdown\\n     - \${config.enums.task_statuses.pending} 1.2 Validate the session token\\n       - wave: 1\\n       - depends_on: []\\n       - files: [src/auth/token.ts, tests/auth/token.test.ts]\\n       - accept:\\n         - \`src/auth/token.ts\` exports \`verifyToken\`\\n         - \`verifyToken\` on an expired token returns \`{ valid: false, reason: \\"expired\\" }\`\\n         - \`npm test -- token\` exits 0\\n     \`\`\`\\n   - **Lint before presenting**: dispatch an analysis subagent to check the draft against the scope sanity gate and the empirical acceptance criteria rule, returning \`config.schemas.plan_lint\`. Revise while blockers remain, up to \`\${config.thresholds.plan_review_iterations}\` iterations; stop early if the blocker count stops decreasing and escalate to the user.\\n   - Show draft (including the wave grouping and any splits made to satisfy the scope gate); user chooses Approve or Revise.",
     "**Persist architectural choices** \u2013 for any \`question\` seed answer that resolved an architectural trade-off (not a routine scoping detail), append a dated entry (option chosen + reason) to the decisions file (resolved via \`config.files.artifacts.decisions\`); before the spec is finalised, cross-check it against existing entries and surface any conflict to the user for explicit confirmation.",
     "**Skill recommendation**:\\n   - Dispatch a subagent of type resolved via \`config.subagent_types\` using capability\u2011based lookup (\`resolveSubagentByCapability(\\"read_files\\", config)\` from the [Subagent Dispatch Protocol](\${config.protocols.subagent_dispatch.path})) (SDP) to scan the skill catalogs \u2014 [Community Skills Catalog](\${config.catalogs.community}) (external/third\u2011party skills) and [Core Skills Catalog](\${config.catalogs.core}) (first\u2011party Conductor skills). Returns schema as defined in \`config.schemas.skill_catalog_match\` from the centralized config (\`[config.json](\${config.directories.conductor_root}/config.json)\`), validated via \`\${config.protocol.protocol_field}: \${config.protocol.version_string}\` with data under \`\${config.protocol.data_envelope}.*\`.\\n   - Present missing skills with trust disclosure \u2014 trust levels resolved from \`config.enums.trust_levels\` dynamically from the centralized config (\`[config.json](\${config.directories.conductor_root}/config.json)\`) \u2014 with frozen commit warning for community skills.\\n   - User selects skills to install; execute installation using the appropriate package manager or download tool for the environment.\\n   - Advise user to refresh their agent environment.",
     "**Create track artifacts & update registry**:\\n   - Resolve tracks directory from config; check for name collisions via sub\u2011agent.\\n   - Generate track ID, create directory under the tracks directory (resolved via \`config.directories.tracks_dir\`).\\n   - Write the track metadata (resolved via \`config.files.artifacts.track_metadata\`), the spec document (resolved via \`config.files.artifacts.spec\`), the plan document (resolved via \`config.files.artifacts.plan\`), and the track\u2011level index document (resolved via \`config.files.artifacts.index\`).\\n   - Append entry to the tracks registry (resolved via \`config.files.artifacts.tracks_registry\`); ensure the project index document (resolved via \`config.files.artifacts.index\`) links to registry and directory.\\n   - Commit all changes.",
@@ -3805,7 +3926,13 @@ var init_embedded = __esm({
     "Tool Validation: Validate success of every tool call; self-correct once or halt.",
     "Path Integrity: Use relative paths from project root.",
     "Interaction Protocol: When gathering information, provide single/multiple-choice options introduced with \\"\${i18n.t(\\"common.choices.select_option\\")}\\", listing the recommended option first prefixed with \\"\${i18n.t(\\"common.confirmations.recommended\\")}\\", and \u2014 in plain-text chat \u2014 closing the list with \\"\${i18n.t(\\"common.choices.reply_with_number\\")}\\". Yes/No questions use the labels \\"\${i18n.t(\\"common.confirmations.yes\\")}\\" and \\"\${i18n.t(\\"common.confirmations.no\\")}\\". \`ask_question\`s sequentially one at a time unless grouped in a native tool.",
-    "Context Isolation (SDP): Use subagent dispatches per the Subagent Dispatch Protocol (resolve paths via \`[config.json](\${config.directories.conductor_root}/config.json)\`) for reading large files as defined by \`config.thresholds.delegate_lines\` threshold. The orchestrator operates only on condensed schemas with the \`\${config.protocol.protocol_field}: \${config.protocol.version_string}\` field as defined in config.json. Discard intermediate history after consumption."
+    "Context Isolation (SDP): Use subagent dispatches per the Subagent Dispatch Protocol (resolve paths via \`[config.json](\${config.directories.conductor_root}/config.json)\`) for reading large files as defined by \`config.thresholds.delegate_lines\` threshold. The orchestrator operates only on condensed schemas with the \`\${config.protocol.protocol_field}: \${config.protocol.version_string}\` field as defined in config.json. Discard intermediate history after consumption.",
+    "**Review verdict is a closed enum**: every review ends with exactly one status from \`config.enums.review_statuses\` \u2014 the pass value when everything checks out, the gaps value when findings remain, the human value when something could not be verified by machine. Never report a verdict outside this set and never soften one in prose.",
+    "**The pass verdict has a precondition (CRITICAL)**: you may only report the pass value when the review left NO item requiring human judgement \u2014 no untested behaviour, no manual verification step, no finding you could not confirm empirically. If even one such item exists, the verdict is the human value from \`config.enums.review_statuses\`, regardless of how minor the item seems and regardless of how many checks passed. A track that closes as passed while carrying unverified behaviour is the single most damaging outcome this skill can produce: it converts an open question into a false guarantee.",
+    "**Unverified behaviour is explicit**: any behaviour changed by the track but not covered by an executed test MUST be listed under its own heading in the report and counted. Do not describe it as verified, do not infer it works from surrounding tests passing, and do not omit it because the change looked obviously correct.",
+    "**Evidence before claims (IRON LAW)**: every check you report as passing MUST be backed by a command you ran during this review and whose output you read \u2014 the test suite, the linter, the build. Never carry over a result from the implementation phase, and never infer that a check passes because the code looks right. If you could not run it, the check is unverified, not passed, and it belongs in the human-verification section.",
+    "**Forbidden verdict language**: never soften a finding with hedging from \`config.enums.banned_completion_phrasings\` or any equivalent. A finding you are unsure about is reported as unsure, with what would settle it \u2014 writing \\"probably fine\\" converts your own uncertainty into the user's false confidence.",
+    "**Fail closed**: if a required input cannot be read or a check cannot be executed \u2014 missing styleguide, unreadable decisions file, test suite that will not run \u2014 the verdict is the human value from \`config.enums.review_statuses\` with the reason stated. Never treat an unreadable input as an absent problem."
   ],
   "skills": [
     "Git diff and log analysis to pinpoint relevant changes.",
@@ -3825,6 +3952,7 @@ var init_embedded = __esm({
     "**Identify Scope**: Check user input for a track name; else auto-detect the in-progress track from the tracks registry (\`config.directories.conductor_root\` / \`config.files.artifacts.tracks_registry\`) via a subagent \u2014 resolve subagent type via \`config.subagent_types\` using capability-based lookup (\`resolveSubagentByCapability(\\"read_files\\", config)\` from the Subagent Dispatch Protocol). Confirm scope with user.",
     "**Retrieve Context (SDP)**: Dispatch subagents \u2014 resolve subagent type via \`config.subagent_types\` using capability-based lookup (\`resolveSubagentByCapability(\\"read_files\\", config)\` from the Subagent Dispatch Protocol) \u2014 to load rules from guidelines (\`config.files.artifacts.product_guidelines\`), tech-stack (\`config.files.artifacts.tech_stack\`), decisions (\`config.files.artifacts.decisions\`), styleguides (\`config.directories.styleguides_dir\`), and installed skills. Dispatch a subagent to load the track's plan (\`config.files.artifacts.plan\`) and extract the commit range. Dispatch subagent(s) \u2014 resolve subagent type via \`config.subagent_types\` using capability-based lookup (\`resolveSubagentByCapability(\\"analysis\\", config)\` from the Subagent Dispatch Protocol) \u2014 to analyze the git diff (plan compliance, style, correctness, security, coverage). Dispatch a subagent to run the test suite. Every return MUST contain the protocol field as \`\${config.protocol.protocol_field}: \${config.protocol.version_string}\` as defined in \`[config.json](\${config.directories.conductor_root}/config.json)\`. The orchestrator consumes only the \`\${config.protocol.data_envelope}.findings[]\` \u2014 schema defined in \`config.schemas.diff_analysis\`. Discard history.",
     "**Output Findings**: Format a report with Summary, Verification Checks (checklist), and detailed Findings with severity, file, lines, context, and diff suggestion. Returns schema as defined in \`config.schemas.*\` \u2014 validate envelope via \`\${config.protocol.protocol_field}\` as defined in \`[config.json](\${config.directories.conductor_root}/config.json)\`.",
+    "**Verdict**: state one status from \`config.enums.review_statuses\`, followed by the counts that justify it \u2014 findings by severity, and the number of behaviours changed by the track but not covered by an executed test. Add a **Needs Human Verification** section listing every item a machine could not confirm; if that section is non-empty, the verdict MUST be the human value from \`config.enums.review_statuses\`, never the pass value. An empty section is what earns a pass \u2014 say so explicitly rather than leaving it implied.",
     "**Completion**: Determine recommendation based on findings. If issues, ask user to apply fixes, manually fix, or ignore. Apply selected action, committing code and updating the plan (\`config.files.artifacts.plan\`) automatically. Then update the tracks registry to reflect the completed review. **Handoff**: close by proactively offering the next step as a single-choice \`question\` (options labelled \\"\${i18n.t(\\"common.confirmations.yes\\")}\\" / \\"\${i18n.t(\\"common.confirmations.no\\")}\\", recommended first, prefixed \\"\${i18n.t(\\"common.confirmations.recommended\\")}\\"): if the review is approved and no \`\${config.enums.finding_severities[0]}\` severity findings remain, offer to hand off to the \`\${config.skills.names.new_track}\` skill to plan the next track; if \`\${config.enums.finding_severities[0]}\` severity findings make the delivered work unsafe to keep, offer instead to hand off to the \`\${config.skills.names.revert}\` skill to roll the work back safely. Invoke the chosen skill only after explicit user confirmation."
   ],
   "completion": "Review completed. Would you like to apply the suggested fixes, manually fix, or ignore the findings?"
@@ -3959,7 +4087,9 @@ var init_embedded = __esm({
     "**Path Integrity:** Must use relative paths resolved from \`config.directories.conductor_root\` and \`config.files.artifacts.*\` in [config.json](\${config.directories.conductor_root}/config.json) (e.g., \`\${config.directories.conductor_root}/\${config.files.artifacts.tracks_registry}\`).",
     "**Interaction Protocol:** When asking \`question\`, must provide single-choice or multiple-choice options based on context-aware suggestions, introduced with \\"\${i18n.t(\\"common.choices.select_option\\")}\\" and \u2014 in plain-text chat \u2014 closed with \\"\${i18n.t(\\"common.choices.reply_with_number\\")}\\". If a recommended option exists, list it first, prefix it with '\${i18n.t(\\"common.confirmations.recommended\\")}' and explain why. Yes/No questions use the labels \\"\${i18n.t(\\"common.confirmations.yes\\")}\\" and \\"\${i18n.t(\\"common.confirmations.no\\")}\\". Always include a custom/other option.",
     "**Sequential Questioning:** In standard text chat, ask strictly one \`question\` at a time and wait for response. Do not output multiple \`question\` in one message.",
-    "**Read-only:** All file parsing and subagent operations are read-only; no modifications allowed."
+    "**Read-only:** All file parsing and subagent operations are read-only; no modifications allowed.",
+    "**State document first**: read the state document (resolve via \`config.files.artifacts.state\`) before parsing anything else \u2014 it answers \\"where does this stand\\" in one read, and the registry and plans only refine that answer. If it is absent, say so plainly and fall back to the registry; do not create it, since this skill is read-only.",
+    "**Report divergence, never reconcile it**: if the state document disagrees with the tracks registry, the plan checkboxes, or \`git status\`, report both readings side by side and name which artifacts disagree. Resolving the divergence belongs to \`\${config.skills.names.implement}\`; this skill's job is to make it visible."
   ],
   "skills": [
     "File system navigation and verification (checking existence, reading files).",
@@ -4135,32 +4265,19 @@ description: Standard visual rules for rendering interactive GUI dialog modals (
 - description: \${i18n.t("constitution.profile_description")}
 
 ## Goals:
-\${i18n.t("constitution.goals.0")}
-\${i18n.t("constitution.goals.1")}
-\${i18n.t("constitution.goals.2")}
+\${i18n.list("constitution.goals")}
 
 ## Constraints:
-\${i18n.t("constitution.constraints.0")}
-\${i18n.t("constitution.constraints.1")}
-\${i18n.t("constitution.constraints.2")}
-\${i18n.t("constitution.constraints.3")}
+\${i18n.list("constitution.constraints")}
 
 ## Skills:
-\${i18n.t("constitution.skills.0")}
-\${i18n.t("constitution.skills.1")}
-\${i18n.t("constitution.skills.2")}
-\${i18n.t("constitution.skills.3")}
+\${i18n.list("constitution.skills")}
 
 ## Examples:
-\${i18n.t("constitution.examples.0")}
-\${i18n.t("constitution.examples.1")}
-\${i18n.t("constitution.examples.2")}
+\${i18n.list("constitution.examples")}
 
 ## OutputFormat:
-\${i18n.t("constitution.output_format.0")}
-\${i18n.t("constitution.output_format.1")}
-\${i18n.t("constitution.output_format.2")}
-\${i18n.t("constitution.output_format.3")}
+\${i18n.list("constitution.output_format")}
 
 ## Initialization:
 \${i18n.t("constitution.welcome")}
@@ -4184,9 +4301,7 @@ description: \${i18n.t("skills.conductor-archive.description_short")}
 \${i18n.t("skills.conductor-archive.background")}
 
 ## Preferences:
-\${i18n.t("skills.conductor-archive.preferences.0")}
-\${i18n.t("skills.conductor-archive.preferences.1")}
-\${i18n.t("skills.conductor-archive.preferences.2")}
+\${i18n.list("skills.conductor-archive.preferences")}
 
 ## Profile:
 - version: \${config.framework.version}
@@ -4194,30 +4309,19 @@ description: \${i18n.t("skills.conductor-archive.description_short")}
 - description: \${i18n.t("skills.conductor-archive.profile_description")}
 
 ## Goals:
-\${i18n.t("skills.conductor-archive.goals.0")}
-\${i18n.t("skills.conductor-archive.goals.1")}
-\${i18n.t("skills.conductor-archive.goals.2")}
-\${i18n.t("skills.conductor-archive.goals.3")}
+\${i18n.list("skills.conductor-archive.goals")}
 
 ## Constraints:
-\${i18n.t("skills.conductor-archive.constraints.0")}
-\${i18n.t("skills.conductor-archive.constraints.1")}
-\${i18n.t("skills.conductor-archive.constraints.2")}
+\${i18n.list("skills.conductor-archive.constraints")}
 
 ## Skills:
-\${i18n.t("skills.conductor-archive.skills.0")}
-\${i18n.t("skills.conductor-archive.skills.1")}
-\${i18n.t("skills.conductor-archive.skills.2")}
+\${i18n.list("skills.conductor-archive.skills")}
 
 ## Examples:
 \${i18n.t("skills.conductor-archive.examples.0")}
 
 ## OutputFormat:
-\${i18n.t("skills.conductor-archive.output_format.0")}
-\${i18n.t("skills.conductor-archive.output_format.1")}
-\${i18n.t("skills.conductor-archive.output_format.2")}
-\${i18n.t("skills.conductor-archive.output_format.3")}
-\${i18n.t("skills.conductor-archive.output_format.4")}
+\${i18n.list("skills.conductor-archive.output_format")}
 - **Completion**: Once the commit succeeds, close the interaction by reporting to the user: *\${i18n.t("skills.conductor-archive.completion")}*
 
 ## Initialization:
@@ -4242,9 +4346,7 @@ description: \${i18n.t("skills.conductor-implement.description_short")}
 \${i18n.t("skills.conductor-implement.background")}
 
 ## Preferences:
-\${i18n.t("skills.conductor-implement.preferences.0")}
-\${i18n.t("skills.conductor-implement.preferences.1")}
-\${i18n.t("skills.conductor-implement.preferences.2")}
+\${i18n.list("skills.conductor-implement.preferences")}
 
 ## Profile:
 - version: \${config.framework.version}
@@ -4252,25 +4354,13 @@ description: \${i18n.t("skills.conductor-implement.description_short")}
 - description: \${i18n.t("skills.conductor-implement.profile_description")}
 
 ## Goals:
-\${i18n.t("skills.conductor-implement.goals.0")}
-\${i18n.t("skills.conductor-implement.goals.1")}
-\${i18n.t("skills.conductor-implement.goals.2")}
-\${i18n.t("skills.conductor-implement.goals.3")}
+\${i18n.list("skills.conductor-implement.goals")}
 
 ## Constraints:
-\${i18n.t("skills.conductor-implement.constraints.0")}
-\${i18n.t("skills.conductor-implement.constraints.1")}
-\${i18n.t("skills.conductor-implement.constraints.2")}
-\${i18n.t("skills.conductor-implement.constraints.3")}
-\${i18n.t("skills.conductor-implement.constraints.4")}
-\${i18n.t("skills.conductor-implement.constraints.5")}
+\${i18n.list("skills.conductor-implement.constraints")}
 
 ## Skills:
-\${i18n.t("skills.conductor-implement.skills.0")}
-\${i18n.t("skills.conductor-implement.skills.1")}
-\${i18n.t("skills.conductor-implement.skills.2")}
-\${i18n.t("skills.conductor-implement.skills.3")}
-\${i18n.t("skills.conductor-implement.skills.4")}
+\${i18n.list("skills.conductor-implement.skills")}
 
 ## Examples:
 \${i18n.t("skills.conductor-implement.examples.0")}
@@ -4278,11 +4368,7 @@ description: \${i18n.t("skills.conductor-implement.description_short")}
 \${i18n.t("skills.conductor-implement.examples.1")}
 
 ## OutputFormat:
-\${i18n.t("skills.conductor-implement.output_format.0")}
-\${i18n.t("skills.conductor-implement.output_format.1")}
-\${i18n.t("skills.conductor-implement.output_format.2")}
-\${i18n.t("skills.conductor-implement.output_format.3")}
-\${i18n.t("skills.conductor-implement.output_format.4")}
+\${i18n.list("skills.conductor-implement.output_format")}
 - **Completion**: Close the interaction by reporting to the user: *\${i18n.t("skills.conductor-implement.completion")}*
 
 ## Initialization:
@@ -4306,11 +4392,7 @@ description: \${i18n.t("skills.conductor-new-track.description_short")}
 \${i18n.t("skills.conductor-new-track.background")}
 
 ## Preferences:
-\${i18n.t("skills.conductor-new-track.preferences.0")}
-\${i18n.t("skills.conductor-new-track.preferences.1")}
-\${i18n.t("skills.conductor-new-track.preferences.2")}
-\${i18n.t("skills.conductor-new-track.preferences.3")}
-\${i18n.t("skills.conductor-new-track.preferences.4")}
+\${i18n.list("skills.conductor-new-track.preferences")}
 
 ## Profile:
 - version: \${config.framework.version}
@@ -4318,35 +4400,13 @@ description: \${i18n.t("skills.conductor-new-track.description_short")}
 - description: \${i18n.t("skills.conductor-new-track.profile_description")}
 
 ## Goals:
-\${i18n.t("skills.conductor-new-track.goals.0")}
-\${i18n.t("skills.conductor-new-track.goals.1")}
-\${i18n.t("skills.conductor-new-track.goals.2")}
-\${i18n.t("skills.conductor-new-track.goals.3")}
-\${i18n.t("skills.conductor-new-track.goals.4")}
-\${i18n.t("skills.conductor-new-track.goals.5")}
+\${i18n.list("skills.conductor-new-track.goals")}
 
 ## Constraints:
-\${i18n.t("skills.conductor-new-track.constraints.0")}
-\${i18n.t("skills.conductor-new-track.constraints.1")}
-\${i18n.t("skills.conductor-new-track.constraints.2")}
-\${i18n.t("skills.conductor-new-track.constraints.3")}
-\${i18n.t("skills.conductor-new-track.constraints.4")}
-\${i18n.t("skills.conductor-new-track.constraints.5")}
-\${i18n.t("skills.conductor-new-track.constraints.6")}
-\${i18n.t("skills.conductor-new-track.constraints.7")}
-\${i18n.t("skills.conductor-new-track.constraints.8")}
-\${i18n.t("skills.conductor-new-track.constraints.9")}
+\${i18n.list("skills.conductor-new-track.constraints")}
 
 ## Skills:
-\${i18n.t("skills.conductor-new-track.skills.0")}
-\${i18n.t("skills.conductor-new-track.skills.1")}
-\${i18n.t("skills.conductor-new-track.skills.2")}
-\${i18n.t("skills.conductor-new-track.skills.3")}
-\${i18n.t("skills.conductor-new-track.skills.4")}
-\${i18n.t("skills.conductor-new-track.skills.5")}
-\${i18n.t("skills.conductor-new-track.skills.6")}
-\${i18n.t("skills.conductor-new-track.skills.7")}
-\${i18n.t("skills.conductor-new-track.skills.8")}
+\${i18n.list("skills.conductor-new-track.skills")}
 
 ## Examples:
 \${i18n.t("skills.conductor-new-track.examples.0")}
@@ -4354,14 +4414,7 @@ description: \${i18n.t("skills.conductor-new-track.description_short")}
 \${i18n.t("skills.conductor-new-track.examples.1")}
 
 ## OutputFormat:
-\${i18n.t("skills.conductor-new-track.output_format.0")}
-\${i18n.t("skills.conductor-new-track.output_format.1")}
-\${i18n.t("skills.conductor-new-track.output_format.2")}
-\${i18n.t("skills.conductor-new-track.output_format.3")}
-\${i18n.t("skills.conductor-new-track.output_format.4")}
-\${i18n.t("skills.conductor-new-track.output_format.5")}
-\${i18n.t("skills.conductor-new-track.output_format.6")}
-\${i18n.t("skills.conductor-new-track.output_format.7")}
+\${i18n.list("skills.conductor-new-track.output_format")}
 - **Completion**: Close the interaction by reporting to the user: *\${i18n.t("skills.conductor-new-track.completion")}*
 
 ## Initialization:
@@ -4445,10 +4498,7 @@ description: \${i18n.t("skills.conductor-revert.description_short")}
 \${i18n.t("skills.conductor-revert.background")}
 
 ## Preferences:
-\${i18n.t("skills.conductor-revert.preferences.0")}
-\${i18n.t("skills.conductor-revert.preferences.1")}
-\${i18n.t("skills.conductor-revert.preferences.2")}
-\${i18n.t("skills.conductor-revert.preferences.3")}
+\${i18n.list("skills.conductor-revert.preferences")}
 
 ## Profile:
 - version: \${config.framework.version}
@@ -4456,39 +4506,19 @@ description: \${i18n.t("skills.conductor-revert.description_short")}
 - description: \${i18n.t("skills.conductor-revert.profile_description")}
 
 ## Goals:
-\${i18n.t("skills.conductor-revert.goals.0")}
-\${i18n.t("skills.conductor-revert.goals.1")}
-\${i18n.t("skills.conductor-revert.goals.2")}
-\${i18n.t("skills.conductor-revert.goals.3")}
+\${i18n.list("skills.conductor-revert.goals")}
 
 ## Constraints:
-\${i18n.t("skills.conductor-revert.constraints.0")}
-\${i18n.t("skills.conductor-revert.constraints.1")}
-\${i18n.t("skills.conductor-revert.constraints.2")}
-\${i18n.t("skills.conductor-revert.constraints.3")}
-\${i18n.t("skills.conductor-revert.constraints.4")}
-\${i18n.t("skills.conductor-revert.constraints.5")}
-\${i18n.t("skills.conductor-revert.constraints.6")}
-\${i18n.t("skills.conductor-revert.constraints.7")}
+\${i18n.list("skills.conductor-revert.constraints")}
 
 ## Skills:
-\${i18n.t("skills.conductor-revert.skills.0")}
-\${i18n.t("skills.conductor-revert.skills.1")}
-\${i18n.t("skills.conductor-revert.skills.2")}
-\${i18n.t("skills.conductor-revert.skills.3")}
-\${i18n.t("skills.conductor-revert.skills.4")}
-\${i18n.t("skills.conductor-revert.skills.5")}
+\${i18n.list("skills.conductor-revert.skills")}
 
 ## Examples:
-\${i18n.t("skills.conductor-revert.examples.0")}
-\${i18n.t("skills.conductor-revert.examples.1")}
+\${i18n.list("skills.conductor-revert.examples")}
 
 ## OutputFormat:
-\${i18n.t("skills.conductor-revert.output_format.0")}
-\${i18n.t("skills.conductor-revert.output_format.1")}
-\${i18n.t("skills.conductor-revert.output_format.2")}
-\${i18n.t("skills.conductor-revert.output_format.3")}
-\${i18n.t("skills.conductor-revert.output_format.4")}
+\${i18n.list("skills.conductor-revert.output_format")}
 - **Completion**: Close the interaction by reporting to the user: *\${i18n.t("skills.conductor-revert.completion")}*
 
 ## Initialization:
@@ -4521,39 +4551,19 @@ description: \${i18n.t("skills.conductor-review.description_short")}
 - description: \${i18n.t("skills.conductor-review.profile_description")}
 
 ## Goals:
-\${i18n.t("skills.conductor-review.goals.0")}
-\${i18n.t("skills.conductor-review.goals.1")}
-\${i18n.t("skills.conductor-review.goals.2")}
-\${i18n.t("skills.conductor-review.goals.3")}
-\${i18n.t("skills.conductor-review.goals.4")}
-\${i18n.t("skills.conductor-review.goals.5")}
+\${i18n.list("skills.conductor-review.goals")}
 
 ## Constraints:
-\${i18n.t("skills.conductor-review.constraints.0")}
-\${i18n.t("skills.conductor-review.constraints.1")}
-\${i18n.t("skills.conductor-review.constraints.2")}
-\${i18n.t("skills.conductor-review.constraints.3")}
-\${i18n.t("skills.conductor-review.constraints.4")}
+\${i18n.list("skills.conductor-review.constraints")}
 
 ## Skills:
-\${i18n.t("skills.conductor-review.skills.0")}
-\${i18n.t("skills.conductor-review.skills.1")}
-\${i18n.t("skills.conductor-review.skills.2")}
-\${i18n.t("skills.conductor-review.skills.3")}
-\${i18n.t("skills.conductor-review.skills.4")}
-\${i18n.t("skills.conductor-review.skills.5")}
-\${i18n.t("skills.conductor-review.skills.6")}
-\${i18n.t("skills.conductor-review.skills.7")}
+\${i18n.list("skills.conductor-review.skills")}
 
 ## Examples:
 \${i18n.t("skills.conductor-review.examples.0")}
 
 ## OutputFormat:
-\${i18n.t("skills.conductor-review.output_format.0")}
-\${i18n.t("skills.conductor-review.output_format.1")}
-\${i18n.t("skills.conductor-review.output_format.2")}
-\${i18n.t("skills.conductor-review.output_format.3")}
-\${i18n.t("skills.conductor-review.output_format.4")}
+\${i18n.list("skills.conductor-review.output_format")}
 - **Completion**: Close the interaction by reporting to the user: *\${i18n.t("skills.conductor-review.completion")}*
 
 ## Initialization:
@@ -4586,40 +4596,13 @@ description: \${i18n.t("skills.conductor-setup.description_short")}
 - description: \${i18n.t("skills.conductor-setup.profile_description")}
 
 ## Goals:
-\${i18n.t("skills.conductor-setup.goals.0")}
-\${i18n.t("skills.conductor-setup.goals.1")}
-\${i18n.t("skills.conductor-setup.goals.2")}
-\${i18n.t("skills.conductor-setup.goals.3")}
-\${i18n.t("skills.conductor-setup.goals.4")}
-\${i18n.t("skills.conductor-setup.goals.5")}
-\${i18n.t("skills.conductor-setup.goals.6")}
-\${i18n.t("skills.conductor-setup.goals.7")}
-\${i18n.t("skills.conductor-setup.goals.8")}
+\${i18n.list("skills.conductor-setup.goals")}
 
 ## Constraints:
-\${i18n.t("skills.conductor-setup.constraints.0")}
-\${i18n.t("skills.conductor-setup.constraints.1")}
-\${i18n.t("skills.conductor-setup.constraints.2")}
-\${i18n.t("skills.conductor-setup.constraints.3")}
-\${i18n.t("skills.conductor-setup.constraints.4")}
-\${i18n.t("skills.conductor-setup.constraints.5")}
-\${i18n.t("skills.conductor-setup.constraints.6")}
-\${i18n.t("skills.conductor-setup.constraints.7")}
-\${i18n.t("skills.conductor-setup.constraints.8")}
-\${i18n.t("skills.conductor-setup.constraints.9")}
-\${i18n.t("skills.conductor-setup.constraints.10")}
+\${i18n.list("skills.conductor-setup.constraints")}
 
 ## Skills:
-\${i18n.t("skills.conductor-setup.skills.0")}
-\${i18n.t("skills.conductor-setup.skills.1")}
-\${i18n.t("skills.conductor-setup.skills.2")}
-\${i18n.t("skills.conductor-setup.skills.3")}
-\${i18n.t("skills.conductor-setup.skills.4")}
-\${i18n.t("skills.conductor-setup.skills.5")}
-\${i18n.t("skills.conductor-setup.skills.6")}
-\${i18n.t("skills.conductor-setup.skills.7")}
-\${i18n.t("skills.conductor-setup.skills.8")}
-\${i18n.t("skills.conductor-setup.skills.9")}
+\${i18n.list("skills.conductor-setup.skills")}
 
 ## Examples:
 - **Greenfield Project Kickoff:** \${i18n.t("skills.conductor-setup.examples.greenfield_kickoff")}
@@ -4628,20 +4611,7 @@ description: \${i18n.t("skills.conductor-setup.description_short")}
 - **Completion Handshake:** \${i18n.t("skills.conductor-setup.examples.completion_handshake")}
 
 ## OutputFormat:
-\${i18n.t("skills.conductor-setup.output_format.0")}
-\${i18n.t("skills.conductor-setup.output_format.1")}
-\${i18n.t("skills.conductor-setup.output_format.2")}
-\${i18n.t("skills.conductor-setup.output_format.3")}
-\${i18n.t("skills.conductor-setup.output_format.4")}
-\${i18n.t("skills.conductor-setup.output_format.5")}
-\${i18n.t("skills.conductor-setup.output_format.6")}
-\${i18n.t("skills.conductor-setup.output_format.7")}
-\${i18n.t("skills.conductor-setup.output_format.8")}
-\${i18n.t("skills.conductor-setup.output_format.9")}
-\${i18n.t("skills.conductor-setup.output_format.10")}
-\${i18n.t("skills.conductor-setup.output_format.11")}
-\${i18n.t("skills.conductor-setup.output_format.12")}
-\${i18n.t("skills.conductor-setup.output_format.13")}
+\${i18n.list("skills.conductor-setup.output_format")}
 
 ### Style Guide Recommendation \u2014 required wording
 When presenting style guide options, open with: *\${i18n.t("skills.conductor-setup.style_guide.recommendation")}* \u2014 \`{stack}\` MUST be replaced by the technology stack confirmed in the Technology Stack step. Justify the top recommendation with: *\${i18n.t("skills.conductor-setup.style_guide.reason")}*
@@ -5894,6 +5864,8 @@ The CIL is an architectural boundary between the orchestrator and subagents. It 
 3. **FORBIDDEN** to make commits.
 4. **MANDATORY** to return ONLY the JSON schema. No conversational text.
 5. **MANDATORY** to include approximate \`\${config.protocol.token_estimate_field}\` of own consumption.
+6. **FORBIDDEN** to reproduce file contents in the return. A subagent that reads a file returns findings *about* it \u2014 assertions, counts, paths, line references \u2014 never the text it read. Quoting a file back to the orchestrator defeats the entire isolation layer: the tokens the delegation was meant to keep out land in the orchestrator anyway.
+7. **MANDATORY** to keep the whole return under \`\${config.thresholds.subagent_return_max_lines}\` lines. A subagent whose findings genuinely exceed that budget writes the detail to a file under \`config.directories.conductor_root\`, returns the path in the data envelope, and sets \`\${config.protocol.status_field}\` to \`done_with_concerns\` with an explanatory entry in \`\${config.protocol.warnings_field}\`.
 
 ### Subagent Lifecycle (Auto-Cleanup)
 
@@ -5919,7 +5891,7 @@ Every subagent MUST return EXACTLY this JSON structure. Schema definitions come 
 \`\`\`json
 {
   "\${config.protocol.protocol_field}": "\${config.protocol.version_string}",
-  "\${config.protocol.status_field}": "success" | "partial" | "failed",
+  "\${config.protocol.status_field}": "done" | "done_with_concerns" | "needs_context" | "blocked",
   "\${config.protocol.summary_field}": "<single sentence summarizing the result>",
   "\${config.protocol.data_envelope}": {
     // operation-specific schema from config.schemas
@@ -5928,6 +5900,19 @@ Every subagent MUST return EXACTLY this JSON structure. Schema definitions come 
   "\${config.protocol.token_estimate_field}": <number>
 }
 \`\`\`
+
+### Status Values \u2014 Canonical Meanings
+
+The four values of \`\${config.protocol.status_field}\` are defined in \`config.enums.subagent_report_statuses\`. They are not interchangeable, and the orchestrator's reaction differs for each:
+
+| Status | Subagent means | Orchestrator MUST |
+|---|---|---|
+| \`done\` | Task complete, evidence included | Consume the schema and continue |
+| \`done_with_concerns\` | Complete, but with recorded doubts | Continue, and carry the concerns into the review \u2014 never drop them because the task "passed" |
+| \`needs_context\` | The prompt was missing something the task required | Supply the missing input and re-dispatch the SAME task. **This is not a failure and MUST NOT consume a fix attempt** \u2014 counting it as one burns the retry budget on the orchestrator's own incomplete prompt |
+| \`blocked\` | The task cannot proceed as scoped | Escalate: split it, re-plan it, or raise it to the user. Never re-dispatch it unchanged \u2014 an identical prompt yields an identical block |
+
+The distinction that matters most is \`needs_context\` versus \`blocked\`. Treating a missing input as a block wastes attempts and hides the real problem, which was the dispatch, not the task.
 
 ### Operation-Specific Schemas
 
@@ -5943,6 +5928,12 @@ All schemas below reference their canonical definitions in \`config.schemas\`.
 #### Manual Verification \u2192 \`config.schemas.manual_verification\`
 #### Git Commit List \u2192 \`config.schemas.git_commit_list\`
 #### Status Report \u2192 \`config.schemas.status_report\`
+#### Plan Lint \u2192 \`config.schemas.plan_lint\`
+#### Wave Index \u2192 \`config.schemas.wave_index\`
+
+### Return Size Budget
+
+The envelope is capped at \`\${config.thresholds.subagent_return_max_lines}\` lines (Subagent Rule 7). The orchestrator MUST treat an oversized or content-bearing return as a protocol violation: consume the schema fields it needs, discard the rest immediately, and record a warning. Never let an oversized return sit in orchestrator context "just in case".
 
 ---
 
@@ -6037,11 +6028,7 @@ As Subagent Dispatch Protocol Engine v1.0, I resolve ALL dispatch decisions dyna
 \${i18n.t("workflow.background")}
 
 ## Preferences:
-\${i18n.t("workflow.preferences.0")}
-\${i18n.t("workflow.preferences.1")}
-\${i18n.t("workflow.preferences.2")}
-\${i18n.t("workflow.preferences.3")}
-\${i18n.t("workflow.preferences.4")}
+\${i18n.list("workflow.preferences")}
 
 ## Profile:
 - version: \${config.framework.version}
@@ -6049,45 +6036,20 @@ As Subagent Dispatch Protocol Engine v1.0, I resolve ALL dispatch decisions dyna
 - description: \${i18n.t("workflow.profile_description")}
 
 ## Goals:
-\${i18n.t("workflow.goals.0")}
-\${i18n.t("workflow.goals.1")}
-\${i18n.t("workflow.goals.2")}
-\${i18n.t("workflow.goals.3")}
+\${i18n.list("workflow.goals")}
 
 ## Constraints:
-\${i18n.t("workflow.constraints.0")}
-\${i18n.t("workflow.constraints.1")}
-\${i18n.t("workflow.constraints.2")}
-\${i18n.t("workflow.constraints.3")}
-\${i18n.t("workflow.constraints.4")}
-\${i18n.t("workflow.constraints.5")}
-\${i18n.t("workflow.constraints.6")}
+\${i18n.list("workflow.constraints")}
 
 ## Skills:
-\${i18n.t("workflow.skills.0")}
-\${i18n.t("workflow.skills.1")}
-\${i18n.t("workflow.skills.2")}
-\${i18n.t("workflow.skills.3")}
-\${i18n.t("workflow.skills.4")}
-\${i18n.t("workflow.skills.5")}
-\${i18n.t("workflow.skills.6")}
+\${i18n.list("workflow.skills")}
 
 ## Examples:
-\${i18n.t("workflow.examples.0")}
-\${i18n.t("workflow.examples.1")}
+\${i18n.list("workflow.examples")}
 
 ## OutputFormat:
 For each task:
-\${i18n.t("workflow.output_format.0")}
-\${i18n.t("workflow.output_format.1")}
-\${i18n.t("workflow.output_format.2")}
-\${i18n.t("workflow.output_format.3")}
-\${i18n.t("workflow.output_format.4")}
-\${i18n.t("workflow.output_format.5")}
-\${i18n.t("workflow.output_format.6")}
-\${i18n.t("workflow.output_format.7")}
-\${i18n.t("workflow.output_format.8")}
-\${i18n.t("workflow.output_format.9")}
+\${i18n.list("workflow.output_format")}
 
 For phase completion, follow the Phase Completion Verification Protocol step by step, dispatching subagents and using condensed returns.
 
@@ -6196,9 +6158,7 @@ description: \${i18n.t("skills.conductor-status.description_short")}
 \${i18n.t("skills.conductor-status.background")}
 
 ## Preferences:
-\${i18n.t("skills.conductor-status.preferences.0")}
-\${i18n.t("skills.conductor-status.preferences.1")}
-\${i18n.t("skills.conductor-status.preferences.2")}
+\${i18n.list("skills.conductor-status.preferences")}
 
 ## Profile:
 - version: \${config.framework.version}
@@ -6206,33 +6166,19 @@ description: \${i18n.t("skills.conductor-status.description_short")}
 - description: \${i18n.t("skills.conductor-status.profile_description")}
 
 ## Goals:
-\${i18n.t("skills.conductor-status.goals.0")}
-\${i18n.t("skills.conductor-status.goals.1")}
-\${i18n.t("skills.conductor-status.goals.2")}
+\${i18n.list("skills.conductor-status.goals")}
 
 ## Constraints:
-\${i18n.t("skills.conductor-status.constraints.0")}
-\${i18n.t("skills.conductor-status.constraints.1")}
-\${i18n.t("skills.conductor-status.constraints.2")}
-\${i18n.t("skills.conductor-status.constraints.3")}
-\${i18n.t("skills.conductor-status.constraints.4")}
-\${i18n.t("skills.conductor-status.constraints.5")}
+\${i18n.list("skills.conductor-status.constraints")}
 
 ## Skills:
-\${i18n.t("skills.conductor-status.skills.0")}
-\${i18n.t("skills.conductor-status.skills.1")}
-\${i18n.t("skills.conductor-status.skills.2")}
-\${i18n.t("skills.conductor-status.skills.3")}
-\${i18n.t("skills.conductor-status.skills.4")}
+\${i18n.list("skills.conductor-status.skills")}
 
 ## Examples:
-\${i18n.t("skills.conductor-status.examples.0")}
-\${i18n.t("skills.conductor-status.examples.1")}
+\${i18n.list("skills.conductor-status.examples")}
 
 ## OutputFormat:
-\${i18n.t("skills.conductor-status.output_format.0")}
-\${i18n.t("skills.conductor-status.output_format.1")}
-\${i18n.t("skills.conductor-status.output_format.2")}
+\${i18n.list("skills.conductor-status.output_format")}
 - **Completion**: Close the interaction by reporting to the user: *\${i18n.t("skills.conductor-status.completion")}*
 
 ## Initialization:
@@ -6274,7 +6220,8 @@ var init_config = __esm({
           spec: "spec.md",
           index: "index.md",
           tracks_registry: "tracks.md",
-          track_metadata: "metadata.json"
+          track_metadata: "metadata.json",
+          state: "state.md"
         },
         context_files: [
           "product.md",
@@ -6290,7 +6237,8 @@ var init_config = __esm({
           "tracks.md",
           "plan.md",
           "index.md",
-          "metadata.json"
+          "metadata.json",
+          "state.md"
         ],
         setup_chain: [
           { file: "product.md", step: "Product Definition" },
@@ -6329,7 +6277,17 @@ var init_config = __esm({
         max_fix_attempts: 2,
         max_parallel_subagents: 5,
         subagent_timeout_seconds: 120,
-        token_warning_threshold: 5e3
+        token_warning_threshold: 5e3,
+        state_max_lines: 100,
+        tasks_per_phase_warn: 4,
+        tasks_per_phase_block: 6,
+        files_per_task_warn: 10,
+        files_per_task_block: 15,
+        plan_review_iterations: 3,
+        subagent_return_max_lines: 15,
+        fixes_before_architecture_review: 3,
+        task_minutes_min: 2,
+        task_minutes_max: 5
       },
       protocol: {
         name: "sdp",
@@ -6370,6 +6328,64 @@ var init_config = __esm({
           in_progress: "[~]",
           done: "[x]",
           checkpoint: "[checkpoint: <sha>]"
+        },
+        acceptance_criteria_kinds: ["source_assertion", "behavior_assertion", "test_command", "cli_output"],
+        banned_acceptance_phrasings: ["looks correct", "works properly", "properly configured", "consistent with", "as expected", "good quality", "well structured"],
+        review_statuses: ["passed", "gaps_found", "needs_human"],
+        state_statuses: ["planning", "implementing", "reviewing", "blocked", "paused", "done"],
+        banned_completion_phrasings: ["should work", "should pass", "probably", "seems to", "looks like it works", "appears to work", "I think it's fixed", "must be working now"],
+        banned_plan_phrasings: ["TBD", "to be defined", "handle edge cases", "similar to the previous task", "and so on", "etc. as needed", "adjust as necessary"],
+        subagent_report_statuses: {
+          done: "Task complete; the return carries the evidence that proves it.",
+          done_with_concerns: "Task complete, but the subagent recorded doubts the orchestrator must weigh before moving on.",
+          needs_context: "The prompt lacked information the task required. The orchestrator supplies it and re-dispatches the SAME task \u2014 this is not a failure and MUST NOT consume a fix attempt.",
+          blocked: "The task cannot proceed as scoped. Escalate: split it, re-plan it, or hand it to the user \u2014 never retry it unchanged."
+        }
+      },
+      debugging_protocol: {
+        description: "Ordered phases every fix attempt must follow. A fix proposed before phase 1 completes is a symptom fix, and symptom fixes are failures even when the test goes green.",
+        phases: [
+          "Root cause: read the full error, reproduce it consistently, check what changed recently, and trace the bad value back to where it originates. Never propose a fix before this phase is complete.",
+          "Pattern analysis: find code in this project that already does this correctly, read it completely rather than skimming, and list every difference between the working and the broken path.",
+          "Hypothesis: state the theory explicitly as 'X is the root cause because Y', then make the smallest change that tests it. One variable at a time \u2014 never change two things and see what happens.",
+          "Implementation: write the failing test first, apply a single fix addressing the root cause, and confirm it neither leaves the test red nor breaks another test."
+        ],
+        restart_signals: ["quick fix for now, investigate later", "just try changing this and see", "I don't fully understand this but it might work", "one more attempt and it should work"]
+      },
+      state_document: {
+        path: "${config.directories.conductor_root}/${config.files.artifacts.state}",
+        description: "Session digest: the one file that tells a fresh session where the work stands. Written only by the orchestrator, never by a subagent. It is a digest, not a log \u2014 when it approaches config.thresholds.state_max_lines, drop the oldest resolved entries rather than growing the file.",
+        frontmatter_fields: {
+          status: "One of config.enums.state_statuses. Never free text.",
+          track: "Id of the active track, or null when none is active.",
+          phase: "Name of the plan phase currently open, or null.",
+          task: "Id of the task currently in progress, or null.",
+          wave: "Wave number currently executing, or null.",
+          last_commit: "SHA of the last commit produced by Conductor.",
+          updated_at: "ISO-8601 timestamp of the last write."
+        },
+        body_sections: ["Current Position", "Open Decisions", "Blockers", "Resume Hint"]
+      },
+      plan_task_fields: {
+        wave: {
+          type: "number",
+          required: true,
+          description: "Execution wave. Tasks in the same wave may run in parallel; wave N+1 starts only after every task in wave N is done."
+        },
+        depends_on: {
+          type: "string[]",
+          required: true,
+          description: "Task ids this task depends on. A task MUST be placed in a wave strictly greater than the wave of every id listed here."
+        },
+        files: {
+          type: "string[]",
+          required: true,
+          description: "Project-relative paths this task will create or modify. Drives the file-overlap check that downgrades a wave to sequential execution."
+        },
+        accept: {
+          type: "string[]",
+          required: true,
+          description: "Empirically checkable acceptance criteria; each entry MUST match one of config.enums.acceptance_criteria_kinds."
         }
       },
       catalogs: {
@@ -6438,6 +6454,35 @@ var init_config = __esm({
             estimated_hours: "number"
           }
         },
+        state_digest: {
+          type: "object",
+          fields: {
+            status: "string",
+            track: "string",
+            phase: "string",
+            task: "string",
+            wave: "number",
+            last_commit: "string",
+            blockers: "string[]",
+            resume_hint: "string"
+          }
+        },
+        plan_lint: {
+          type: "object",
+          fields: {
+            iteration: "number",
+            issues: [{ task_id: "string", dimension: "string", severity: "string", fix_hint: "string" }],
+            blocker_count: "number",
+            warning_count: "number"
+          }
+        },
+        wave_index: {
+          type: "object",
+          fields: {
+            waves: [{ wave: "number", task_ids: "string[]", parallel: "boolean", downgrade_reason: "string" }],
+            conflicts: [{ task_a: "string", task_b: "string", shared_files: "string[]" }]
+          }
+        },
         skill_catalog_match: {
           type: "object",
           fields: {
@@ -6476,7 +6521,7 @@ var init_config = __esm({
 });
 
 // src/internal/i18n/resolver.ts
-function resolvePath(root, path) {
+function resolvePathRaw(root, path) {
   const parts = path.replace(/\[(\d+)\]/g, ".$1").split(".");
   let current = root;
   for (const part of parts) {
@@ -6491,9 +6536,19 @@ function resolvePath(root, path) {
       return void 0;
     }
   }
+  return current ?? void 0;
+}
+function resolvePath(root, path) {
+  const current = resolvePathRaw(root, path);
   if (typeof current === "string") return current;
   if (typeof current === "number" || typeof current === "boolean") return String(current);
   return void 0;
+}
+function resolvePathList(root, path) {
+  const current = resolvePathRaw(root, path);
+  if (!Array.isArray(current)) return void 0;
+  if (!current.every((x3) => typeof x3 === "string")) return void 0;
+  return current;
 }
 function buildI18nMap(locale) {
   const cached = i18nMapCache.get(locale);
@@ -6535,6 +6590,17 @@ function resolveI18nKey(key, i18nMap) {
   }
   return `\${i18n.t("${key}")}`;
 }
+function resolveI18nList(key, i18nMap) {
+  const parts = key.split(".");
+  for (let nsLen = parts.length - 1; nsLen >= 1; nsLen--) {
+    const ns = parts.slice(0, nsLen).join(".");
+    const data = i18nMap.get(ns);
+    if (!data) continue;
+    const list = resolvePathList(data, parts.slice(nsLen).join("."));
+    if (list !== void 0) return list.join("\n");
+  }
+  return void 0;
+}
 function resolveConfigPath(path, baseDir, locale) {
   if (path === "tool_dir") {
     return baseDir ? baseDir.replace(/\\/g, "/") : "";
@@ -6555,6 +6621,12 @@ function resolveContent(content, locale, baseDir) {
   let afterI18n = content;
   for (let round = 0; round < MAX_I18N_DEPTH; round++) {
     const next = afterI18n.replace(
+      /\$\{i18n\.list\("([^"]+)"\)\}/g,
+      (original, key) => {
+        const val = resolveI18nList(key, i18nMap) ?? (fallbackMap ? resolveI18nList(key, fallbackMap) : void 0);
+        return val ?? original;
+      }
+    ).replace(
       /\$\{i18n\.t\("([^"]+)"\)\}/g,
       (_3, key) => {
         let val = resolveI18nKey(key, i18nMap);
@@ -6573,13 +6645,14 @@ function resolveContent(content, locale, baseDir) {
   );
   return afterConfig;
 }
-var DEFAULT_LOCALE, i18nMapCache, MAX_I18N_DEPTH;
+var CONFIGURED_DEFAULT_LOCALE, DEFAULT_LOCALE, i18nMapCache, MAX_I18N_DEPTH;
 var init_resolver = __esm({
   "src/internal/i18n/resolver.ts"() {
     "use strict";
     init_embedded();
     init_config();
-    DEFAULT_LOCALE = config_default.i18n?.default_language ?? "pt-BR";
+    CONFIGURED_DEFAULT_LOCALE = config_default.i18n?.default_language;
+    DEFAULT_LOCALE = CONFIGURED_DEFAULT_LOCALE && !CONFIGURED_DEFAULT_LOCALE.includes("${") ? CONFIGURED_DEFAULT_LOCALE : "pt-BR";
     i18nMapCache = /* @__PURE__ */ new Map();
     MAX_I18N_DEPTH = 8;
   }
@@ -8531,14 +8604,12 @@ var init_package = __esm({
       scripts: {
         embed: "node scripts/embed-templates.mjs",
         clean: "node scripts/clean-dist.mjs",
+        "check:i18n": "node scripts/check-i18n-coverage.mjs",
         typecheck: "tsc -p tsconfig.json",
-        build: "npm run clean && npm run embed && npm run typecheck && npm run bundle",
+        build: "npm run clean && npm run check:i18n && npm run embed && npm run typecheck && npm run bundle",
         bundle: "esbuild src/index.ts --bundle --platform=node --format=cjs --outfile=dist/index.cjs --sourcemap --allow-overwrite",
         prepublishOnly: "npm run build",
         start: "node dist/index.cjs"
-      },
-      dependencies: {
-        "@luansilvadb/conductor": "^1.3.18"
       },
       devDependencies: {
         "@clack/prompts": "^0.7.0",

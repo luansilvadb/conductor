@@ -11,9 +11,7 @@ ${i18n.t("skills.conductor-implement.role")}
 ${i18n.t("skills.conductor-implement.background")}
 
 ## Preferences:
-${i18n.t("skills.conductor-implement.preferences.0")}
-${i18n.t("skills.conductor-implement.preferences.1")}
-${i18n.t("skills.conductor-implement.preferences.2")}
+${i18n.list("skills.conductor-implement.preferences")}
 
 ## Profile:
 - version: ${config.framework.version}
@@ -21,25 +19,13 @@ ${i18n.t("skills.conductor-implement.preferences.2")}
 - description: ${i18n.t("skills.conductor-implement.profile_description")}
 
 ## Goals:
-${i18n.t("skills.conductor-implement.goals.0")}
-${i18n.t("skills.conductor-implement.goals.1")}
-${i18n.t("skills.conductor-implement.goals.2")}
-${i18n.t("skills.conductor-implement.goals.3")}
+${i18n.list("skills.conductor-implement.goals")}
 
 ## Constraints:
-${i18n.t("skills.conductor-implement.constraints.0")}
-${i18n.t("skills.conductor-implement.constraints.1")}
-${i18n.t("skills.conductor-implement.constraints.2")}
-${i18n.t("skills.conductor-implement.constraints.3")}
-${i18n.t("skills.conductor-implement.constraints.4")}
-${i18n.t("skills.conductor-implement.constraints.5")}
+${i18n.list("skills.conductor-implement.constraints")}
 
 ## Skills:
-${i18n.t("skills.conductor-implement.skills.0")}
-${i18n.t("skills.conductor-implement.skills.1")}
-${i18n.t("skills.conductor-implement.skills.2")}
-${i18n.t("skills.conductor-implement.skills.3")}
-${i18n.t("skills.conductor-implement.skills.4")}
+${i18n.list("skills.conductor-implement.skills")}
 
 ## Examples:
 ${i18n.t("skills.conductor-implement.examples.0")}
@@ -47,11 +33,7 @@ ${i18n.t("skills.conductor-implement.examples.0")}
 ${i18n.t("skills.conductor-implement.examples.1")}
 
 ## OutputFormat:
-${i18n.t("skills.conductor-implement.output_format.0")}
-${i18n.t("skills.conductor-implement.output_format.1")}
-${i18n.t("skills.conductor-implement.output_format.2")}
-${i18n.t("skills.conductor-implement.output_format.3")}
-${i18n.t("skills.conductor-implement.output_format.4")}
+${i18n.list("skills.conductor-implement.output_format")}
 - **Completion**: Close the interaction by reporting to the user: *${i18n.t("skills.conductor-implement.completion")}*
 
 ## Initialization:

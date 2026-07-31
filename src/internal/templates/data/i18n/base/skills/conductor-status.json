@@ -22,7 +22,9 @@
     "**Path Integrity:** Must use relative paths resolved from `config.directories.conductor_root` and `config.files.artifacts.*` in [config.json](${config.directories.conductor_root}/config.json) (e.g., `${config.directories.conductor_root}/${config.files.artifacts.tracks_registry}`).",
     "**Interaction Protocol:** When asking `question`, must provide single-choice or multiple-choice options based on context-aware suggestions, introduced with \"${i18n.t(\"common.choices.select_option\")}\" and — in plain-text chat — closed with \"${i18n.t(\"common.choices.reply_with_number\")}\". If a recommended option exists, list it first, prefix it with '${i18n.t(\"common.confirmations.recommended\")}' and explain why. Yes/No questions use the labels \"${i18n.t(\"common.confirmations.yes\")}\" and \"${i18n.t(\"common.confirmations.no\")}\". Always include a custom/other option.",
     "**Sequential Questioning:** In standard text chat, ask strictly one `question` at a time and wait for response. Do not output multiple `question` in one message.",
-    "**Read-only:** All file parsing and subagent operations are read-only; no modifications allowed."
+    "**Read-only:** All file parsing and subagent operations are read-only; no modifications allowed.",
+    "**State document first**: read the state document (resolve via `config.files.artifacts.state`) before parsing anything else — it answers \"where does this stand\" in one read, and the registry and plans only refine that answer. If it is absent, say so plainly and fall back to the registry; do not create it, since this skill is read-only.",
+    "**Report divergence, never reconcile it**: if the state document disagrees with the tracks registry, the plan checkboxes, or `git status`, report both readings side by side and name which artifacts disagree. Resolving the divergence belongs to `${config.skills.names.implement}`; this skill's job is to make it visible."
   ],
   "skills": [
     "File system navigation and verification (checking existence, reading files).",

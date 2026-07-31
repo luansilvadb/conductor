@@ -3426,8 +3426,11 @@ var init_embedded = __esm({
       "test": "The full test suite.",
       "coverage": "Coverage measurement. Compared against config.thresholds per config.thresholds.coverage_mode.",
       "structure": "Project-specific structural checks that no off-the-shelf tool covers. Generated at setup from what the user described \u2014 e.g. tenant scoping, no server imports in client code, required auth on endpoints, environment variables complete, documentation in sync with the API, files within config.thresholds.file_max_lines.",
-      "design": "Soundness of the design system itself: broken token references, WCAG AA contrast on declared component pairs, whether each numeric axis landed on a declared band rather than between bands, and \u2014 against the recorded baseline \u2014 any widening or flattening of the token scales from inside an implementation task. Runs config.gates.scripts_dir/design-gate.mjs. Absent when the project has no user interface.",
-      "design_tokens": "Whether the code actually uses the design system: colour and dimension literals that appear in source but in no token. Ratcheted against a recorded baseline so a legacy interface can adopt it without being rewritten. Runs config.gates.scripts_dir/design-tokens-gate.mjs. Absent when the project has no user interface."
+      "design": "Soundness of the design system itself: broken token references, WCAG AA contrast on declared component pairs, whether each numeric axis landed on a declared band rather than between bands, whether the type families match the selected pairing from config.gates.scripts_dir/type-pairings.json and number no more than two, and \u2014 against the recorded baseline \u2014 any widening or flattening of the token scales from inside an implementation task. Runs config.gates.scripts_dir/design-gate.mjs. Absent when the project has no user interface.",
+      "design_grammar": "Whether each page's declared composition is a valid sentence in the composition grammar (config.gates.scripts_dir/design-grammar.json): a page is an ordered list of archetypes drawn from a finite vocabulary, and it must derive from one of the declared page grammars as well as satisfy the variety invariants \u2014 no adjacent repeat, a floor on distinct archetypes, a cap on centred entry, alternating density. This is the earliest and cheapest design gate: it reads a list of names, so it runs while the page is still an outline. That is the point \u2014 composition is decided when the page is planned, and an agent asked to recompose a layout it already built will nudge rather than recompose. Runs config.gates.scripts_dir/design-grammar-gate.mjs. Absent when the project has no user interface.",
+      "design_assets": "Whether the images the page presents as content are actually content: one asset referenced with several different alt texts, and assets used as illustration that are too simple to be one. Not a judgement of artistic quality, which no gate can make \u2014 a check that the asset exists at the fidelity the markup claims for it, which is the same kind of check as a broken link and fails for the same reason. Ratcheted. Runs config.gates.scripts_dir/design-assets-gate.mjs. Absent when the project has no user interface.",
+      "design_render": "What the page actually renders, measured in a browser at each configured viewport: whether every style axis lands on its declared band AND lands on the SAME band at every breakpoint, whether the shadow count matches the declared depth band, whether the page BUILT the composition it declared to the grammar gate, the motion invariants that only a browser can settle (nothing above the fold starts hidden, the page survives with JavaScript disabled, reduced motion calms movement rather than removing content), and the composition floors in config.gates.scripts_dir/composition-bands.json. This is the only gate that reads the rendered result rather than a declaration, which is what lets it see the two things every other design check is blind to \u2014 a utility class or custom property that carries no literal for the token scan to find, and a media query that silently moves an axis to a different band in the viewport the project calls primary. Optionally writes per-viewport screenshots, the only artefact that lets a later step review the page instead of the markup. Runs config.gates.scripts_dir/design-render-gate.mjs and needs a running page (--url) plus Playwright resolvable from the project. Playwright is NOT installed on the user's behalf: when it is absent this gate is registered absent per config.gates.absent_policy, never with a command that cannot run.",
+      "design_tokens": "Whether the code actually uses the design system: colour and dimension literals that appear in source but in no token. Ratcheted against a recorded baseline so a legacy interface can adopt it without being rewritten. Runs config.gates.scripts_dir/design-tokens-gate.mjs. The baseline MUST be recorded when the gate is registered \u2014 an unarmed ratchet has no line to hold, so it tolerates every finding, and the gate exits 2 rather than 0 to keep that from reading as a pass. Absent when the project has no user interface."
     },
     "entry_fields": {
       "cmd": "The exact command, runnable from the project root. Null when the project has no such tool.",
@@ -3436,6 +3439,13 @@ var init_embedded = __esm({
     },
     "absent_policy": "A gate whose cmd is null is DECLARED, never silently skipped and never installed on the user's behalf \u2014 choosing a linter is the project's decision, not Conductor's. Setup may offer to configure one; it must not configure one unasked. Every skill that would have run an absent gate states in its report which checks therefore fall back to human judgement. An absent gate is an unverified check, not a passed one.",
     "exit_contract": "A gate is proven by its exit code and its output, read in the run that is being reported. Never infer a gate passed because the code looks right, and never carry a result over from an earlier run or an earlier phase.",
+    "exit_codes": {
+      "0": "Pass. The check ran and the project satisfies it.",
+      "1": "Verdict. The check ran and the project failed it \u2014 the output names what to fix, and fixing it is the work.",
+      "2": "Unrunnable. The check did NOT run: the tool is missing, a runner refused to start, an input is unreadable, output was unparsable. There is no verdict, so there is nothing to fix in the code and no finding to act on."
+    },
+    "design_gates_measure_defects_not_quality": "A green board is not a verdict on whether the interface is good. The design gates decompose into what a machine can settle \u2014 an internally sound token system, valid contrast, axes on their bands, a page that derives from the composition grammar and renders what it declared, assets that exist at the fidelity the markup claims. That is structure and integrity, which is roughly the UX quarter of what actually separates a memorable interface from a competent one, plus part of the motion share. Art direction, visual identity and original assets are the larger part and are absent from this framework entirely \u2014 they are aesthetic intent and creative work, which do not live in a closed catalogue and cannot be gated. So never report passing design gates as evidence that the interface is well designed, attractive, or of high quality: report them as the absence of the specific defects they name. The aim of these gates is to raise a low-cost interface to clearly-designed, non-generic and visually coherent \u2014 to reduce average mediocrity, not to guarantee brilliance. A page can pass every check here and still be forgettable, and saying so plainly is more useful to the user than a summary that implies otherwise.",
+    "unrunnable_policy": "Exit 2 is not a soft failure and it is not a human to-do. A required gate that could not run leaves its whole subject unverified \u2014 the same position as if the gate did not exist, except that the project believes it does. Record every such gate in config.state_document.frontmatter_fields.unrunnable_gates with the exact command and the complete output including stderr, and treat the list as closed: while it is non-empty, no task may be marked done, the state document may not carry the done status, and the track may not be archived. Never reclassify an exit 2 as a pending manual check, an environment quirk, or an absent gate. Absent (config.gates.absent_policy) means the project declared it has no such tool and the skills report the check as resting on human judgement; unrunnable means the project declared a tool, the framework tried to run it, and it broke \u2014 a defect to repair, not a judgement to defer. Conflating the two is how a broken gate acquires the same standing as a deliberate decision, and it is the cheaper path every time, which is why it is named here rather than left to judgement. When the gate cannot be repaired in the current session, the resolution is to say so to the user and stop, or \u2014 with the user's explicit and recorded decision \u2014 to redeclare the gate absent in the manifest, which is a visible change to the project's contract rather than a silent one.",
     "missing_manifest_policy": "A project set up before gates existed has no manifest, and that is not an error to halt on. Say so once, offer to run the gate-configuration step of the setup skill, and proceed with every check treated as absent per absent_policy \u2014 which means the work continues and the report states plainly that nothing was machine-verified. Never fabricate a manifest to keep going, and never let the absence read as though the gates passed."
   },
 
@@ -3593,6 +3603,7 @@ var init_embedded = __esm({
       "task": "Id of the task currently in progress, or null.",
       "wave": "Wave number currently executing, or null.",
       "last_commit": "SHA of the last commit produced by Conductor.",
+      "unrunnable_gates": "Array of required gates that exited 2 during this track, each as { kind, cmd, output }. Empty is the normal state. While it is non-empty the track is blocked per config.gates.unrunnable_policy: the status may not be the done value and the track may not be archived. This field exists because a gate that cannot run has no category of its own otherwise, and the categories that are available \u2014 a blocker to fix, a human check to defer \u2014 both misdescribe it, the second one harmlessly enough that it is the one that gets used.",
       "updated_at": "ISO-8601 timestamp of the last write."
     },
     "body_sections": ["Current Position", "Open Decisions", "Blockers", "Resume Hint"]
@@ -3801,6 +3812,281 @@ var init_embedded = __esm({
 `
       },
       {
+        sourcePath: "D:/conductor/src/internal/templates/data/config/gates/composition-bands.json",
+        category: "config",
+        subpath: "gates",
+        ext: ".json",
+        content: `{
+  "description": "Composition floors, counted on the rendered DOM by design-render-gate.mjs. The style bands in design-bands.json deliberately stop short of composition \u2014 design-scales.md says so \u2014 and hand hierarchy, density and grid tension to the prose of DESIGN.md. The same file explains why that cannot hold: prose does not move a model off the mean. These are the crudest possible counters against sameness, in the format that did work for style: a number the page either clears or does not.",
+  "not_a_definition_of_good": "Every metric here is a floor, never a target. A page can clear all of them and still be badly composed \u2014 composition is not five numbers. What they catch is the specific failure that survives every other gate: a page where each section repeats the previous one, which is what a model produces when nothing constrains layout and which no token, contrast ratio or band can see.",
+  "measured_at": "The widest configured viewport. Composition is a desktop question \u2014 at 375px almost everything is legitimately one centred column, so measuring there would report every mobile layout as uniform and teach the gate to be ignored.",
+  "metrics": {
+    "centered_section_ratio": {
+      "max": 0.8,
+      "severity": "fail",
+      "why": "every section centred is the single most reliable signature of generated layout; at least one section should be composed differently from the rest"
+    },
+    "distinct_container_widths": {
+      "min": 2,
+      "severity": "fail",
+      "why": "one measure for the whole page means the content never changes density, however different the content is"
+    },
+    "section_height_variation": {
+      "min": 0.15,
+      "severity": "fail",
+      "why": "coefficient of variation of section heights; near zero means every section takes the same vertical space regardless of what it holds, so the page has one tempo"
+    },
+    "distinct_heading_sizes": {
+      "min": 2,
+      "severity": "warn",
+      "why": "one type size across every section heading flattens the hierarchy the type scale was built to express \u2014 warned rather than blocked, since a deliberately flat editorial page is a real choice"
+    },
+    "grid_breaking_elements": {
+      "min": 1,
+      "severity": "warn",
+      "why": "nothing that bleeds past the container or breaks the grid means the page never varies its own frame; warned rather than blocked, since restraint is a legitimate style and this is the metric most likely to be gamed by adding a decorative full-bleed strip"
+    }
+  }
+}
+`
+      },
+      {
+        sourcePath: "D:/conductor/src/internal/templates/data/config/gates/design-assets-gate.mjs",
+        category: "config",
+        subpath: "gates",
+        ext: ".mjs",
+        content: `#!/usr/bin/env node
+// Asset integrity gate.
+//
+// Every other design gate judges decisions: is this value in the scale, does
+// this pair meet contrast, does this page derive from the grammar. This one
+// judges something cruder and, in practice, more damaging \u2014 whether the images
+// the page presents as content are actually content.
+//
+// The failure it exists for, from a real audit: one 392-byte SVG of an empty
+// phone outline, referenced three times with three different alt texts ("the
+// expense screen", "the netting screen", "the household dashboard"), under three
+// captions promising three different views of the product. And a 287-byte
+// ellipse rendered at 320px as the hero illustration of a brand whose guidelines
+// describe "animated blob creatures with stick limbs". Nothing was broken.
+// Every gate was green. There was simply no artwork, and the markup asserted
+// there was.
+//
+// This is not a judgement about artistic quality, which no gate can make. It is
+// a check that the asset exists at the fidelity the markup claims for it \u2014 the
+// same kind of check as a broken link, and it fails for the same reason: the
+// page says something that is not true.
+//
+// Exit codes: 0 pass, 1 violation, 2 harness failure.
+//
+// Usage:
+//   node conductor/gates/design-assets-gate.mjs [--src <dir>]... [--public <dir>]
+//        [--min-bytes <n>] [--min-marks <n>] [--baseline <json>] [--update-baseline]
+
+import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { dirname, extname, join, relative, sep } from 'node:path';
+import { fail } from './design-cli.mjs';
+import { eachLine } from './design-scan.mjs';
+
+// --- Policy -----------------------------------------------------------------
+// An SVG below this size cannot carry a figure. For calibration: a single
+// rounded rectangle is ~200 bytes, a recognisable icon 400-900, an illustration
+// with a character in it several kilobytes. The threshold sits where "icon"
+// ends, and it only applies to assets the markup uses as ILLUSTRATION, never to
+// icons \u2014 a 300-byte icon is a good icon.
+const MIN_ILLUSTRATION_BYTES = 900;
+
+// Drawing elements in an SVG. Two shapes is a placeholder; a creature with
+// limbs and a face does not fit in two.
+const MIN_ILLUSTRATION_MARKS = 4;
+
+// Where an asset is being used as illustration rather than decoration. Matched
+// against the reference path, so it follows the project's own naming.
+const ILLUSTRATION_HINTS = /(illustration|mascot|character|hero|artwork|scene|device|screenshot|preview|mockup)/i;
+
+const MARK_RE = /<(path|circle|ellipse|rect|polygon|polyline|line|image|text|use)\\b/gi;
+
+// \`<img src alt>\`, \`<Image src alt>\`, and the same attributes in JSX with braces.
+const IMG_TAG_RE = /<(?:img|Image)\\b([^>]*)>/gi;
+const ATTR_RE = /\\b(src|alt|width|height|class|className)\\s*=\\s*(?:"([^"]*)"|'([^']*)'|\\{[\`'"]([^\`'"]*)[\`'"]\\})/gi;
+
+function parseArgs(argv) {
+  const opts = {
+    src: [],
+    publicDirs: [],
+    minBytes: MIN_ILLUSTRATION_BYTES,
+    minMarks: MIN_ILLUSTRATION_MARKS,
+    baseline: 'conductor/gates/design-assets-baseline.json',
+    updateBaseline: false,
+  };
+  for (let i = 0; i < argv.length; i += 1) {
+    const arg = argv[i];
+    if (arg === '--src') opts.src.push(argv[++i]);
+    else if (arg === '--public') opts.publicDirs.push(argv[++i]);
+    else if (arg === '--min-bytes') opts.minBytes = Number(argv[++i]);
+    else if (arg === '--min-marks') opts.minMarks = Number(argv[++i]);
+    else if (arg === '--baseline') opts.baseline = argv[++i];
+    else if (arg === '--update-baseline') opts.updateBaseline = true;
+  }
+  if (opts.src.length === 0) opts.src.push('.');
+  if (opts.publicDirs.length === 0) {
+    opts.publicDirs = ['public', 'static', 'assets'].filter((d) => existsSync(d));
+  }
+  return opts;
+}
+
+function attrsOf(tag) {
+  const out = {};
+  for (const m of tag.matchAll(ATTR_RE)) {
+    out[m[1].toLowerCase()] = m[2] ?? m[3] ?? m[4] ?? '';
+  }
+  return out;
+}
+
+/** Resolves a markup reference to a file on disk, trying each public root. */
+function resolveAsset(ref, publicDirs) {
+  if (!ref || /^(https?:|data:|#)/i.test(ref)) return null;
+  const clean = ref.split('?')[0].split('#')[0];
+  const candidates = [clean.replace(/^\\//, '')];
+  for (const dir of publicDirs) candidates.push(join(dir, clean.replace(/^\\//, '')));
+  for (const candidate of candidates) {
+    try {
+      if (existsSync(candidate) && statSync(candidate).isFile()) return candidate;
+    } catch {
+      // Unreadable candidate is simply not a match.
+    }
+  }
+  return null;
+}
+
+function main() {
+  const opts = parseArgs(process.argv.slice(2));
+  if (!Number.isFinite(opts.minBytes) || !Number.isFinite(opts.minMarks)) {
+    fail(2, '--min-bytes and --min-marks must be numbers');
+  }
+  for (const root of opts.src) {
+    if (!existsSync(root)) fail(2, 'source path not found: ' + root);
+  }
+
+  // ref -> { alts:Set, uses:[location], illustrative:boolean }
+  const refs = new Map();
+
+  const scanned = eachLine(opts.src, (line, at) => {
+    for (const tag of line.matchAll(IMG_TAG_RE)) {
+      const attrs = attrsOf(tag[1]);
+      const src = attrs.src;
+      if (!src) continue;
+      if (!refs.has(src)) refs.set(src, { alts: new Set(), uses: [], illustrative: false });
+      const entry = refs.get(src);
+      entry.uses.push(at);
+      if (attrs.alt !== undefined && attrs.alt.trim() !== '') entry.alts.add(attrs.alt.trim());
+      if (ILLUSTRATION_HINTS.test(src) || ILLUSTRATION_HINTS.test(attrs.class ?? attrs.classname ?? '')) {
+        entry.illustrative = true;
+      }
+    }
+  });
+
+  const findings = { 'placeholder-asset': [], 'one-asset-many-claims': [] };
+
+  for (const [ref, entry] of refs) {
+    // One file, several different promises. The alt text is the claim; a single
+    // file cannot be three different screens of a product.
+    if (entry.alts.size > 1) {
+      findings['one-asset-many-claims'].push(
+        ref + ' is used ' + entry.uses.length + ' times with ' + entry.alts.size +
+        ' different alt texts (' + [...entry.alts].map((a) => JSON.stringify(a)).join(', ') +
+        ') at ' + entry.uses.join(', ') +
+        ' \u2014 one file cannot be each of those things, so at least ' + (entry.alts.size - 1) +
+        ' of these claims is false to a screen reader and empty to everyone else',
+      );
+    }
+
+    const path = resolveAsset(ref, opts.publicDirs);
+    if (!path || extname(path).toLowerCase() !== '.svg') continue;
+
+    let body;
+    try {
+      body = readFileSync(path, 'utf-8');
+    } catch {
+      continue;
+    }
+    const bytes = Buffer.byteLength(body);
+    const marks = [...body.matchAll(MARK_RE)].length;
+    const isIllustration = entry.illustrative || ILLUSTRATION_HINTS.test(path);
+
+    if (isIllustration && (bytes < opts.minBytes || marks < opts.minMarks)) {
+      findings['placeholder-asset'].push(
+        relative(process.cwd(), path).split(sep).join('/') + ': ' + bytes + ' bytes, ' + marks +
+        ' drawing element(s) \u2014 used as illustration at ' + entry.uses[0] +
+        ' but too simple to be one (expected at least ' + opts.minBytes + ' bytes and ' +
+        opts.minMarks + ' elements). Either the artwork is missing, or this is a placeholder that ' +
+        'the page presents as finished work',
+      );
+    }
+  }
+
+  const counts = Object.fromEntries(Object.entries(findings).map(([k, v]) => [k, v.length]));
+  const total = Object.values(counts).reduce((a, b) => a + b, 0);
+
+  if (opts.updateBaseline) {
+    try {
+      mkdirSync(dirname(opts.baseline), { recursive: true });
+      writeFileSync(
+        opts.baseline,
+        JSON.stringify({
+          description: 'Asset findings recorded when this gate was adopted. The numbers may only move down.',
+          recordedAt: new Date().toISOString(),
+          counts,
+        }, null, 2) + '\\n',
+        'utf-8',
+      );
+    } catch (err) {
+      fail(2, 'could not write the baseline to ' + opts.baseline + ' (' + err.message + ')');
+    }
+    process.stdout.write('design-assets: baseline recorded (' + total + ' findings)\\n');
+    process.exit(0);
+  }
+
+  let baseline = null;
+  if (existsSync(opts.baseline)) {
+    try {
+      baseline = JSON.parse(readFileSync(opts.baseline, 'utf-8'))?.counts ?? null;
+    } catch (err) {
+      fail(2, 'baseline at ' + opts.baseline + ' is unreadable (' + err.message + ')');
+    }
+  }
+
+  for (const [rule, list] of Object.entries(findings)) {
+    if (list.length === 0) continue;
+    process.stderr.write('\\n' + rule + ' (' + list.length + '):\\n');
+    for (const line of list) process.stderr.write('  ' + line + '\\n');
+  }
+
+  const regressions = Object.entries(counts).filter(([rule, count]) => count > (baseline?.[rule] ?? 0));
+  if (regressions.length > 0) {
+    process.stderr.write('\\nAsset gate FAILED:\\n');
+    for (const [rule, count] of regressions) {
+      process.stderr.write('  x ' + rule + ': ' + count + ' (allowed ' + (baseline?.[rule] ?? 0) + ')\\n');
+    }
+    process.stderr.write(
+      '\\nThe fix is the asset, not the markup. Removing the alt text to silence this leaves the same ' +
+      'empty image with less information; pointing three references at three equally empty files ' +
+      'satisfies the letter of the check and none of its purpose. If the artwork does not exist yet, ' +
+      'say so as a human-verification item and let the user decide \u2014 shipping a placeholder that ' +
+      'presents itself as finished work is the one option this gate exists to remove.\\n',
+    );
+    process.stdout.write('design-assets: FAIL (' + total + ' findings)\\n');
+    process.exit(1);
+  }
+
+  process.stdout.write('design-assets: PASS (' + total + ' findings, ' + scanned + ' files, ' + refs.size + ' referenced assets)\\n');
+  process.exit(0);
+}
+
+main();
+`
+      },
+      {
         sourcePath: "D:/conductor/src/internal/templates/data/config/gates/design-bands.json",
         category: "config",
         subpath: "gates",
@@ -3823,6 +4109,12 @@ var init_embedded = __esm({
       "bands": { "sharp": 2, "architectural": 4, "soft": 8 }
     }
   },
+  "depth": {
+    "selected": null,
+    "bands": { "tonal": 0, "bordered": 0, "shadowed": 2 },
+    "checked_by": "design-tokens-gate.mjs, as the \`off-band-depth\` rule",
+    "note": "The depth axis of design-scales.md, and the only one that cannot be anchored on a token: \`tonal\`, \`bordered\` and \`shadowed\` differ by whether shadows exist at all, not by a value the design system declares. So it is checked against the code, where the evidence is \u2014 the number is the maximum count of distinct shadow declarations the band tolerates. A project that answered \`bordered\` and then shipped a card shadow has left its band, and no reading of DESIGN.md would ever reveal it. Setup writes \`selected\` from the user's answer to Axis 5; while it is null the axis is reported as unchecked, never guessed \u2014 a default here would either flag every legitimately shadowed project or protect none of them."
+  },
   "banned": {
     "accent_colors": ["#3b82f6", "#6366f1", "#8b5cf6"],
     "neutral_must_not_be": ["#ffffff", "#fff"],
@@ -3837,12 +4129,15 @@ var init_embedded = __esm({
         subpath: "gates",
         ext: ".mjs",
         content: `// Shared bridge to the \`@google/design.md\` CLI, used by the design gates.
-// Kept in one place because invoking it correctly on Windows is not obvious.
+// Kept in one place because invoking it correctly across package managers and
+// on Windows is not obvious.
 
 import { spawnSync } from 'node:child_process';
+import { existsSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
 
 // Pinned deliberately. The format is alpha, it lives in the user's repository,
-// and an unpinned \`npx\` would deliver a breaking upstream change silently on
+// and an unpinned fetch would deliver a breaking upstream change silently on
 // some future run. Bump this after reading the changelog, never by drift.
 export const PACKAGE = '@google/design.md@0.4.0';
 export const BIN = 'designmd'; // not \`design.md\`: on Windows the .md suffix
@@ -3859,36 +4154,208 @@ function quoteForCmd(arg) {
   return /[\\s"&|<>^]/.test(arg) ? '"' + arg.replace(/"/g, '""') + '"' : arg;
 }
 
+// --- Executor resolution ----------------------------------------------------
+// Why this exists: \`npx\` is not a neutral way to run a one-off binary. npm
+// refuses to operate at all inside a project whose \`devEngines.packageManager\`
+// names another manager (EBADDEVENGINES), and it aborts before it ever fetches
+// the package. Conductor's own setup writes that field, so hard-coding npx made
+// both design gates unrunnable in every pnpm, yarn or bun project it created \u2014
+// the gates that exist to stop a generic interface, disabled by default on the
+// majority of modern JavaScript projects.
+//
+// The manager is therefore read from the project rather than assumed.
+
+/** Reads the nearest package.json without throwing; absent or broken is "no signal". */
+function readPackageJson(cwd) {
+  const path = join(cwd, 'package.json');
+  if (!existsSync(path)) return null;
+  try {
+    return JSON.parse(readFileSync(path, 'utf-8'));
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The declared manager, in the order the ecosystem itself resolves it:
+ * corepack's \`packageManager\` field, then \`devEngines.packageManager\`, then the
+ * lockfile. A lockfile is the weakest signal but the most common one, and it is
+ * still a far better guess than assuming npm.
+ */
+export function detectPackageManager(cwd = process.cwd()) {
+  const pkg = readPackageJson(cwd);
+
+  const fromSpec = (spec) => {
+    const match = /^([a-z]+)(?:@(\\d+))?/i.exec(String(spec ?? ''));
+    return match ? { name: match[1].toLowerCase(), major: match[2] ? Number(match[2]) : null } : null;
+  };
+
+  const corepack = fromSpec(pkg?.packageManager);
+  if (corepack) return { ...corepack, source: 'packageManager' };
+
+  const devEngines = pkg?.devEngines?.packageManager;
+  if (devEngines?.name) {
+    // \`version\` here is a range ("^11.9.0"), not a spec \u2014 take the first number.
+    const major = /(\\d+)/.exec(String(devEngines.version ?? ''));
+    return {
+      name: String(devEngines.name).toLowerCase(),
+      major: major ? Number(major[1]) : null,
+      source: 'devEngines.packageManager',
+    };
+  }
+
+  for (const [file, name] of [
+    ['pnpm-lock.yaml', 'pnpm'],
+    ['yarn.lock', 'yarn'],
+    ['bun.lockb', 'bun'],
+    ['bun.lock', 'bun'],
+    ['package-lock.json', 'npm'],
+  ]) {
+    if (existsSync(join(cwd, file))) return { name, major: null, source: file };
+  }
+
+  return { name: 'npm', major: null, source: 'default' };
+}
+
+/**
+ * Whether \`command\` can be spawned at all, so a missing manager falls back
+ * rather than surfacing as an unexplained failure of the gate.
+ *
+ * The extension is left to the shell on Windows rather than appended here: the
+ * launchers do not agree on one (\`pnpm.cmd\`, \`bunx.exe\`), and guessing wrong
+ * reports a manager that is installed as missing.
+ */
+function isOnPath(command) {
+  const isWin = process.platform === 'win32';
+  const probe = spawnSync(command, ['--version'], {
+    encoding: 'utf-8',
+    windowsHide: true,
+    shell: isWin,
+  });
+  return !probe.error && probe.status === 0;
+}
+
+/**
+ * The command that runs BIN from PACKAGE under the given manager.
+ *
+ * Each manager is given its own explicit "package X, run binary Y" form. The
+ * shorthand (\`pnpm dlx @google/design.md@0.4.0\`) infers the binary from the
+ * package name, which is wrong here: the package is \`@google/design.md\` and the
+ * binary is \`designmd\`.
+ */
+function runnerFor(manager, args) {
+  const invoke = [BIN, ...args];
+  switch (manager.name) {
+    case 'pnpm':
+      return { command: 'pnpm', argv: ['--package=' + PACKAGE, 'dlx', ...invoke] };
+    case 'yarn':
+      // Only Berry has \`dlx\`. Yarn 1 has no one-off runner, so it borrows npx \u2014
+      // which is safe precisely because a Yarn 1 project has no devEngines block
+      // for npm to reject.
+      if (manager.major !== null && manager.major < 2) return null;
+      return { command: 'yarn', argv: ['dlx', '--package', PACKAGE, ...invoke] };
+    case 'bun':
+      return { command: 'bunx', argv: ['--package', PACKAGE, ...invoke] };
+    default:
+      return null;
+  }
+}
+
+/**
+ * Resolves how to invoke the CLI, preferring what costs least and breaks least:
+ *   1. A binary already installed in the project \u2014 no network, no manager.
+ *   2. The project's own package manager's one-off runner.
+ *   3. npx, which is correct for npm projects and the only remaining option.
+ * Exported so a gate can report which route it took when something goes wrong.
+ */
+export function resolveRunner(cwd = process.cwd()) {
+  const isWin = process.platform === 'win32';
+
+  const local = join(cwd, 'node_modules', '.bin', isWin ? BIN + '.cmd' : BIN);
+  if (existsSync(local)) {
+    return { command: local, argv: [], via: 'node_modules/.bin', manager: null };
+  }
+
+  const manager = detectPackageManager(cwd);
+  const runner = runnerFor(manager, []);
+  if (runner && isOnPath(runner.command)) {
+    return {
+      command: runner.command,
+      argv: runner.argv,
+      via: manager.name + ' (from ' + manager.source + ')',
+      manager,
+    };
+  }
+
+  return {
+    command: 'npx',
+    argv: ['-y', '-p', PACKAGE],
+    via: runner ? 'npx (fallback: ' + manager.name + ' not on PATH)' : 'npx',
+    manager,
+  };
+}
+
 /**
  * Runs a design.md subcommand and returns its parsed JSON output.
  * Exit status 1 is treated as data, not failure: \`diff\` uses it for its own
  * notion of regression, which the gates deliberately re-judge themselves.
  */
 export function runDesignMd(args) {
-  const full = ['-y', '-p', PACKAGE, BIN, ...args];
-  // On Windows the launcher is \`npx.cmd\`, and since the fix for CVE-2024-27980
-  // Node refuses to spawn a .cmd without a shell. With a shell, arguments are
-  // re-parsed by cmd.exe, so anything that may contain a space is quoted here.
+  const runner = resolveRunner();
   const isWin = process.platform === 'win32';
+
+  // The npx route names the binary after the package flags; every other route
+  // already carries it, and the local binary IS the binary.
+  const full =
+    runner.via.startsWith('npx')
+      ? [...runner.argv, BIN, ...args]
+      : [...runner.argv, ...args];
+
+  // On Windows the launchers are shims (\`npx.cmd\`, \`pnpm.cmd\`, \`bunx.exe\`), and
+  // since the fix for CVE-2024-27980 Node refuses to spawn a .cmd without a
+  // shell. Running through the shell also lets cmd.exe pick the right extension
+  // from PATHEXT, which is why none is appended here. With a shell, arguments
+  // are re-parsed by cmd.exe, so anything that may contain a space is quoted.
+  const command = runner.command;
   const res = isWin
-    ? spawnSync('npx.cmd', full.map(quoteForCmd), {
+    ? spawnSync(quoteForCmd(command), full.map(quoteForCmd), {
         encoding: 'utf-8',
         windowsHide: true,
         shell: true,
       })
-    : spawnSync('npx', full, { encoding: 'utf-8', windowsHide: true });
+    : spawnSync(command, full, { encoding: 'utf-8', windowsHide: true });
+
+  // Every failure path names the route taken. A gate that cannot run must say
+  // what it tried to run, or the agent reading it can only guess \u2014 and the guess
+  // it reaches for ("the tool is not installed") sends it to work around a gate
+  // that was one flag away from working.
+  const context = 'via ' + runner.via + ' (' + [command, ...full].join(' ') + ')';
 
   if (res.error) {
-    fail(2, 'could not execute npx (' + res.error.message + '). Is Node on PATH?');
+    fail(2, 'could not execute ' + command + ' ' + context + ': ' + res.error.message);
   }
   if (res.status !== 0 && res.status !== 1) {
-    fail(2, PACKAGE + ' ' + args[0] + ' failed (exit ' + res.status + '):\\n' + (res.stderr || res.stdout));
+    fail(
+      2,
+      PACKAGE + ' ' + args[0] + ' failed (exit ' + res.status + ') ' + context + '\\n' +
+      'stdout:\\n' + (res.stdout || '(empty)') + '\\n' +
+      'stderr:\\n' + (res.stderr || '(empty)'),
+    );
   }
 
   try {
     return JSON.parse(res.stdout);
   } catch {
-    fail(2, 'could not parse JSON from \`' + BIN + ' ' + args[0] + '\`. Raw output:\\n' + res.stdout);
+    // stderr is included deliberately. This path is where a runner that refused
+    // to start reports WHY \u2014 EBADDEVENGINES, a proxy rejection, a missing
+    // registry \u2014 and printing stdout alone turns all of them into one blank
+    // message that names no cause.
+    fail(
+      2,
+      'could not parse JSON from \`' + BIN + ' ' + args[0] + '\` ' + context + '\\n' +
+      'stdout:\\n' + (res.stdout || '(empty)') + '\\n' +
+      'stderr:\\n' + (res.stderr || '(empty)'),
+    );
   }
 }
 `
@@ -4164,6 +4631,7 @@ function parseArgs(argv) {
     file: 'conductor/DESIGN.md',
     baseline: 'conductor/gates/design-baseline.md',
     bands: 'conductor/gates/design-bands.json',
+    pairings: 'conductor/gates/type-pairings.json',
     verbose: false,
   };
   for (let i = 0; i < argv.length; i += 1) {
@@ -4172,6 +4640,7 @@ function parseArgs(argv) {
     else if (arg === '--file') opts.file = argv[++i];
     else if (arg === '--baseline') opts.baseline = argv[++i];
     else if (arg === '--bands') opts.bands = argv[++i];
+    else if (arg === '--pairings') opts.pairings = argv[++i];
     else if (arg === '--verbose') opts.verbose = true;
   }
   if (opts.mode !== 'implement' && opts.mode !== 'design') {
@@ -4308,6 +4777,85 @@ function checkBands(designFile, bandsFile) {
   return { name: 'bands', blocking, advisory };
 }
 
+/**
+ * Checks the type pairing against the catalogue, and the family count against
+ * the one rule that holds regardless of catalogue.
+ *
+ * Pairing type well is a craft skill, and the failure mode is not ugliness \u2014 it
+ * is sameness: the same two or three families appear in every generated
+ * interface, so the page reads as related to every other generated page. A
+ * catalogue removes the composition step, exactly as the bands did for spacing.
+ *
+ * A project with its own licensed brand faces leaves \`selected\` null and is
+ * reported as unchecked. That is correct: brand type always outranks a
+ * catalogue entry, and the catalogue exists for the case where nobody chose,
+ * which is the case where the mean answer wins by default.
+ */
+function checkType(designFile, pairingsFile) {
+  const blocking = [];
+  const advisory = [];
+  if (!existsSync(pairingsFile)) return { name: 'type', blocking, advisory };
+
+  let spec;
+  try {
+    spec = JSON.parse(readFileSync(pairingsFile, 'utf-8'));
+  } catch (err) {
+    fail(2, 'type pairings at ' + pairingsFile + ' are unreadable (' + err.message + ')');
+  }
+
+  const dtcg = runDesignMd(['export', '--format', 'dtcg', designFile]);
+  const typography = dtcg.typography ?? {};
+  const familyOf = (token) => {
+    const raw = typography[token]?.$value?.fontFamily;
+    if (!raw) return null;
+    return String(Array.isArray(raw) ? raw[0] : raw).split(',')[0].replace(/["']/g, '').trim();
+  };
+
+  const families = new Set();
+  for (const [name, token] of Object.entries(typography)) {
+    if (name.startsWith('$')) continue;
+    const raw = token?.$value?.fontFamily;
+    if (!raw) continue;
+    families.add(String(Array.isArray(raw) ? raw[0] : raw).split(',')[0].replace(/["']/g, '').trim());
+  }
+  if (families.size > 2) {
+    blocking.push(
+      'typography uses ' + families.size + ' families (' + [...families].join(', ') +
+      '). More than two is an unresolved decision, not a richer system',
+    );
+  }
+
+  const selected = spec.selected;
+  if (!selected) {
+    advisory.push('type pairing: none selected in ' + pairingsFile + ', so the pairing was not checked');
+    return { name: 'type', blocking, advisory };
+  }
+
+  const pairing = spec.pairings?.[selected];
+  if (!pairing) {
+    fail(2, pairingsFile + ' selects the pairing "' + selected + '", which it does not define.');
+  }
+
+  const display = familyOf('display');
+  const body = familyOf('body');
+  const norm = (s) => (s ?? '').toLowerCase();
+
+  if (display && norm(display) !== norm(pairing.display)) {
+    blocking.push(
+      'typography.display is \`' + display + '\`, but the selected pairing \`' + selected + '\` is \`' +
+      pairing.display + '\`. Pick a pairing and copy it \u2014 recombining halves of two pairings is composing ' +
+      'a new one, which is what the catalogue exists to avoid',
+    );
+  }
+  if (body && norm(body) !== norm(pairing.body)) {
+    blocking.push(
+      'typography.body is \`' + body + '\`, but the selected pairing \`' + selected + '\` is \`' + pairing.body + '\`',
+    );
+  }
+
+  return { name: 'type', blocking, advisory };
+}
+
 // --- Report -----------------------------------------------------------------
 function report(sections, opts) {
   const blocking = sections.flatMap((s) => s.blocking);
@@ -4334,6 +4882,13 @@ function report(sections, opts) {
       process.stderr.write(
         '\\nBand findings mean an axis was averaged rather than chosen. Go back to the band table, ' +
         'pick one band for that axis and copy its value \u2014 do not nudge the current value toward the nearest band.\\n',
+      );
+    }
+    if (failed.includes('type')) {
+      process.stderr.write(
+        '\\nType findings are fixed by copying the selected pairing into ' + opts.file + ' verbatim, ' +
+        'or by selecting a different pairing deliberately. Editing the catalogue to match what was ' +
+        'already written is the same move as widening a token to fit a component.\\n',
       );
     }
     if (failed.includes('ratchet')) {
@@ -4367,7 +4922,7 @@ function main() {
     fail(2, opts.file + ' is empty.');
   }
 
-  const sections = [checkSpec(opts.file)];
+  const sections = [checkSpec(opts.file), checkType(opts.file, opts.pairings)];
 
   if (existsSync(opts.bands)) {
     sections.push(checkBands(opts.file, opts.bands));
@@ -4388,6 +4943,1327 @@ function main() {
 }
 
 main();
+`
+      },
+      {
+        sourcePath: "D:/conductor/src/internal/templates/data/config/gates/design-grammar-check.mjs",
+        category: "config",
+        subpath: "gates",
+        ext: ".mjs",
+        content: `// Derivation checker for the composition grammar. Pure: no browser, no CLI, no
+// filesystem beyond what the caller hands it, so the rules stay readable and
+// testable on their own.
+//
+// A page declares its composition as an ordered list of archetype names. This
+// file decides whether that list is a sentence the grammar can produce, and
+// whether it satisfies the invariants that apply to every page regardless of
+// grammar. Both halves matter and they fail differently:
+//
+//   - A derivation error means the page has the wrong SHAPE: no turn, two
+//     resolves, a prove before anything was established. The fix is the order.
+//   - An invariant error means the page has the right shape and no variety
+//     inside it: six sections, four of them centred, nothing bleeding. The fix
+//     is the choice of archetype, not the order.
+
+/** Movement counts are either an exact number or an inclusive [min, max]. */
+function bounds(count) {
+  if (Array.isArray(count)) return { min: count[0], max: count[1] };
+  return { min: count, max: count };
+}
+
+/**
+ * Matches the sequence of roles against the movements, in order.
+ *
+ * Greedy with backtracking. The grammars here are tiny (five movements, a
+ * handful of sections), so the simple exhaustive walk is both fast enough and
+ * obviously correct \u2014 a hand-rolled greedy pass without backtracking silently
+ * rejects valid pages whenever an optional movement precedes a required one.
+ */
+export function derives(roles, movements) {
+  function walk(roleIndex, movementIndex) {
+    if (movementIndex === movements.length) return roleIndex === roles.length;
+    const { min, max } = bounds(movements[movementIndex].count);
+    const role = movements[movementIndex].role;
+
+    let taken = 0;
+    while (taken < min) {
+      if (roles[roleIndex + taken] !== role) return false;
+      taken += 1;
+    }
+    for (let n = min; n <= max; n += 1) {
+      if (n > 0 && roles[roleIndex + n - 1] !== role) break;
+      if (walk(roleIndex + n, movementIndex + 1)) return true;
+    }
+    return false;
+  }
+  return walk(0, 0);
+}
+
+/** Human-readable account of where a sequence stops matching a grammar. */
+function explainDerivation(roles, grammar) {
+  const shape = grammar.movements
+    .map((m) => {
+      const { min, max } = bounds(m.count);
+      return m.role + (min === max ? '\xD7' + min : '\xD7' + min + '-' + max);
+    })
+    .join(' \u2192 ');
+  const missing = grammar.movements
+    .filter((m) => bounds(m.count).min > 0 && !roles.includes(m.role))
+    .map((m) => m.role);
+
+  let detail = 'got ' + (roles.join(' \u2192 ') || '(no sections)');
+  if (missing.length > 0) {
+    detail += '; no section fills the ' + missing.join(' or ') + ' movement';
+    if (missing.includes('turn')) {
+      detail += ' \u2014 the turn is the movement a generated page always omits, and its absence is what makes a page read as a list rather than an argument';
+    }
+  }
+  return 'expected ' + shape + '; ' + detail;
+}
+
+/**
+ * Checks one page's declared composition.
+ *
+ * \`sections\` is the ordered list of archetype names the page claims to use.
+ * Returns blocking and advisory findings; empty blocking means the derivation
+ * is valid and every invariant held.
+ */
+export function checkDerivation(sections, spec, grammarName) {
+  const blocking = [];
+  const advisory = [];
+  const archetypes = spec.archetypes ?? {};
+  const grammar = (spec.grammars ?? {})[grammarName];
+
+  if (!grammar) {
+    blocking.push(
+      'unknown grammar ' + JSON.stringify(grammarName) + '. Declared grammars: ' +
+      Object.keys(spec.grammars ?? {}).join(', '),
+    );
+    return { blocking, advisory };
+  }
+  if (!Array.isArray(sections) || sections.length === 0) {
+    blocking.push('the page declares no sections, so there is no composition to check');
+    return { blocking, advisory };
+  }
+
+  const unknown = sections.filter((name) => !archetypes[name]);
+  if (unknown.length > 0) {
+    blocking.push(
+      'unknown archetype(s): ' + [...new Set(unknown)].join(', ') +
+      '. Compose from the declared vocabulary \u2014 inventing one here is how the grammar stops constraining anything. ' +
+      'Available: ' + Object.keys(archetypes).join(', '),
+    );
+    return { blocking, advisory };
+  }
+
+  const resolved = sections.map((name) => ({ name, ...archetypes[name] }));
+
+  // --- Shape ----------------------------------------------------------------
+  const roles = resolved.map((s) => s.role);
+  if (!derives(roles, grammar.movements)) {
+    blocking.push('composition is not a valid \`' + grammarName + '\` page: ' + explainDerivation(roles, grammar));
+  }
+
+  // --- Variety --------------------------------------------------------------
+  const inv = spec.invariants ?? {};
+
+  for (let i = 1; i < resolved.length; i += 1) {
+    if (resolved[i].name === resolved[i - 1].name) {
+      blocking.push(
+        'sections ' + i + ' and ' + (i + 1) + ' both use \`' + resolved[i].name +
+        '\` \u2014 ' + (inv.no_adjacent_repeat?.why ?? 'adjacent repetition reads as a template'),
+      );
+    }
+  }
+
+  const centeredLimit = inv.max_centered_statement?.value;
+  if (typeof centeredLimit === 'number') {
+    const used = resolved.filter((s) => s.name === 'centered-statement').length;
+    if (used > centeredLimit) {
+      blocking.push(
+        '\`centered-statement\` used ' + used + ' times, at most ' + centeredLimit + ' allowed \u2014 ' +
+        (inv.max_centered_statement.why ?? ''),
+      );
+    }
+  }
+
+  const distinctLimit = inv.min_distinct_archetypes?.value;
+  if (typeof distinctLimit === 'number') {
+    const distinct = new Set(resolved.map((s) => s.name)).size;
+    if (distinct < distinctLimit) {
+      blocking.push(
+        'only ' + distinct + ' distinct archetype(s), at least ' + distinctLimit + ' required \u2014 ' +
+        (inv.min_distinct_archetypes.why ?? ''),
+      );
+    }
+  }
+
+  const bleedLimit = inv.min_bleeding_sections?.value;
+  if (typeof bleedLimit === 'number') {
+    const bleeding = resolved.filter((s) => s.bleeds === true).length;
+    if (bleeding < bleedLimit) {
+      blocking.push(
+        'no section bleeds past its container (' + bleeding + ' of ' + bleedLimit + ' required) \u2014 ' +
+        (inv.min_bleeding_sections.why ?? ''),
+      );
+    }
+  }
+
+  const densityLimit = inv.max_consecutive_same_density?.value;
+  if (typeof densityLimit === 'number') {
+    let run = 1;
+    for (let i = 1; i <= resolved.length; i += 1) {
+      if (i < resolved.length && resolved[i].density === resolved[i - 1].density) {
+        run += 1;
+        continue;
+      }
+      if (run > densityLimit) {
+        blocking.push(
+          run + ' consecutive sections share density \`' + resolved[i - 1].density + '\` (at most ' +
+          densityLimit + ') \u2014 ' + (inv.max_consecutive_same_density.why ?? ''),
+        );
+      }
+      run = 1;
+    }
+  }
+
+  // Centre only. A run of left-entering sections is the reading direction; a run
+  // of centred ones is the stack this whole file exists to prevent.
+  const centreRun = inv.max_consecutive_centered_entry?.value;
+  if (typeof centreRun === 'number') {
+    let run = 0;
+    for (let i = 0; i <= resolved.length; i += 1) {
+      if (i < resolved.length && resolved[i].entry === 'center') {
+        run += 1;
+        continue;
+      }
+      if (run > centreRun) {
+        blocking.push(
+          run + ' consecutive sections enter from the centre (at most ' + centreRun + ') \u2014 ' +
+          (inv.max_consecutive_centered_entry.why ?? ''),
+        );
+      }
+      run = 0;
+    }
+  }
+
+  const centreRatio = inv.max_centered_entry_ratio?.value;
+  if (typeof centreRatio === 'number') {
+    const centred = resolved.filter((s) => s.entry === 'center').length;
+    const ratio = centred / resolved.length;
+    if (ratio > centreRatio) {
+      blocking.push(
+        centred + ' of ' + resolved.length + ' sections enter from the centre (' + Math.round(ratio * 100) +
+        '%, at most ' + Math.round(centreRatio * 100) + '%) \u2014 ' + (inv.max_centered_entry_ratio.why ?? ''),
+      );
+    }
+  }
+
+  return { blocking, advisory };
+}
+
+/**
+ * The archetypes that would complete a partial composition \u2014 what the agent
+ * should be told when it is stuck, instead of being left to guess.
+ */
+export function suggestions(sections, spec, grammarName) {
+  const grammar = (spec.grammars ?? {})[grammarName];
+  if (!grammar) return [];
+  const out = [];
+  for (const movement of grammar.movements) {
+    const { min } = bounds(movement.count);
+    const have = sections.filter((name) => spec.archetypes?.[name]?.role === movement.role).length;
+    if (have < min) {
+      const options = Object.entries(spec.archetypes ?? {})
+        .filter(([, a]) => a.role === movement.role)
+        .map(([name]) => name);
+      out.push(movement.role + ': ' + options.join(', '));
+    }
+  }
+  return out;
+}
+`
+      },
+      {
+        sourcePath: "D:/conductor/src/internal/templates/data/config/gates/design-grammar-gate.mjs",
+        category: "config",
+        subpath: "gates",
+        ext: ".mjs",
+        content: `#!/usr/bin/env node
+// Composition grammar gate. Checks that every page the project declares is a
+// valid sentence in the grammar, before anything is built.
+//
+// This is the earliest of the design gates and the cheapest to satisfy: it
+// reads a list of archetype names, not code, so it can run while the page is
+// still an outline. That is deliberate. Composition is decided when the page is
+// planned; catching a centred stack after it is implemented means asking for a
+// rewrite, and an agent asked to rewrite a layout it already built will nudge
+// rather than recompose.
+//
+// Exit codes: 0 pass, 1 violation, 2 harness failure.
+//
+// Usage:
+//   node conductor/gates/design-grammar-gate.mjs
+//        [--pages <composition.json>] [--grammar <design-grammar.json>] [--page <name>]
+
+import { existsSync, readFileSync } from 'node:fs';
+import { fail } from './design-cli.mjs';
+import { checkDerivation, suggestions } from './design-grammar-check.mjs';
+
+function parseArgs(argv) {
+  const opts = {
+    pages: 'conductor/design/composition.json',
+    grammar: 'conductor/gates/design-grammar.json',
+    page: null,
+  };
+  for (let i = 0; i < argv.length; i += 1) {
+    const arg = argv[i];
+    if (arg === '--pages') opts.pages = argv[++i];
+    else if (arg === '--grammar') opts.grammar = argv[++i];
+    else if (arg === '--page') opts.page = argv[++i];
+  }
+  return opts;
+}
+
+function readJson(path, what) {
+  if (!existsSync(path)) return null;
+  try {
+    return JSON.parse(readFileSync(path, 'utf-8'));
+  } catch (err) {
+    fail(2, what + ' at ' + path + ' is unreadable (' + err.message + ')');
+  }
+}
+
+function main() {
+  const opts = parseArgs(process.argv.slice(2));
+
+  const spec = readJson(opts.grammar, 'grammar definitions');
+  if (!spec) {
+    fail(2, 'no grammar at ' + opts.grammar + '. Conductor ships one; restore it or declare this gate absent in the manifest.');
+  }
+
+  const declared = readJson(opts.pages, 'page compositions');
+  if (!declared) {
+    fail(
+      2,
+      'no page compositions at ' + opts.pages + ', so no composition was checked.\\n' +
+      'Declare each page as { "grammar": <one of ' + Object.keys(spec.grammars ?? {}).join('|') + '>, ' +
+      '"sections": [<archetype names in order>] }.\\n' +
+      'Archetypes available: ' + Object.keys(spec.archetypes ?? {}).join(', '),
+    );
+  }
+
+  const pages = Object.entries(declared.pages ?? declared).filter(([name]) => !name.startsWith('$'));
+  if (pages.length === 0) {
+    fail(2, opts.pages + ' declares no pages. An empty composition file checks nothing.');
+  }
+
+  const selected = opts.page ? pages.filter(([name]) => name === opts.page) : pages;
+  if (selected.length === 0) {
+    fail(2, 'no page named ' + JSON.stringify(opts.page) + ' in ' + opts.pages);
+  }
+
+  let blockingTotal = 0;
+  for (const [name, page] of selected) {
+    const sections = page?.sections ?? [];
+    const grammar = page?.grammar;
+    if (!grammar) {
+      fail(2, 'page ' + JSON.stringify(name) + ' declares no grammar. Pick one of: ' + Object.keys(spec.grammars ?? {}).join(', '));
+    }
+
+    const { blocking } = checkDerivation(sections, spec, grammar);
+    if (blocking.length === 0) continue;
+
+    blockingTotal += blocking.length;
+    process.stderr.write('\\n' + name + ' (' + grammar + ', ' + sections.length + ' sections):\\n');
+    for (const line of blocking) process.stderr.write('  x ' + line + '\\n');
+
+    const hints = suggestions(sections, spec, grammar);
+    if (hints.length > 0) {
+      process.stderr.write('  Archetypes that would fill the missing movements:\\n');
+      for (const hint of hints) process.stderr.write('    ' + hint + '\\n');
+    }
+  }
+
+  if (blockingTotal > 0) {
+    process.stderr.write(
+      '\\nCompose from the declared vocabulary rather than adjusting it. Adding an archetype, raising an ' +
+      'invariant or inventing a grammar to make a page pass is the same move as widening the token set ' +
+      'to fit a component \u2014 if the vocabulary genuinely lacks a shape this product needs, that is a ' +
+      'design decision and belongs to a design track.\\n',
+    );
+    process.stdout.write('design-grammar: FAIL (' + blockingTotal + ' blocking across ' + selected.length + ' page(s))\\n');
+    process.exit(1);
+  }
+
+  process.stdout.write('design-grammar: PASS (' + selected.length + ' page(s))\\n');
+  process.exit(0);
+}
+
+main();
+`
+      },
+      {
+        sourcePath: "D:/conductor/src/internal/templates/data/config/gates/design-grammar.json",
+        category: "config",
+        subpath: "gates",
+        ext: ".json",
+        content: `{
+  "description": "The composition grammar: a finite vocabulary of section archetypes and a finite set of valid page shapes built from them. Every other design file here constrains style \u2014 what a value may be. This one constrains form \u2014 what a page may be built out of, and in what order.",
+  "why": "The band architecture stops at style by its own admission, and hands composition to the prose of DESIGN.md. The same document explains why that cannot hold: prose does not move a model off the mean, and the mean of every landing page ever written is a stack of centred sections of equal height. Floors ('do not be uniform') detect that after the fact. A grammar prevents it, because the model is no longer composing \u2014 it is choosing a path through a graph someone else drew. That is the same move the bands made for spacing, applied one level up, and it gets stronger as the model gets weaker: a model that cannot invent a good layout can still walk a valid derivation.",
+  "not_a_style_guide": "An archetype is a skeleton, never an appearance. It fixes where the eye enters, how the measure is divided and what breaks the frame; it says nothing about colour, radius or type, which the bands already own. Two pages built from the same derivation with different bands look nothing alike \u2014 which is the point. This file removes the choice of STRUCTURE only.",
+
+  "archetypes": {
+    "hero-split": {
+      "role": "open",
+      "structure": "Asymmetric two-column: copy in the narrower column, a single large visual in the wider one. The visual bleeds off one edge.",
+      "grid": "5fr 7fr",
+      "entry": "left",
+      "bleeds": true,
+      "density": "low"
+    },
+    "hero-full-bleed": {
+      "role": "open",
+      "structure": "One edge-to-edge image or canvas with the headline set over it. Nothing else above the fold.",
+      "grid": "1fr",
+      "entry": "center",
+      "bleeds": true,
+      "density": "low"
+    },
+    "hero-editorial": {
+      "role": "open",
+      "structure": "Type-led opening: an oversized headline on a plain field, the supporting line hanging beneath it, the visual deferred to the next section entirely.",
+      "grid": "1fr",
+      "entry": "left",
+      "bleeds": false,
+      "density": "low"
+    },
+    "feature-triptych": {
+      "role": "establish",
+      "structure": "Three equal columns, each an icon or number with a short block beneath. The most conventional archetype here, and the reason the invariants cap how often it may appear.",
+      "grid": "repeat(3, 1fr)",
+      "entry": "center",
+      "bleeds": false,
+      "density": "medium"
+    },
+    "editorial-offset": {
+      "role": "establish",
+      "structure": "Single column held to a reading measure and offset from centre, with the heading in the empty margin beside it rather than above it.",
+      "grid": "1fr",
+      "entry": "left",
+      "bleeds": false,
+      "density": "medium"
+    },
+    "stat-band": {
+      "role": "establish",
+      "structure": "A horizontal band of three or four numbers at display scale, on a contrasting field, with no supporting copy beyond a caption each.",
+      "grid": "repeat(auto-fit, minmax(0, 1fr))",
+      "entry": "left",
+      "bleeds": true,
+      "density": "low"
+    },
+    "overlap-cards": {
+      "role": "turn",
+      "structure": "Cards on a staggered baseline that overlap the section edge or each other, so the grid is visibly broken rather than filled.",
+      "grid": "repeat(2, 1fr)",
+      "entry": "left",
+      "bleeds": true,
+      "density": "high"
+    },
+    "marquee": {
+      "role": "turn",
+      "structure": "A single line of oversized type or logos running past both edges of the viewport, read as texture rather than as content.",
+      "grid": "1fr",
+      "entry": "left",
+      "bleeds": true,
+      "density": "low"
+    },
+    "full-bleed-media": {
+      "role": "turn",
+      "structure": "One edge-to-edge visual with no container and no heading, used as a breath between two dense sections.",
+      "grid": "1fr",
+      "entry": "center",
+      "bleeds": true,
+      "density": "low"
+    },
+    "demo-sticky-scroll": {
+      "role": "prove",
+      "structure": "A pinned visual on one side while the copy beside it advances through steps. The visual changes with the step.",
+      "grid": "6fr 6fr",
+      "entry": "right",
+      "bleeds": false,
+      "density": "high"
+    },
+    "testimonial-mosaic": {
+      "role": "prove",
+      "structure": "Quotes at deliberately unequal sizes in an irregular mosaic, never a row of equal cards.",
+      "grid": "masonry",
+      "entry": "left",
+      "bleeds": false,
+      "density": "high"
+    },
+    "data-grid": {
+      "role": "prove",
+      "structure": "A dense comparison table or spec grid, the densest thing on the page, placed where density is the argument.",
+      "grid": "table",
+      "entry": "left",
+      "bleeds": false,
+      "density": "high"
+    },
+    "cta-split": {
+      "role": "resolve",
+      "structure": "Two columns: the ask on one side, a single reason to act on the other. Not centred.",
+      "grid": "7fr 5fr",
+      "entry": "left",
+      "bleeds": false,
+      "density": "low"
+    },
+    "centered-statement": {
+      "role": "resolve",
+      "structure": "One centred line at display scale with a single action beneath it. The most-reached-for shape on the web, which is why the invariants limit it rather than ban it \u2014 used once, at the end, it resolves; used everywhere, it IS the generic page.",
+      "grid": "1fr",
+      "entry": "center",
+      "bleeds": false,
+      "density": "low"
+    }
+  },
+
+  "grammars": {
+    "landing": {
+      "description": "A marketing page with something to sell. The arc is deliberately musical: state, establish, break, prove, resolve. The \`turn\` movement is the one a generated page always omits, and its absence is what makes such a page feel like a list rather than an argument.",
+      "movements": [
+        { "role": "open", "count": 1 },
+        { "role": "establish", "count": [1, 2] },
+        { "role": "turn", "count": 1 },
+        { "role": "prove", "count": [1, 2] },
+        { "role": "resolve", "count": 1 }
+      ]
+    },
+    "product": {
+      "description": "A page for something the reader already knows they want. Opens flatter, proves harder, turns late.",
+      "movements": [
+        { "role": "open", "count": 1 },
+        { "role": "prove", "count": [1, 2] },
+        { "role": "establish", "count": [1, 2] },
+        { "role": "turn", "count": [0, 1] },
+        { "role": "resolve", "count": 1 }
+      ]
+    },
+    "editorial": {
+      "description": "Long-form, where the argument is the content. Almost no turn, and the resolve is quiet.",
+      "movements": [
+        { "role": "open", "count": 1 },
+        { "role": "establish", "count": [2, 4] },
+        { "role": "turn", "count": [0, 1] },
+        { "role": "resolve", "count": 1 }
+      ]
+    }
+  },
+
+  "invariants": {
+    "no_adjacent_repeat": {
+      "rule": "No two consecutive sections may use the same archetype.",
+      "why": "Repetition between neighbours is what reads as a template. It is also the single cheapest thing to do, which is why it is stated as a rule rather than left to taste."
+    },
+    "max_centered_statement": {
+      "rule": "At most 2 sections may use \`centered-statement\`.",
+      "value": 2,
+      "why": "One centred statement resolves a page. Every section centred is the signature of a page nobody composed."
+    },
+    "min_distinct_archetypes": {
+      "rule": "A page must use at least 4 distinct archetypes.",
+      "value": 4,
+      "why": "Below four, the page has a pattern rather than a shape, however many sections it has."
+    },
+    "min_bleeding_sections": {
+      "rule": "At least 1 section must have \`bleeds: true\`.",
+      "value": 1,
+      "why": "A page where nothing ever leaves the container never varies its own frame, and reads as a document rather than a designed page."
+    },
+    "max_consecutive_same_density": {
+      "rule": "At most 2 consecutive sections may share the same density.",
+      "value": 2,
+      "why": "Density is tempo. Three dense sections in a row exhausts the reader; three sparse ones in a row reads as padding. Alternation is most of what makes a page feel paced."
+    },
+    "max_consecutive_centered_entry": {
+      "rule": "At most 2 consecutive sections may use \`entry: center\`.",
+      "value": 2,
+      "why": "Where the eye enters is the axis a generated page never varies \u2014 every heading centred, forever. Note this constrains centre only, not \`left\`: a run of left-entering sections is the reading direction doing its job, and forcing alternation there would push content to the right for no reason, which is a different kind of arbitrary. The failure being prevented is specifically the centred stack."
+    },
+    "max_centered_entry_ratio": {
+      "rule": "At most half the sections may use \`entry: center\`.",
+      "value": 0.5,
+      "why": "The run limit alone is satisfied by alternating centre and left forever, which still reads as centred. This bounds the page globally: if most sections enter from the middle, the page has one axis however the runs are arranged."
+    }
+  }
+}
+`
+      },
+      {
+        sourcePath: "D:/conductor/src/internal/templates/data/config/gates/design-render-gate.mjs",
+        category: "config",
+        subpath: "gates",
+        ext: ".mjs",
+        content: `#!/usr/bin/env node
+// Render gate. The only gate in this framework that looks at the page.
+//
+// Everything else here reads a declaration: DESIGN.md, or the source that is
+// supposed to use it. Both are one compilation step away from what ships, and
+// the gap is not academic \u2014 a design system can declare \`expressive\` type,
+// \`airy\` rhythm and \`soft\` shape, and render 2.0x, 64px and 6px, while every
+// declaration check passes. Utility classes carry no literal for the token scan
+// to find, and no declaration check has a notion of breakpoint.
+//
+// This gate takes its measurements from the rendered page, at each configured
+// viewport, and judges those. It also counts the composition metrics that the
+// band architecture explicitly does not cover, and can write screenshots \u2014 the
+// only artefact in the framework that lets a later step review the page rather
+// than the markup.
+//
+// Playwright is NOT installed on the user's behalf, per config.gates.absent_policy:
+// choosing a browser automation stack is the project's decision. When it is not
+// resolvable this gate exits 2 (it cannot run) and setup registers it as absent
+// (cmd null) rather than registering a command that will never work.
+//
+// Exit codes: 0 pass, 1 design violation, 2 harness failure.
+//
+// Usage:
+//   node conductor/gates/design-render-gate.mjs --url <url> [--viewport <px>]...
+//        [--bands <json>] [--composition <json>] [--baseline <json>]
+//        [--page <name>] [--pages <composition.json>] [--grammar <json>]
+//        [--screenshots <dir>] [--update-baseline] [--verbose]
+
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { pathToFileURL } from 'node:url';
+import { fail } from './design-cli.mjs';
+import { judgeAxis, judgeComposition, judgeDerivationRender, round } from './design-render-judge.mjs';
+
+// Mobile-first projects declare 375px primary; 1440 is where composition is
+// actually decided. Both are measured because the failure this gate exists for
+// is precisely a system that differs between them.
+const DEFAULT_VIEWPORTS = [375, 1440];
+
+function parseArgs(argv) {
+  const opts = {
+    url: null,
+    viewports: [],
+    bands: 'conductor/gates/design-bands.json',
+    composition: 'conductor/gates/composition-bands.json',
+    baseline: 'conductor/gates/composition-baseline.json',
+    grammar: 'conductor/gates/design-grammar.json',
+    motion: 'conductor/gates/motion-bands.json',
+    pages: 'conductor/design/composition.json',
+    page: null,
+    screenshots: null,
+    updateBaseline: false,
+    verbose: false,
+  };
+  for (let i = 0; i < argv.length; i += 1) {
+    const arg = argv[i];
+    if (arg === '--url') opts.url = argv[++i];
+    else if (arg === '--viewport') opts.viewports.push(Number(argv[++i]));
+    else if (arg === '--bands') opts.bands = argv[++i];
+    else if (arg === '--composition') opts.composition = argv[++i];
+    else if (arg === '--baseline') opts.baseline = argv[++i];
+    else if (arg === '--grammar') opts.grammar = argv[++i];
+    else if (arg === '--motion') opts.motion = argv[++i];
+    else if (arg === '--pages') opts.pages = argv[++i];
+    else if (arg === '--page') opts.page = argv[++i];
+    else if (arg === '--screenshots') opts.screenshots = argv[++i];
+    else if (arg === '--update-baseline') opts.updateBaseline = true;
+    else if (arg === '--verbose') opts.verbose = true;
+  }
+  if (opts.viewports.length === 0) opts.viewports = [...DEFAULT_VIEWPORTS];
+  if (opts.viewports.some((v) => !Number.isFinite(v) || v <= 0)) {
+    fail(2, 'every --viewport must be a positive number of pixels');
+  }
+  if (!opts.url) {
+    fail(2, 'no --url given. This gate needs a running page: point it at the dev server or a preview of the built site.');
+  }
+  return opts;
+}
+
+/**
+ * Resolves Playwright from the PROJECT, never from this framework.
+ *
+ * Conductor does not install tooling on the user's behalf, so the honest
+ * outcome when it is missing is exit 2 \u2014 the gate could not run \u2014 and a
+ * manifest entry of null. What must never happen is exit 0, which would report
+ * an unexamined page as a checked one.
+ */
+async function loadPlaywright() {
+  const candidates = [
+    'playwright',
+    join(process.cwd(), 'node_modules', 'playwright', 'index.js'),
+    join(process.cwd(), 'node_modules', 'playwright-core', 'index.js'),
+  ];
+  for (const candidate of candidates) {
+    try {
+      const specifier = candidate.includes('node_modules') ? pathToFileURL(candidate).href : candidate;
+      const mod = await import(specifier);
+      if (mod?.chromium) return mod;
+    } catch {
+      // Try the next candidate; the aggregate failure is reported below.
+    }
+  }
+  fail(
+    2,
+    'Playwright is not resolvable from this project, so the page was never rendered and nothing was checked.\\n' +
+    'Install it in the project (\`npm i -D playwright && npx playwright install chromium\`), ' +
+    'or declare the design_render gate absent in the gate manifest \u2014 an absent gate is an unverified check, ' +
+    'which is honest; a passing one here would not be.',
+  );
+}
+
+/**
+ * Runs in the page. Returns raw measurements only \u2014 every judgement happens in
+ * design-render-judge.mjs, so what the gate decides stays readable without a
+ * browser in the loop.
+ */
+/* c8 ignore start \u2014 executes in the browser context, not under node */
+function collectInPage() {
+  const px = (v) => {
+    const n = parseFloat(v);
+    return Number.isFinite(n) ? n : 0;
+  };
+  const visible = (el) => {
+    const r = el.getBoundingClientRect();
+    return r.width > 0 && r.height > 0;
+  };
+
+  // A "section" is what the page itself calls one. Falling back to top-level
+  // children of main/body keeps this working for pages that never use the tag.
+  let sections = [...document.querySelectorAll('section')].filter(visible);
+  if (sections.length < 2) {
+    const root = document.querySelector('main') ?? document.body;
+    sections = [...root.children].filter((el) => el instanceof HTMLElement && visible(el));
+  }
+
+  const body = getComputedStyle(document.body);
+  const bodyFontSize = px(body.fontSize) || 16;
+  const pageWidth = document.documentElement.clientWidth;
+
+  // --- Style axes, as rendered ---------------------------------------------
+  const sectionPaddings = sections
+    .map((el) => px(getComputedStyle(el).paddingTop))
+    .filter((v) => v > 0)
+    .sort((a, b) => a - b);
+  const median = (arr) => (arr.length === 0 ? null : arr[Math.floor(arr.length / 2)]);
+
+  let displaySize = 0;
+  for (const el of document.querySelectorAll('h1, h2, [class*="display"], [class*="headline"]')) {
+    if (!visible(el)) continue;
+    displaySize = Math.max(displaySize, px(getComputedStyle(el).fontSize));
+  }
+
+  // The shape anchor is the SMALLEST non-zero radius in use, matching
+  // \`rounded.sm\` in the band table. Pills (9999px) are excluded: every band
+  // declares one, so it distinguishes nothing.
+  let smallestRadius = null;
+  let shadowCount = 0;
+  for (const el of document.querySelectorAll('*')) {
+    if (!(el instanceof HTMLElement) || !visible(el)) continue;
+    const style = getComputedStyle(el);
+    const radius = px(style.borderTopLeftRadius);
+    if (radius > 0 && radius < 500 && (smallestRadius === null || radius < smallestRadius)) {
+      smallestRadius = radius;
+    }
+    const shadow = style.boxShadow;
+    if (shadow && shadow !== 'none') shadowCount += 1;
+  }
+
+  // --- Composition ----------------------------------------------------------
+  const headings = sections
+    .map((el) => el.querySelector('h1, h2, h3'))
+    .filter((el) => el && visible(el));
+
+  const centred = headings.filter((el) => {
+    const style = getComputedStyle(el);
+    if (style.textAlign === 'center') return true;
+    // Also count a block centred by auto margins inside its container.
+    const rect = el.getBoundingClientRect();
+    const parent = el.parentElement?.getBoundingClientRect();
+    if (!parent || parent.width === 0) return false;
+    const leftGap = rect.left - parent.left;
+    const rightGap = parent.right - rect.right;
+    return Math.abs(leftGap - rightGap) < 2 && leftGap > 1;
+  }).length;
+
+  const widths = new Set();
+  for (const el of sections) {
+    const inner = el.firstElementChild;
+    if (!(inner instanceof HTMLElement) || !visible(inner)) continue;
+    widths.add(Math.round(inner.getBoundingClientRect().width));
+  }
+
+  const heights = sections.map((el) => el.getBoundingClientRect().height).filter((h) => h > 0);
+  const mean = heights.reduce((a, b) => a + b, 0) / (heights.length || 1);
+  const variance = heights.reduce((a, h) => a + (h - mean) ** 2, 0) / (heights.length || 1);
+  const cv = mean > 0 ? Math.sqrt(variance) / mean : 0;
+
+  const headingSizes = new Set(headings.map((el) => Math.round(px(getComputedStyle(el).fontSize))));
+
+  // Per-section shape, for checking the declared derivation against what the
+  // page actually built. Declaring \`hero-split\` and rendering another centred
+  // stack is the obvious way to satisfy the grammar gate without composing
+  // anything, and it is invisible to every check that reads only the manifest.
+  const perSection = sections.map((el) => {
+    const heading = el.querySelector('h1, h2, h3');
+    const rect = el.getBoundingClientRect();
+    let entry = 'left';
+    if (heading && visible(heading)) {
+      const style = getComputedStyle(heading);
+      const hRect = heading.getBoundingClientRect();
+      if (style.textAlign === 'center') entry = 'center';
+      else if (style.textAlign === 'right') entry = 'right';
+      else {
+        const leftGap = hRect.left - rect.left;
+        const rightGap = rect.right - hRect.right;
+        if (leftGap > 1 && Math.abs(leftGap - rightGap) < 2) entry = 'center';
+        else if (rightGap < leftGap * 0.5) entry = 'right';
+      }
+    }
+
+    let bleeds = false;
+    for (const child of el.querySelectorAll('*')) {
+      if (!(child instanceof HTMLElement) || !visible(child)) continue;
+      const cRect = child.getBoundingClientRect();
+      if (cRect.width >= pageWidth - 1 && cRect.width > rect.width * 0.98 && el.clientWidth < pageWidth) {
+        bleeds = true;
+        break;
+      }
+      if (cRect.left < rect.left - 1 || cRect.right > rect.right + 1) {
+        bleeds = true;
+        break;
+      }
+    }
+    if (Math.round(rect.width) >= pageWidth - 1 && getComputedStyle(el).paddingLeft === '0px') bleeds = true;
+
+    return { entry, bleeds };
+  });
+
+  // Elements that leave their container's measure: full-bleed strips, pulled
+  // quotes, overlapping cards. Counted at the section level to avoid rewarding
+  // a page for every decorative absolute child.
+  let gridBreaking = 0;
+  for (const el of sections) {
+    for (const child of el.querySelectorAll(':scope > *, :scope > * > *')) {
+      if (!(child instanceof HTMLElement) || !visible(child)) continue;
+      const rect = child.getBoundingClientRect();
+      const parent = child.parentElement?.getBoundingClientRect();
+      if (!parent) continue;
+      const bleeds = rect.width > parent.width + 2 || rect.width >= pageWidth - 1;
+      const offset = Math.abs((rect.left - parent.left) - (parent.right - rect.right)) > parent.width * 0.25;
+      if (bleeds || offset) {
+        gridBreaking += 1;
+        break;
+      }
+    }
+  }
+
+  return {
+    sections: sections.length,
+    perSection,
+    axes: {
+      rhythm: median(sectionPaddings),
+      type_contrast: displaySize > 0 ? displaySize : null,
+      shape: smallestRadius,
+    },
+    shadows: shadowCount,
+    bodyFontSize,
+    composition: {
+      centered_section_ratio: headings.length > 0 ? centred / headings.length : null,
+      distinct_container_widths: widths.size,
+      section_height_variation: cv,
+      distinct_heading_sizes: headingSizes.size,
+      grid_breaking_elements: gridBreaking,
+    },
+  };
+}
+/* c8 ignore stop */
+
+/**
+ * Motion invariants that only a browser can settle.
+ *
+ * Each is a separate page load because each asks a different question, and all
+ * three are questions about a state that exists for a few hundred milliseconds
+ * or only under a setting nobody tests by hand:
+ *
+ *   1. With JavaScript disabled, is the content there? If the hidden state was
+ *      authored into the stylesheet, this is where the page turns out to be
+ *      blank without a script \u2014 the failure mode progressive enhancement exists
+ *      to prevent.
+ *   2. Immediately after the document is parsed, is anything in the first
+ *      viewport already invisible? That is the flash: an entrance animation on
+ *      content that was never off screen, which has nothing to enter from.
+ *   3. Under \`prefers-reduced-motion: reduce\`, is the content still visible?
+ *      The common mistake is to disable the transition and keep the hidden
+ *      state, which turns a request for less movement into less content.
+ */
+async function checkMotion(browser, url, spec) {
+  const blocking = [];
+  const advisory = [];
+  const inv = spec?.invariants ?? {};
+
+  // Counts elements in the first viewport that are effectively invisible.
+  const hiddenAboveFold = () => {
+    const out = [];
+    const h = window.innerHeight;
+    for (const el of document.querySelectorAll('section, header, h1, h2, p, img, a, button')) {
+      if (!(el instanceof HTMLElement)) continue;
+      const rect = el.getBoundingClientRect();
+      if (rect.top >= h || rect.bottom <= 0 || rect.width === 0) continue;
+      const style = getComputedStyle(el);
+      const faded = parseFloat(style.opacity) < 0.05;
+      const shifted = style.transform !== 'none' && /matrix.*?,\\s*(-?\\d+(\\.\\d+)?)\\)$/.test(style.transform);
+      if (faded || style.visibility === 'hidden') {
+        out.push((el.id ? '#' + el.id : el.tagName.toLowerCase()) + (faded ? ' (opacity ' + style.opacity + ')' : ' (visibility hidden)'));
+      }
+      void shifted;
+    }
+    return out.slice(0, 8);
+  };
+
+  const load = async (contextOptions, waitUntil) => {
+    const context = await browser.newContext({ viewport: { width: 1440, height: 900 }, ...contextOptions });
+    const page = await context.newPage();
+    try {
+      await page.goto(url, { waitUntil, timeout: 30000 });
+      return { hidden: await page.evaluate(hiddenAboveFold), context };
+    } catch (err) {
+      await context.close();
+      throw err;
+    }
+  };
+
+  const runs = [
+    {
+      key: 'progressive_enhancement',
+      options: { javaScriptEnabled: false },
+      waitUntil: 'domcontentloaded',
+      label: 'with JavaScript disabled',
+      detail: 'the hidden state is authored in the markup or stylesheet, so without a script the content never appears',
+    },
+    {
+      key: 'nothing_above_the_fold_starts_hidden',
+      options: {},
+      waitUntil: 'domcontentloaded',
+      label: 'immediately after the document was parsed',
+      detail: 'content already in the first viewport was given an entrance animation, so the first thing the user sees is an empty page',
+    },
+    {
+      key: 'reduced_motion_keeps_content',
+      options: { reducedMotion: 'reduce' },
+      waitUntil: 'networkidle',
+      label: 'under prefers-reduced-motion: reduce',
+      detail: 'reduced motion disabled the transition but left the hidden state, so the setting hides content instead of calming it',
+    },
+  ];
+
+  for (const run of runs) {
+    const rule = inv[run.key];
+    if (!rule) continue;
+    let result;
+    try {
+      result = await load(run.options, run.waitUntil);
+    } catch (err) {
+      advisory.push('motion: could not load the page ' + run.label + ' (' + err.message + ')');
+      continue;
+    }
+    await result.context.close();
+    if (result.hidden.length === 0) continue;
+
+    const line = 'motion: ' + result.hidden.length + ' element(s) invisible above the fold ' + run.label +
+      ' (' + result.hidden.join(', ') + ') \u2014 ' + run.detail;
+    if (rule.severity === 'warn') advisory.push(line);
+    else blocking.push(line);
+  }
+
+  return { blocking, advisory };
+}
+
+function readJson(path, what) {
+  if (!existsSync(path)) return null;
+  try {
+    return JSON.parse(readFileSync(path, 'utf-8'));
+  } catch (err) {
+    fail(2, what + ' at ' + path + ' is unreadable (' + err.message + ')');
+  }
+}
+
+async function main() {
+  const opts = parseArgs(process.argv.slice(2));
+  const bandSpec = readJson(opts.bands, 'band definitions');
+  const compositionSpec = readJson(opts.composition, 'composition bands');
+  const baselineFile = readJson(opts.baseline, 'composition baseline');
+  const baseline = baselineFile?.metrics ?? null;
+
+  const { chromium } = await loadPlaywright();
+  let browser;
+  try {
+    browser = await chromium.launch();
+  } catch (err) {
+    fail(2, 'could not launch Chromium (' + err.message + '). Run \`npx playwright install chromium\`.');
+  }
+
+  const measurements = [];
+  try {
+    for (const width of [...opts.viewports].sort((a, b) => a - b)) {
+      const page = await browser.newPage({ viewport: { width, height: 900 } });
+      try {
+        const response = await page.goto(opts.url, { waitUntil: 'networkidle', timeout: 30000 });
+        if (response && !response.ok()) {
+          fail(2, opts.url + ' responded ' + response.status() + ' at ' + width + 'px \u2014 nothing was measured.');
+        }
+      } catch (err) {
+        fail(2, 'could not load ' + opts.url + ' at ' + width + 'px (' + err.message + '). Is the dev server running?');
+      }
+      const data = await page.evaluate(collectInPage);
+      measurements.push({ viewport: width, ...data });
+
+      if (opts.screenshots) {
+        mkdirSync(opts.screenshots, { recursive: true });
+        await page.screenshot({
+          path: join(opts.screenshots, 'viewport-' + width + '.png'),
+          fullPage: true,
+        });
+      }
+      await page.close();
+    }
+  } finally {
+    await browser.close();
+  }
+
+  const blocking = [];
+  const advisory = [];
+
+  // --- Motion, in its own page loads ----------------------------------------
+  const motionSpec = readJson(opts.motion, 'motion bands');
+  if (motionSpec) {
+    let motionBrowser;
+    try {
+      motionBrowser = await chromium.launch();
+      const verdict = await checkMotion(motionBrowser, opts.url, motionSpec);
+      blocking.push(...verdict.blocking);
+      advisory.push(...verdict.advisory);
+    } catch (err) {
+      advisory.push('motion checks did not run (' + err.message + ')');
+    } finally {
+      if (motionBrowser) await motionBrowser.close();
+    }
+  }
+
+  // --- Style axes, per viewport ---------------------------------------------
+  for (const [axis, def] of Object.entries(bandSpec?.axes ?? {})) {
+    const samples = measurements.map((m) => ({ viewport: m.viewport, value: m.axes[axis] ?? null }));
+    const verdict = judgeAxis(axis, def.bands, samples);
+    blocking.push(...verdict.blocking);
+    advisory.push(...verdict.advisory);
+  }
+
+  // Depth is categorical, so it is judged against the selected band rather than
+  // an anchor \u2014 the same rule the token gate applies to the source.
+  const depth = bandSpec?.depth;
+  if (depth?.selected) {
+    const limit = depth.bands?.[depth.selected];
+    for (const m of measurements) {
+      if (typeof limit === 'number' && m.shadows > limit) {
+        blocking.push(
+          'depth at ' + m.viewport + 'px renders ' + m.shadows + ' shadowed element(s); band \`' +
+          depth.selected + '\` tolerates ' + limit,
+        );
+      }
+    }
+  } else {
+    advisory.push('depth: no band selected in ' + opts.bands + ', so the axis was not checked');
+  }
+
+  // --- Declared derivation vs what was built --------------------------------
+  const widest = measurements[measurements.length - 1];
+  if (opts.page && widest) {
+    const grammarSpec = readJson(opts.grammar, 'grammar definitions');
+    const declared = readJson(opts.pages, 'page compositions');
+    const pages = declared?.pages ?? declared ?? {};
+    const page = pages[opts.page];
+    if (!page) {
+      fail(2, 'no page named ' + JSON.stringify(opts.page) + ' in ' + opts.pages + ', so the declared composition could not be checked.');
+    }
+    const verdict = judgeDerivationRender(widest.perSection ?? [], page.sections ?? [], grammarSpec?.archetypes);
+    blocking.push(...verdict.blocking);
+    advisory.push(...verdict.advisory);
+  }
+
+  // --- Composition, at the widest viewport ----------------------------------
+  const metrics = widest?.composition ?? {};
+  if (opts.updateBaseline) {
+    const body = {
+      description:
+        'Composition metrics recorded when the render gate was adopted. The gate demands no worse ' +
+        'than these; the numbers may only move toward the declared floors.',
+      recordedAt: new Date().toISOString(),
+      viewport: widest?.viewport ?? null,
+      metrics,
+    };
+    mkdirSync(dirname(opts.baseline), { recursive: true });
+    writeFileSync(opts.baseline, JSON.stringify(body, null, 2) + '\\n', 'utf-8');
+    process.stdout.write('design-render: composition baseline recorded at ' + widest?.viewport + 'px\\n');
+    process.exit(0);
+  }
+
+  const composition = judgeComposition(metrics, compositionSpec, baseline);
+  blocking.push(...composition.blocking);
+  advisory.push(...composition.advisory);
+
+  // --- Report ---------------------------------------------------------------
+  for (const m of measurements) {
+    const line = m.viewport + 'px: ' + m.sections + ' sections, rhythm ' + m.axes.rhythm +
+      ', display ' + m.axes.type_contrast + ', radius ' + m.axes.shape + ', shadows ' + m.shadows;
+    if (opts.verbose || blocking.length > 0) process.stderr.write('  ' + line + '\\n');
+  }
+  if (opts.verbose || blocking.length > 0) {
+    process.stderr.write('  composition@' + widest?.viewport + 'px: ' +
+      Object.entries(metrics).map(([k, v]) => k + ' ' + round(v ?? 0)).join(', ') + '\\n');
+  }
+
+  if (blocking.length > 0) {
+    process.stderr.write('\\nRender gate FAILED (' + blocking.length + ' blocking):\\n');
+    for (const line of blocking) process.stderr.write('  x ' + line + '\\n');
+    if (advisory.length > 0) {
+      process.stderr.write('\\nAlso reported (non-blocking):\\n');
+      for (const line of advisory) process.stderr.write('  - ' + line + '\\n');
+    }
+    process.stderr.write(
+      '\\nThese are measurements of the rendered page, not of the design system. Fix them in the ' +
+      'components and the stylesheet \u2014 editing DESIGN.md or the band files to match what rendered ' +
+      'is the move every design gate here exists to catch.\\n',
+    );
+    if (opts.screenshots) {
+      process.stderr.write('Screenshots for this run: ' + opts.screenshots + '\\n');
+    }
+    process.stdout.write('design-render: FAIL (' + blocking.length + ' blocking, ' + advisory.length + ' advisory)\\n');
+    process.exit(1);
+  }
+
+  if (advisory.length > 0 && opts.verbose) {
+    process.stderr.write('\\nRender gate passed with notes:\\n');
+    for (const line of advisory) process.stderr.write('  - ' + line + '\\n');
+  }
+  // Said on the way out, every time, because this is the gate whose green most
+  // looks like a verdict on the page. It is a verdict on the absence of the
+  // defects named above: structure, cadence, integrity. Art direction and the
+  // assets are the larger share of visual quality and nothing here measured them.
+  process.stderr.write(
+    '\\nPassing means the measured defects are absent \u2014 bands, derivation, motion safety, composition ' +
+    'floors. It is not a judgement that the page looks good: art direction and original assets are ' +
+    'outside what any gate can settle, and a page can pass all of this and still be forgettable.\\n',
+  );
+  process.stdout.write(
+    'design-render: PASS (' + measurements.length + ' viewports, ' + advisory.length + ' advisory)\\n',
+  );
+  process.exit(0);
+}
+
+main().catch((err) => fail(2, 'render gate crashed: ' + (err?.stack ?? err)));
+`
+      },
+      {
+        sourcePath: "D:/conductor/src/internal/templates/data/config/gates/design-render-judge.mjs",
+        category: "config",
+        subpath: "gates",
+        ext: ".mjs",
+        content: `// Judgement half of the render gate, kept free of any browser so it can be
+// tested and reasoned about on its own.
+//
+// The other design gates read what the project DECLARED: design-gate.mjs proves
+// DESIGN.md is internally sound, design-tokens-gate.mjs proves the source
+// contains no literal outside the token set. Both are blind in the same
+// direction, and it is the direction that decides what the user sees:
+//
+//   - A utility class carries no literal. \`rounded-md\`, \`text-3xl\` and \`gap-8\`
+//     contain no digit and no unit, so a Tailwind/UnoCSS/Panda interface passes
+//     the token scan while rendering whatever the framework's default scale
+//     says \u2014 which is the average of the web, the exact thing the bands exist
+//     to avoid. The same hole swallows CSS custom properties and any component
+//     library with semantic props (\`<Button radius="md">\`).
+//   - Bands are checked once, against the document. A system may declare
+//     \`expressive\` type and \`airy\` rhythm, then collapse to 2.0x and a 64px
+//     section gap under a media query \u2014 landing on the mean answer in the very
+//     viewport a mobile-first project calls primary \u2014 and every declaration
+//     check still passes, because nothing here has a notion of breakpoint.
+//
+// So this file judges measurements taken from the rendered page, per viewport.
+// A value that survives compilation and the cascade is the value the user gets,
+// whatever name produced it.
+
+/** Bands are exact anchors, never nearest-match: see design-bands.json. */
+export function bandOf(value, bands) {
+  const hit = Object.entries(bands).find(([, v]) => v === value);
+  return hit ? hit[0] : null;
+}
+
+/**
+ * Judges one axis across every viewport.
+ *
+ * Two distinct failures, deliberately kept apart in the message because they
+ * have different fixes: a value that is in no band at all (the axis was
+ * averaged), and values that are each in a band but not the SAME band (the
+ * system silently changes identity at a breakpoint, which no token can express
+ * and no reviewer reads a stylesheet closely enough to catch).
+ */
+export function judgeAxis(axis, bands, samples) {
+  const blocking = [];
+  const advisory = [];
+  const options = Object.entries(bands).map(([n, v]) => n + ' ' + v).join(', ');
+
+  const measured = samples.filter((s) => typeof s.value === 'number' && Number.isFinite(s.value));
+  if (measured.length === 0) {
+    advisory.push(axis + ': nothing measurable in any viewport, so the axis was not checked');
+    return { blocking, advisory };
+  }
+
+  const landed = new Map();
+  for (const sample of measured) {
+    const band = bandOf(sample.value, bands);
+    if (band === null) {
+      blocking.push(
+        axis + ' at ' + sample.viewport + 'px is ' + sample.value + ', which is no band. Expected one of ' +
+        options + ' \u2014 a value between bands is the averaged answer this axis exists to prevent',
+      );
+      continue;
+    }
+    if (!landed.has(band)) landed.set(band, []);
+    landed.get(band).push(sample.viewport);
+  }
+
+  if (landed.size > 1) {
+    const spread = [...landed.entries()]
+      .map(([band, viewports]) => band + ' at ' + viewports.join('/') + 'px')
+      .join(', ');
+    blocking.push(
+      axis + ' changes band across viewports: ' + spread +
+      '. The design system declares one band per axis; a breakpoint that moves it means the declared identity is not what renders',
+    );
+  }
+
+  return { blocking, advisory };
+}
+
+/**
+ * Composition metrics, which the band architecture never reached.
+ *
+ * design-scales.md is explicit that its bands "constrain style, not
+ * composition", and hands hierarchy, density and grid tension to the prose of
+ * DESIGN.md. The same document opens by stating why prose cannot carry it:
+ * "Prose does not move it; the model regresses to the mean on the next token.
+ * What does move it is removing the choice." So the axis that decides whether a
+ * page looks designed was left to the one instrument the framework itself
+ * classifies as inoperative \u2014 and seven identical centred sections pass every
+ * gate that exists.
+ *
+ * These are counted on the rendered DOM, which is what makes them gateable at
+ * all. They are intentionally crude: each one is a floor against sameness, not
+ * a definition of good composition. A page can clear all of them and still be
+ * poor; a page that fails them is uniform in a way no design intends.
+ */
+export function judgeComposition(metrics, spec, baseline) {
+  const blocking = [];
+  const advisory = [];
+  if (!spec || typeof spec !== 'object') return { blocking, advisory };
+
+  for (const [name, rule] of Object.entries(spec.metrics ?? {})) {
+    const value = metrics[name];
+    if (typeof value !== 'number' || !Number.isFinite(value)) {
+      advisory.push('composition.' + name + ': not measurable on this page');
+      continue;
+    }
+
+    const prior = baseline?.[name];
+    let violated = false;
+    let expectation = '';
+
+    if (typeof rule.max === 'number') {
+      // Ratcheted: a page already above the ceiling is held where it is rather
+      // than blocked, matching every other ratchet in the framework.
+      const limit = typeof prior === 'number' ? Math.max(rule.max, prior) : rule.max;
+      violated = value > limit;
+      expectation = 'at most ' + rule.max + (limit !== rule.max ? ' (held at ' + limit + ' by the baseline)' : '');
+    } else if (typeof rule.min === 'number') {
+      const limit = typeof prior === 'number' ? Math.min(rule.min, prior) : rule.min;
+      violated = value < limit;
+      expectation = 'at least ' + rule.min + (limit !== rule.min ? ' (held at ' + limit + ' by the baseline)' : '');
+    } else {
+      continue;
+    }
+
+    const line = 'composition.' + name + ' is ' + round(value) + ', expected ' + expectation +
+      (rule.why ? ' \u2014 ' + rule.why : '');
+    if (violated) {
+      if (rule.severity === 'warn') advisory.push(line);
+      else blocking.push(line);
+    }
+  }
+
+  return { blocking, advisory };
+}
+
+export function round(n) {
+  return Math.round(n * 100) / 100;
+}
+
+/**
+ * Confirms the page BUILT the composition it declared.
+ *
+ * The grammar gate reads a list of archetype names and can only trust it. That
+ * makes declaring \`hero-split\` and then rendering one more centred stack the
+ * obvious way to satisfy it without composing anything \u2014 and it is invisible to
+ * every check that reads the manifest rather than the page. This closes that
+ * loop with the two properties the archetypes actually promise and a browser can
+ * actually measure: where the eye enters, and whether anything leaves the frame.
+ *
+ * Grid shape is deliberately NOT checked. \`5fr 7fr\` can be honoured by flex, by
+ * grid, by a max-width and a margin, or by a layout that reads identically and
+ * shares none of those; asserting the mechanism would reject correct pages and
+ * teach people to write the markup the gate recognises rather than the markup
+ * the page needs.
+ */
+export function judgeDerivationRender(perSection, declaredSections, archetypes) {
+  const blocking = [];
+  const advisory = [];
+  if (!Array.isArray(declaredSections) || declaredSections.length === 0) return { blocking, advisory };
+
+  if (perSection.length !== declaredSections.length) {
+    advisory.push(
+      'the page declares ' + declaredSections.length + ' sections and renders ' + perSection.length +
+      ', so the declared composition could not be matched section by section',
+    );
+    return { blocking, advisory };
+  }
+
+  for (let i = 0; i < declaredSections.length; i += 1) {
+    const name = declaredSections[i];
+    const spec = archetypes?.[name];
+    if (!spec) continue;
+    const actual = perSection[i];
+
+    if (spec.entry && actual.entry !== spec.entry) {
+      blocking.push(
+        'section ' + (i + 1) + ' declares \`' + name + '\` (enters from the ' + spec.entry +
+        ') but renders entering from the ' + actual.entry +
+        (actual.entry === 'center'
+          ? ' \u2014 declaring an asymmetric archetype and centring it anyway is the composition equivalent of widening a token'
+          : ''),
+      );
+    }
+    if (spec.bleeds === true && actual.bleeds !== true) {
+      blocking.push(
+        'section ' + (i + 1) + ' declares \`' + name + '\`, which bleeds past its container, but nothing in it leaves the container',
+      );
+    }
+  }
+
+  return { blocking, advisory };
+}
 `
       },
       {
@@ -4423,6 +6299,43 @@ export const HEX_RE = /#[0-9a-fA-F]{3,8}\\b/g;
 export const FUNC_COLOR_RE = /\\b(?:rgba?|hsla?)\\s*\\([^)]*\\)/gi;
 export const DIM_RE = /(-?\\d*\\.?\\d+)(px|rem)\\b/g;
 export const FONT_FAMILY_RE = /(?:font-family\\s*:|fontFamily\\s*:)\\s*([^;,\\n}]+)/gi;
+
+/**
+ * Shadow declarations, for the depth axis. Matches the CSS property, its
+ * camelCase form in style objects, and the Tailwind-family utility class.
+ *
+ * Depth is the one band that cannot be anchored on a token value: \`tonal\`,
+ * \`bordered\` and \`shadowed\` differ by whether shadows exist at all, not by a
+ * number a design system declares. So it is checked where the evidence is \u2014 a
+ * project that chose \`bordered\` and then shipped \`box-shadow: 0 8px 32px\` has
+ * left its declared band, and nothing in DESIGN.md would ever show it.
+ */
+export const SHADOW_RE = /(?:box-shadow|boxShadow)\\s*:\\s*([^;,\\n}]*(?:,[^;\\n}]*)*)|(?:^|[\\s"'\`])(shadow-(?:sm|md|lg|xl|2xl|inner|\\[[^\\]]+\\]))(?=$|[\\s"'\`])/gi;
+
+/**
+ * Stagger delays. Only \`*-delay\`, never \`*-duration\`: duration is a design token
+ * that DESIGN.md already declares, while the delay is the sequencing decision
+ * the motion band owns and nothing else checks.
+ */
+export const DELAY_RE = /(?:transition-delay|animation-delay|transitionDelay|animationDelay)\\s*:\\s*([^;,\\n}]+)/gi;
+
+/** Delay values in milliseconds, dropping the zero, which every band allows. */
+export function delaysOf(value) {
+  const out = [];
+  for (const match of String(value).matchAll(/(-?\\d*\\.?\\d+)(ms|s)\\b/g)) {
+    const n = Number(match[1]) * (match[2] === 's' ? 1000 : 1);
+    if (Number.isFinite(n) && n !== 0) out.push(n);
+  }
+  return out;
+}
+
+/** Whether a matched shadow declaration actually paints one. */
+export function isRealShadow(match) {
+  const value = (match[1] ?? '').trim().toLowerCase();
+  if (match[2]) return true; // utility class: \`shadow-none\` is not in the pattern
+  if (!value) return false;
+  return value !== 'none' && value !== 'unset' && value !== 'initial' && value !== 'inherit';
+}
 
 /** #abc -> #aabbcc, and a fully opaque alpha channel dropped so #141517ff === #141517. */
 export function normalizeHex(hex) {
@@ -4608,11 +6521,12 @@ export function eachLine(roots, onLine) {
 // Usage:
 //   node conductor/gates/design-tokens-gate.mjs [--src <dir>]... [--strict]
 //        [--file <DESIGN.md>] [--baseline <json>] [--update-baseline]
+//        [--allow-unarmed]
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { dirname } from 'node:path';
+import { dirname, relative, sep } from 'node:path';
 import { fail, runDesignMd } from './design-cli.mjs';
-import { dimKey, eachLine, normalizeHex, HEX_RE, FUNC_COLOR_RE, DIM_RE, STYLESHEET_EXTS } from './design-scan.mjs';
+import { dimKey, delaysOf, eachLine, normalizeHex, isRealShadow, HEX_RE, FUNC_COLOR_RE, DELAY_RE, DIM_RE, SHADOW_RE, STYLESHEET_EXTS } from './design-scan.mjs';
 
 // --- Policy -----------------------------------------------------------------
 // Dimensions every design system tolerates regardless of its scale: the zero,
@@ -4622,22 +6536,38 @@ const ALWAYS_ALLOWED_DIMS = new Set(['0px', '1px']);
 
 const MAX_SHOWN_PER_RULE = 15;
 
+/** This script's own path, relative to the project root, so the remedy printed
+ *  on failure is a command the reader can paste rather than an absolute path
+ *  from whichever machine happened to run it. */
+function selfPath() {
+  const abs = process.argv[1];
+  if (!abs) return 'conductor/gates/design-tokens-gate.mjs';
+  const rel = relative(process.cwd(), abs).split(sep).join('/');
+  return rel.startsWith('..') ? abs : rel;
+}
+
 // --- Args -------------------------------------------------------------------
 function parseArgs(argv) {
   const opts = {
     file: 'conductor/DESIGN.md',
     baseline: 'conductor/gates/design-tokens-baseline.json',
+    bands: 'conductor/gates/design-bands.json',
+    motion: 'conductor/gates/motion-bands.json',
     src: [],
     strict: false,
     updateBaseline: false,
+    allowUnarmed: false,
   };
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
     if (arg === '--file') opts.file = argv[++i];
     else if (arg === '--baseline') opts.baseline = argv[++i];
+    else if (arg === '--bands') opts.bands = argv[++i];
+    else if (arg === '--motion') opts.motion = argv[++i];
     else if (arg === '--src') opts.src.push(argv[++i]);
     else if (arg === '--strict') opts.strict = true;
     else if (arg === '--update-baseline') opts.updateBaseline = true;
+    else if (arg === '--allow-unarmed') opts.allowUnarmed = true;
   }
   if (opts.src.length === 0) opts.src.push('.');
   return opts;
@@ -4682,6 +6612,53 @@ function collectAllowed(designFile) {
 }
 
 // --- Scan -------------------------------------------------------------------
+/**
+ * The depth band the project chose, and the shadow budget it implies.
+ * Returns null when no band file exists or none was selected \u2014 an unchecked
+ * axis, which the caller reports rather than guesses.
+ */
+function readDepthBand(bandsFile) {
+  if (!existsSync(bandsFile)) return null;
+  let spec;
+  try {
+    spec = JSON.parse(readFileSync(bandsFile, 'utf-8'));
+  } catch (err) {
+    fail(2, 'band definitions at ' + bandsFile + ' are unreadable (' + err.message + ')');
+  }
+  const depth = spec.depth;
+  const selected = depth?.selected;
+  if (!depth || !selected) return null;
+  const limit = depth.bands?.[selected];
+  if (typeof limit !== 'number') {
+    fail(2, bandsFile + ' selects the depth band "' + selected + '", which is not defined in its bands table.');
+  }
+  return { name: selected, limit };
+}
+
+/**
+ * The stagger step of the selected motion band, or null when no band was chosen
+ * \u2014 in which case delays are not checked at all rather than checked against a
+ * guess. A \`restrained\` band has a stagger of 0, which means no delay is ever
+ * in band; that is the band saying nothing should be sequenced, and it is
+ * returned as-is so the caller reports it plainly.
+ */
+function readStagger(motionFile) {
+  if (!existsSync(motionFile)) return null;
+  let spec;
+  try {
+    spec = JSON.parse(readFileSync(motionFile, 'utf-8'));
+  } catch (err) {
+    fail(2, 'motion bands at ' + motionFile + ' are unreadable (' + err.message + ')');
+  }
+  const selected = spec?.selected;
+  if (!selected) return null;
+  const band = spec.bands?.[selected];
+  if (!band || typeof band.stagger !== 'number') {
+    fail(2, motionFile + ' selects the motion band "' + selected + '", which is not defined in its bands table.');
+  }
+  return band.stagger === 0 ? null : band.stagger;
+}
+
 function scanLine(line, at, ext, allowed, findings) {
   // Outside a stylesheet, \`#123\` is an issue reference or a URL fragment far more
   // often than a colour, and flagging it tells the agent to "replace the literal
@@ -4705,6 +6682,23 @@ function scanLine(line, at, ext, allowed, findings) {
   for (const match of line.matchAll(DIM_RE)) {
     if (!allowed.dims.has(dimKey(match[1], match[2]))) {
       findings['off-scale-dimension'].push(at + '  ' + match[0]);
+    }
+  }
+
+  // Collected unconditionally; whether they are findings depends on the band,
+  // which is decided once in main() rather than per line.
+  for (const match of line.matchAll(SHADOW_RE)) {
+    // match[2] is the utility class alone; match[0] carries the delimiter that
+    // anchored it, which would print as \`"shadow-lg\`.
+    if (isRealShadow(match)) findings['off-band-depth'].push(at + '  ' + (match[2] ?? match[0]).trim());
+  }
+
+  for (const match of line.matchAll(DELAY_RE)) {
+    for (const ms of delaysOf(match[1])) {
+      if (allowed.stagger === null) continue;
+      if (ms % allowed.stagger !== 0) {
+        findings['off-band-motion'].push(at + '  ' + ms + 'ms (not a multiple of the ' + allowed.stagger + 'ms stagger)');
+      }
     }
   }
 }
@@ -4755,7 +6749,9 @@ function main() {
   }
 
   const allowed = collectAllowed(opts.file);
-  const findings = { 'hardcoded-color': [], 'off-scale-dimension': [] };
+  const depth = readDepthBand(opts.bands);
+  allowed.stagger = readStagger(opts.motion);
+  const findings = { 'hardcoded-color': [], 'off-scale-dimension': [], 'off-band-depth': [], 'off-band-motion': [] };
 
   for (const root of opts.src) {
     if (!existsSync(root)) fail(2, 'source path not found: ' + root);
@@ -4776,8 +6772,32 @@ function main() {
   const baseline = readBaseline(opts.baseline);
   const regressions = [];
   for (const [rule, count] of Object.entries(counts)) {
+    // Depth is budgeted by the declared band, not by zero: \`shadowed\` tolerates
+    // two shadow levels by definition, so holding it to zero would reject the
+    // very band the user chose. An unselected band leaves the axis unchecked.
+    if (rule === 'off-band-depth') {
+      if (depth === null) continue;
+      const limit = opts.strict ? depth.limit : Math.max(depth.limit, baseline?.[rule] ?? 0);
+      if (count > limit) regressions.push({ rule, count, limit });
+      continue;
+    }
+    // An unselected motion band leaves delays unchecked rather than held to zero,
+    // which would flag every project that never answered the question.
+    if (rule === 'off-band-motion' && allowed.stagger === null) continue;
     const limit = opts.strict || baseline === null ? 0 : (baseline[rule] ?? 0);
     if (count > limit) regressions.push({ rule, count, limit });
+  }
+
+  // A brownfield project that adopted the ratchet above its band is held to not
+  // getting worse, which is the promise the ratchet makes everywhere else. Being
+  // over the band is still said out loud, because the alternative is a project
+  // that reads \`bordered\` in its design system and ships shadows forever.
+  if (depth !== null && counts['off-band-depth'] > depth.limit &&
+      !regressions.some((r) => r.rule === 'off-band-depth')) {
+    process.stderr.write(
+      '\\nDepth band \`' + depth.name + '\` tolerates ' + depth.limit + ' shadow declaration(s); the code has ' +
+      counts['off-band-depth'] + '. Held at the baseline rather than blocked, but the declared band and the code disagree.\\n',
+    );
   }
 
   // Detail always goes to stderr: the point of this gate is that the agent
@@ -4793,15 +6813,31 @@ function main() {
     }
   }
 
-  if (baseline === null && !opts.strict && total > 0) {
-    // Honest middle ground: an unarmed ratchet must not read as a pass, and
-    // must not block a brownfield project on its first run either.
-    process.stderr.write(
-      '\\nNo baseline at ' + opts.baseline + ' \u2014 nothing was enforced this run.\\n' +
-      'Record where the project stands with --update-baseline, and the gate will hold that line from then on.\\n',
+  if (baseline === null && !opts.strict) {
+    // An unarmed ratchet has not checked anything: with no baseline there is no
+    // line to hold, so every finding is tolerated. Exiting 0 here made that
+    // indistinguishable from a pass \u2014 the caller reads the exit code, and the
+    // honest sentence on stderr does not travel with it. That is the same defect
+    // as a gate that silently fails to run, so it is reported the same way.
+    //
+    // This is not a brownfield tax: the fix is one command, it is what setup is
+    // already instructed to do, and it makes the project's real starting point
+    // explicit instead of leaving it unmeasured.
+    if (opts.allowUnarmed) {
+      process.stderr.write(
+        '\\nNo baseline at ' + opts.baseline + ' \u2014 nothing was enforced this run, and --allow-unarmed was passed.\\n' +
+        'This gate verified nothing. Record where the project stands with --update-baseline to arm it.\\n',
+      );
+      process.stdout.write('design-tokens: NOT ENFORCED (' + total + ' findings, no baseline)\\n');
+      process.exit(0);
+    }
+    fail(
+      2,
+      'no baseline at ' + opts.baseline + ', so the ratchet is unarmed and this run checked nothing ' +
+      '(' + total + ' findings across ' + scanned + ' files went untested).\\n' +
+      'Arm it with: node ' + selfPath() + ' --update-baseline\\n' +
+      'Pass --allow-unarmed to accept an unverified run instead, or --strict to require zero findings.',
     );
-    process.stdout.write('design-tokens: NOT ENFORCED (' + total + ' findings, no baseline)\\n');
-    process.exit(0);
   }
 
   if (regressions.length > 0) {
@@ -4809,10 +6845,33 @@ function main() {
     for (const r of regressions) {
       process.stderr.write('  x ' + r.rule + ': ' + r.count + ' (allowed ' + r.limit + ')\\n');
     }
-    process.stderr.write(
-      '\\nReplace the literal values with tokens from ' + opts.file + '. ' +
-      'Adding the invented value to the design system instead is the move this gate exists to catch.\\n',
-    );
+    const BAND_RULES = new Set(['off-band-depth', 'off-band-motion']);
+    if (regressions.some((r) => !BAND_RULES.has(r.rule))) {
+      process.stderr.write(
+        '\\nReplace the literal values with tokens from ' + opts.file + '. ' +
+        'Adding the invented value to the design system instead is the move this gate exists to catch.\\n',
+      );
+    }
+    if (regressions.some((r) => r.rule === 'off-band-motion')) {
+      // There is no token for a stagger delay, so pointing at DESIGN.md would
+      // send the agent to add one \u2014 which is the widening this gate prevents.
+      process.stderr.write(
+        '\\nMotion findings are stagger delays that came from nowhere. Use multiples of the band\\'s stagger ' +
+        'step in ' + opts.motion + '; a sequence of 0/50/100/150ms in a system whose motion tokens are ' +
+        'something else is the same defect as a 13px padding. Changing the selected band to fit the ' +
+        'delays is a design decision and belongs to a design track.\\n',
+      );
+    }
+    if (regressions.some((r) => r.rule === 'off-band-depth')) {
+      // Pointing this one at the token set would be actively wrong: there is no
+      // token to reach for, and the only edit that silences it there is widening
+      // the band the user picked.
+      process.stderr.write(
+        '\\nDepth findings are shadows in a \`' + depth.name + '\` system. Remove them \u2014 depth in this band comes from ' +
+        'background layering and 1px borders, not from box-shadow. Changing the selected band in ' + opts.bands +
+        ' to make this pass is a design decision and belongs to a design track, not to this task.\\n',
+      );
+    }
     process.stdout.write('design-tokens: FAIL (' + total + ' findings)\\n');
     process.exit(1);
   }
@@ -4827,11 +6886,148 @@ function main() {
       '. Re-record with --update-baseline so the gain is held.\\n',
     );
   }
-  process.stdout.write('design-tokens: PASS (' + total + ' findings, ' + scanned + ' files)\\n');
+  if (depth === null && counts['off-band-depth'] > 0) {
+    // Said every run, not once: an axis nobody selected is an axis nobody is
+    // checking, and the shadows are already in the code.
+    process.stderr.write(
+      '\\nDepth axis unchecked: no band selected in ' + opts.bands + ' (\`depth.selected\` is null), ' +
+      'while ' + counts['off-band-depth'] + ' shadow declaration(s) are present. ' +
+      'Set it to the band this project chose to bring the axis under the gate.\\n',
+    );
+  }
+  process.stdout.write(
+    'design-tokens: PASS (' + total + ' findings, ' + scanned + ' files' +
+    (depth === null ? ', depth unchecked' : ', depth ' + depth.name) + ')\\n',
+  );
   process.exit(0);
 }
 
 main();
+`
+      },
+      {
+        sourcePath: "D:/conductor/src/internal/templates/data/config/gates/motion-bands.json",
+        category: "config",
+        subpath: "gates",
+        ext: ".json",
+        content: `{
+  "description": "Motion choreography, in the same band form as the style axes. Duration tokens already live in DESIGN.md; what they never say is WHAT moves, WHEN, and in what order \u2014 which is all of what separates motion that reads as considered from motion that reads as a library default.",
+  "selected": null,
+  "why_bands": "Asked to 'add some animation', a model reaches for the same thing every time: fade-and-rise on everything, staggered by a round number nobody chose. That is the mean answer for motion, and prose does not move it any more than it moved spacing. Picking a band fixes the two numbers that matter and, more importantly, fixes how much of the page is allowed to move at all.",
+
+  "bands": {
+    "restrained": {
+      "stagger": 0,
+      "travel": 0,
+      "opacity_only": true,
+      "note": "Nothing translates. Elements resolve in place. The right answer for dense product interfaces, and for any page whose content is the argument."
+    },
+    "measured": {
+      "stagger": 60,
+      "travel": 12,
+      "opacity_only": false,
+      "note": "The default for marketing pages. Perceptible, cheap to render, survives a slow device."
+    },
+    "kinetic": {
+      "stagger": 90,
+      "travel": 24,
+      "opacity_only": false,
+      "note": "Motion is part of the brand. Only choose this if someone will art-direct it \u2014 at this amplitude, sloppy timing is more visible than no motion at all."
+    }
+  },
+
+  "invariants": {
+    "nothing_above_the_fold_starts_hidden": {
+      "rule": "No element visible in the initial viewport may start at opacity 0 or otherwise invisible.",
+      "why": "An entrance animation on content that is already on screen has nothing to enter from. What the user sees is a flash of empty page while the observer catches up, and on a slow connection or with JS disabled they may see nothing at all. This is the most common motion defect in generated pages and it degrades the one impression that cannot be retaken.",
+      "severity": "fail"
+    },
+    "progressive_enhancement": {
+      "rule": "The hidden state must be applied BY the script that will reveal it, never authored into the markup or the stylesheet.",
+      "why": "If the hidden state ships in CSS and the script fails, the content is gone. Applying it from the same code that removes it makes the failure mode 'no animation' instead of 'no page'.",
+      "severity": "fail"
+    },
+    "reduced_motion_keeps_content": {
+      "rule": "\`prefers-reduced-motion: reduce\` must disable travel and stagger, and must never leave content hidden.",
+      "why": "The frequent mistake is to disable the transition while keeping the hidden state, which makes reduced-motion mean invisible. Reduced motion is a request for less movement, not less content.",
+      "severity": "fail"
+    },
+    "stagger_needs_a_series": {
+      "rule": "Stagger applies only to sets of 3 or more sibling elements.",
+      "why": "Staggering two elements is not a rhythm, it is a delay. It reads as lag rather than as sequence.",
+      "severity": "warn"
+    },
+    "stagger_is_bounded": {
+      "rule": "Total stagger across one series must not exceed 400ms.",
+      "value": 400,
+      "why": "Past roughly 400ms the last item arrives after the user has already started reading the first, so the sequence stops being perceived as one gesture and starts being perceived as slowness.",
+      "severity": "warn"
+    },
+    "declared_delays_come_from_the_band": {
+      "rule": "Stagger delays must be multiples of the band's stagger value.",
+      "why": "0/50/100/150ms in a system whose motion tokens are 150/250/400ms is the same defect as a 13px padding: a number that came from nowhere and matches nothing.",
+      "severity": "fail"
+    }
+  }
+}
+`
+      },
+      {
+        sourcePath: "D:/conductor/src/internal/templates/data/config/gates/type-pairings.json",
+        category: "config",
+        subpath: "gates",
+        ext: ".json",
+        content: `{
+  "description": "Curated display/body pairings. Same move as the bands: choose from a finite set rather than compose a new combination, because pairing type is a craft skill and the mean answer is recognisable on sight.",
+  "selected": null,
+  "why": "Asked to pick fonts, a model reaches for the handful it has seen most: Inter with Inter, Poppins with Poppins, a geometric sans with itself at two weights. None of those is wrong, and all of them are why generated pages look related to each other. A pairing is also the cheapest large change available \u2014 swapping the pair transforms a page far more than any token in DESIGN.md, at no structural cost.",
+  "how_to_use": "Pick one entry, then write its \`display\` and \`body\` into DESIGN.md's typography tokens verbatim. The scale, weights and sizes still come from the type contrast band \u2014 a pairing decides which families, never how big.",
+
+  "pairings": {
+    "editorial-serif": {
+      "display": "Fraunces",
+      "body": "Inter",
+      "feel": "Warm, bookish, opinionated. A soft serif with real optical sizing against a neutral workhorse.",
+      "suits": "Consumer products with a human story, D2C, anything that wants to feel made rather than shipped."
+    },
+    "swiss": {
+      "display": "Inter Tight",
+      "body": "Inter",
+      "feel": "Neutral, dense, engineered. One family at two optical widths; the hierarchy comes from scale, not contrast.",
+      "suits": "Developer tools, infrastructure, dashboards \u2014 anywhere the content is the argument and the type should get out of the way."
+    },
+    "brutal": {
+      "display": "Archivo Black",
+      "body": "Archivo",
+      "feel": "Loud, flat, confident. Very heavy display against a plain companion.",
+      "suits": "Launches, events, anything that would rather be remembered than trusted."
+    },
+    "humanist": {
+      "display": "Playfair Display",
+      "body": "Source Sans 3",
+      "feel": "High-contrast serif with a calm humanist sans. Traditional, legible, slightly formal.",
+      "suits": "Finance, health, education \u2014 products where credibility outranks personality."
+    },
+    "technical": {
+      "display": "Space Grotesk",
+      "body": "IBM Plex Sans",
+      "feel": "Quirky geometric display with a workmanlike body. Reads modern without reading generic.",
+      "suits": "Data products, AI tooling, anything technical that does not want to look like a bank."
+    },
+    "monospace-led": {
+      "display": "JetBrains Mono",
+      "body": "Inter",
+      "feel": "Monospace as display voice. Distinctive, and cheap to get wrong at large sizes \u2014 check the headline before committing.",
+      "suits": "Developer-facing products where the audience reads code all day."
+    }
+  },
+
+  "rules": {
+    "one_pairing": "Use exactly one pairing. A third family is not a design decision, it is an unresolved one.",
+    "no_composing": "Do not mix the display of one pairing with the body of another. These are chosen for how the two behave together \u2014 the pairing IS the unit, and recombining them puts you back to composing a new one, which is what this file exists to avoid.",
+    "substitution": "Any pairing may be replaced wholesale with the product's own brand faces when it has them. Licensed brand type always beats a catalogue entry; the catalogue exists for the case where nobody has chosen, which is the case where the mean answer wins by default."
+  }
+}
 `
       },
       {
@@ -4903,6 +7099,7 @@ main();
   ],
   "constraints": [
     "You MUST NEVER archive a track that is currently pending or in progress.",
+    "**Never archive over an unrunnable gate**: before archiving, read the \`unrunnable_gates\` field of the state document (\`config.state_document.frontmatter_fields\`). If it is non-empty, refuse the archive and report each entry with its command and output \u2014 per \`config.gates.unrunnable_policy\` the track is blocked while any required gate has failed to run, because archiving is what converts an open question into a settled record. The track's own status is not sufficient evidence here: a track can reach the done status while carrying an unrunnable gate, and this is the last point at which that can still be caught.",
     "Context Isolation (SDP): All project file access MUST follow the [Subagent Dispatch Protocol](\${config.protocols.subagent_dispatch.path}). The orchestrator NEVER reads context files directly.",
     "Always ask for user confirmation before executing any file manipulation commands."
   ],
@@ -4958,6 +7155,7 @@ main();
     "**Quality Gate (TDD)**: No task may be marked \`\${config.enums.task_statuses.done}\` without first: (1) writing the failing test, (2) watching it fail for the expected reason, (3) implementing the minimum needed to pass, (4) running EVERY gate in the manifest (resolve via \`config.gates.manifest\`) whose \`required\` is true, and (5) confirming each one exited zero. The gate result is the exit code and the output of the run you just performed \u2014 never a judgement about whether the code looks correct, and never a result carried over from an earlier run or an earlier task, per \`config.gates.exit_contract\`. On failure, retry at most \`\${config.thresholds.max_fix_attempts}\` times (via subagent) before stopping and reporting the blocker to the user \u2014 never mark a task done to work around a failure.",
     "**Ratchet, not absolute (CRITICAL)**: for every gate whose \`mode\` is the ratchet value, compare the measurement against \`config.ratchet.baseline_file\`, NOT against the target in \`config.thresholds\`. The gate fails only when the project got worse; falling short of the target is reported, never blocking. This is what lets the framework be adopted on a codebase with history instead of demanding it be perfect before the first task. When a measurement beats the baseline, update the baseline in the same commit as the work that earned it, following \`config.ratchet.rules\`. Never move a baseline in the worsening direction \u2014 not to unblock a task, not to close a track, not at the user's suggestion without an explicit and recorded decision. A baseline that follows the code downward is not a ratchet, it is a ratchet-shaped excuse.",
     "**Absent gates are declared, not skipped**: a gate whose \`cmd\` is null in the manifest has NOT passed \u2014 it was never run. Per \`config.gates.absent_policy\`, name every absent gate in the task report and state which checks therefore rest on human judgement. Never let the absence of a gate read as its success, and never invent a command to fill the hole mid-task. If the manifest itself is missing, follow \`config.gates.missing_manifest_policy\` \u2014 offer to configure it, continue with every check treated as absent, and say plainly in the report that nothing was machine-verified.",
+    "**A gate that could not run is not a gate that passed (CRITICAL)**: read the exit code against \`config.gates.exit_codes\`. Exit 1 is a verdict \u2014 the gate ran, the project failed it, and the output tells you what to fix. Exit 2 is not a verdict: the gate never ran, so its entire subject is unverified. Per \`config.gates.unrunnable_policy\`, record it in the \`unrunnable_gates\` field of the state document (\`config.state_document.frontmatter_fields\`) with the exact command and the FULL output including stderr, and stop the task \u2014 while that list is non-empty no task may be marked \`\${config.enums.task_statuses.done}\` and the state document may not carry the done status. Do not retry an exit 2 as though it were a failing check: \`config.thresholds.max_fix_attempts\` counts attempts at fixing code, and there is no code here to fix. Read the output, name the cause, and either repair the gate or report it to the user and stop. Never write an empty or 'no blockers' Blockers section while an unrunnable gate stands, never file it as a pending manual or infrastructure check, and never treat it as an absent gate \u2014 absent means the project has no such tool, unrunnable means it has one and the tool is broken. The two have different fixes, and the second is the one that looks harmless.",
     "**File size gate**: no task may be marked \`\${config.enums.task_statuses.done}\` while leaving a file it touched at or past \`\${config.thresholds.file_max_lines}\` lines. Count the lines of every file in the task's \`files\` list after the change. Crossing \`\${config.thresholds.file_warn_lines}\` is reported to the user and recorded; crossing \`\${config.thresholds.file_max_lines}\` stops the task \u2014 do not split the file on your own initiative mid-task, because an unplanned extraction changes code no acceptance criterion covers. Report it as a blocker and let the user decide whether to extract now as its own task or to accept the overrun explicitly. A file that was already past the limit before this task is not this task's blocker: hold it to not growing further, and record the pre-existing overrun rather than silently normalising it.",
     "**Wave execution**: execute the plan wave by wave, in ascending wave order, reading the \`wave\` and \`depends_on\` fields defined in \`config.plan_task_fields\`. Tasks within a wave are dispatched in parallel, capped at \`\${config.thresholds.max_parallel_subagents}\` concurrent subagents. A wave starts only after every task of the previous wave is \`\${config.enums.task_statuses.done}\` and has passed the test & coverage gate. Never run a task whose dependencies are unmet, even if its wave number would allow it \u2014 a plan whose waves contradict its \`depends_on\` fields is defective; report it and stop.",
     "**File-overlap check (CRITICAL, before every wave)**: before dispatching any subagent for a wave, compare the \`files\` list of every pair of tasks in that wave. If two tasks share even one path, they carry an implicit dependency and MUST NOT run in parallel \u2014 downgrade that wave alone to sequential execution and state the reason. This downgrade is per-wave and never disables parallelism for the remaining waves. Concurrent writes to one file lose work silently, so this check runs even when the plan explicitly claims the tasks are independent.",
@@ -4989,7 +7187,7 @@ main();
     "**Track Selection:** Check user input for a track name. Parse the tracks registry via a subagent, obtain compact schema. Present the next pending track (or the requested one) and ask for confirmation with a yes/no \`question\`.",
     "**Track Implementation:**\\n   a. Announce the track being implemented.\\n   b. Update its status to \`\${config.enums.task_statuses.in_progress}\` in the tracks registry and commit.\\n   c. **Load track context via SDP**: Dispatch a subagent (resolve subagent type via \`config.subagent_types\` using capability-based lookup \u2014 \`resolveSubagentByCapability(\\"read_files\\", config)\` from the [Subagent Dispatch Protocol](\${config.protocols.subagent_dispatch.path})) to read spec, plan, and workflow. Apply \`classifyTask()\` from the [Subagent Dispatch Protocol](\${config.protocols.subagent_dispatch.path}) (resolve protocol path from conductor skills directory; the protocol itself references \`[config.json](\${config.directories.conductor_root}/config.json)\`) to classify each task deterministically. Subagent returns schema as defined in \`config.schemas.*\` \u2014 validate envelope via \`\${config.protocol.protocol_field}\`; field names defined in \`config.protocol\` and resolved by \`classifyTask()\`.\\n   d. **Build the wave index**: group the plan's tasks by their \`wave\` field (see \`config.plan_task_fields\`), then for each wave compare the \`files\` lists of every pair of tasks in it. Any shared path downgrades that wave to sequential execution. Record the result as \`config.schemas.wave_index\` and show the user the wave grouping \u2014 including any downgrade and the files that caused it \u2014 before execution starts.\\n   e. Execute wave by wave in ascending order. Within a wave, follow the classification:\\n      - \`SUBAGENT\`, wave not downgraded: dispatch all its tasks in parallel via independent subagents (resolve subagent type via \`config.subagent_types\` using capability-based lookup \u2014 \`resolveSubagentByCapability(\\"analysis\\", config)\` from the [Subagent Dispatch Protocol](\${config.protocols.subagent_dispatch.path})), at most \`\${config.thresholds.max_parallel_subagents}\` at a time.\\n      - \`SUBAGENT\`, wave downgraded by file overlap (or task with unmet dependencies): dispatch sequentially, each in its own subagent (same capability-based lookup).\\n      - \`INLINE\`: execute directly in the orchestrator (trivial tasks only, no context file access).\\n      - Close each wave before opening the next: every task \`\${config.enums.task_statuses.done}\`, test & coverage gate passed, changes committed. On failure, finish the remaining tasks of the current wave, then stop and report what is blocked.\\n      - Validate every subagent return contains \`\${config.protocol.protocol_field}: \${config.protocol.version_string}\` as defined in config.json. Consume only \`\${config.protocol.data_envelope}.*\` schema per config.json. Discard history.\\n      - Before starting each task, explicitly update its checkbox in the plan document to \`\${config.enums.task_statuses.in_progress}\`.\\n      - **Quality gate**: before marking any task done, dispatch an analysis subagent to execute every required gate in \`config.gates.manifest\` and report \`config.schemas.gate_execution\` \u2014 per-gate exit codes, the absent list, the current measurements, and the baseline from \`config.ratchet.baseline_file\`. Proceed only when every required gate exited zero and no metric regressed against its baseline. Read those numbers from this run, never from an earlier one. When a metric improved, update the baseline and say so. On failure, work the phases in \`config.debugging_protocol.phases[]\` before each attempt, allowing at most \`config.thresholds.max_fix_attempts\` attempts; a subagent returning the \`needs_context\` status from \`config.enums.subagent_report_statuses\` does NOT consume an attempt \u2014 complete its prompt and re-dispatch the same task.\\n      - After the task is done and the test/coverage gate passes, explicitly update its checkbox in the plan document to \`\${config.enums.task_statuses.done}\` and commit changes.\\n      - Conduct human-in-the-loop checks (yes/no, multiple-choice) as defined by the workflow.\\n   f. After all waves are done, mark the track as \`\${config.enums.task_statuses.done}\` in the tracks registry and commit.\\n   g. **Write the state document** (resolve via \`config.files.artifacts.state\`) at every boundary \u2014 track start, wave open, wave close, blocker, completion \u2014 using the fields in \`config.state_document.frontmatter_fields\` and the sections in \`config.state_document.body_sections\`. On a blocker, set \`status\` to the blocked value from \`config.enums.state_statuses\` and make \`Resume Hint\` a concrete next action, not a restatement of the failure.",
     "**Synchronize Project Documentation:**\\n   a. Resolve paths to product definition, tech stack, and product guidelines (do not read).\\n   b. Dispatch a subagent to analyse the completed track's specification against those docs.\\n   c. Present proposed diffs for each document separately, ask for approval with yes/no before editing.\\n   d. Stage and commit any changed documents.",
-    "**Completion and Handoff:** State the verification evidence before the summary \u2014 every required gate from \`config.gates.manifest\` with the exact command, its exit code, and its measurement, all from the final run; then the baseline comparison per \`config.ratchet.rules\`, naming any metric that improved and any that merely held; then the gates recorded as absent and what they leave unverified. If any task closed with unverified behaviour, list it here rather than in the summary. Then summarise actions taken and ask the user if they want a formal code review as a single-choice \`question\` with the options labelled \\"\${i18n.t(\\"common.confirmations.yes\\")}\\" and \\"\${i18n.t(\\"common.confirmations.no\\")}\\" (recommended first, prefixed \\"\${i18n.t(\\"common.confirmations.recommended\\")}\\"). If yes, invoke the \`\${config.skills.names.review}\` skill; otherwise, suggest they can run it later. Also mention that the \`\${config.skills.names.status}\` skill can be invoked at any time for a read-only progress overview of the track and the project, and that the \`\${config.skills.names.revert}\` skill can safely roll back the work just delivered if it turns out to be wrong."
+    "**Completion and Handoff:** State the verification evidence before the summary \u2014 every required gate from \`config.gates.manifest\` with the exact command, its exit code, and its measurement, all from the final run; then the baseline comparison per \`config.ratchet.rules\`, naming any metric that improved and any that merely held; then the gates recorded as absent and what they leave unverified. If any task closed with unverified behaviour, list it here rather than in the summary. When the track touched an interface and the design gates passed, describe what that establishes in the terms of \`config.gates.design_gates_measure_defects_not_quality\` \u2014 the named defects are absent \u2014 and do not present it as evidence that the interface looks good. The gates cover structure, cadence and integrity; art direction and original assets are outside this framework, so a green board leaves the larger share of visual quality unmeasured rather than confirmed. Then summarise actions taken and ask the user if they want a formal code review as a single-choice \`question\` with the options labelled \\"\${i18n.t(\\"common.confirmations.yes\\")}\\" and \\"\${i18n.t(\\"common.confirmations.no\\")}\\" (recommended first, prefixed \\"\${i18n.t(\\"common.confirmations.recommended\\")}\\"). If yes, invoke the \`\${config.skills.names.review}\` skill; otherwise, suggest they can run it later. Also mention that the \`\${config.skills.names.status}\` skill can be invoked at any time for a read-only progress overview of the track and the project, and that the \`\${config.skills.names.revert}\` skill can safely roll back the work just delivered if it turns out to be wrong."
   ],
   "completion": "Implementation completed. Would you like a formal code review? (\${i18n.t(\\"common.confirmations.yes\\")}/\${i18n.t(\\"common.confirmations.no\\")})"
 }
@@ -5034,6 +7232,7 @@ main();
     "**Respect negative space**: before proposing to change, remove, or revert anything recorded in the decisions file (resolve path via \`config.files.artifacts.decisions\`), surface the relevant entry to the user and require explicit confirmation before proceeding.",
     "**Consult the lessons before planning**: load the lessons document (resolve via \`config.files.artifacts.lessons\`) with the rest of the project context and check every entry whose \`action\` is still open against the track being planned. If an open lesson touches the area this track will change, the plan MUST either carry a task that performs its \`action\` \u2014 adding the lint rule, writing the structure check, amending the styleguide, recording the decision \u2014 or state explicitly why it is being deferred again. Silently planning a track that walks back into a recorded failure is the specific waste the lessons document exists to prevent; a lesson nobody plans against is indistinguishable from one never written. If the document does not exist, follow \`config.lessons_document.missing_policy\`: create it empty, note it in one line, and carry on \u2014 never halt the handshake over it, since a project set up before the ledger existed is not a broken project.",
     "**Empirical acceptance criteria (CRITICAL)**: every task in the plan MUST carry at least one acceptance criterion, and every criterion MUST be checkable without human judgement \u2014 it must fall into one of the kinds listed in \`config.enums.acceptance_criteria_kinds\` from the centralized config (\`[config.json](\${config.directories.conductor_root}/config.json)\`): a source assertion (a named symbol exists in a named file), a behaviour assertion (a concrete input produces a concrete observable output), a test command (a command that exits zero), or a CLI output (a command prints a specific string). NEVER write a criterion using any phrasing listed in \`config.enums.banned_acceptance_phrasings\` or any equivalent subjective wording \u2014 such a criterion is invalid output and MUST be rewritten before the plan is presented to the user.",
+    "**Criteria must cover the scope, not merely be checkable (CRITICAL)**: before presenting the plan, walk the spec's scope clause by clause and confirm every behaviour it promises is named by some acceptance criterion. Criteria that are fully empirical and cover only part of the scope are the more dangerous failure, because at the green they are indistinguishable from criteria that cover all of it \u2014 the gates pass, the task closes, and the uncovered half was never built. That is how a scope specifying focus trapping, focus return and background inertness closes green against a criterion that checks only \`aria-expanded\` and \`Escape\`, leaving a panel that announces itself as a modal dialog and behaves like none. Where a promised behaviour genuinely cannot be checked without a human, name it in the plan as an explicit human-verification item. Narrowing the criteria until they fit what is easy to assert is not a way of resolving that, and an unstated gap is the one unacceptable outcome.",
     "**Task metadata is mandatory**: every task in the plan document MUST declare all fields defined in \`config.plan_task_fields\` from the centralized config (\`[config.json](\${config.directories.conductor_root}/config.json)\`) \u2014 the execution wave, the task ids it depends on, the project-relative files it will touch, and its acceptance criteria. A task missing any of these fields is invalid output; the plan cannot be presented to the user until every task is complete. The \`files\` field is what allows the implementer to detect write conflicts before parallelising, so listing files a task will not touch is as harmful as omitting files it will.",
     "**Wave assignment**: assign each task the lowest wave number consistent with its dependencies \u2014 a task whose \`depends_on\` is empty belongs to wave 1, and any other task belongs to a wave strictly greater than the highest wave among its dependencies. Do not serialise tasks that have no real dependency between them; unnecessary sequencing is the single most expensive defect in a plan.",
     "**Scope sanity gate**: keep each phase within \`\${config.thresholds.tasks_per_phase_warn}\` tasks and each task within \`\${config.thresholds.files_per_task_warn}\` files. A phase reaching \`\${config.thresholds.tasks_per_phase_block}\` tasks, or a task reaching \`\${config.thresholds.files_per_task_block}\` files, is a blocker: split it before presenting the plan. Report any split you made and why.",
@@ -5168,8 +7367,8 @@ main();
     "**Do not re-derive what a gate already decided**: the review's scarce resource is judgement, and spending it on rules a command settles is how real findings get missed. Read only the judgement layer of the styleguides \u2014 the section named by \`config.styleguide_layers.judgment.heading\` \u2014 and take everything under \`config.styleguide_layers.tooling.heading\` as decided by the corresponding gate. If the gate that owns those rules is absent, say so and review them by hand, naming which section you had to read manually; that is the honest cost of a missing gate, not a reason to review every rule by hand every time.",
     "**Forbidden verdict language**: never soften a finding with hedging from \`config.enums.banned_completion_phrasings\` or any equivalent. A finding you are unsure about is reported as unsure, with what would settle it \u2014 writing \\"probably fine\\" converts your own uncertainty into the user's false confidence.",
     "**Recurrence detection**: a finding that keeps coming back is a different defect from the finding itself \u2014 the code is a symptom, the recurrence is the cause. Before writing the verdict, compare this review's findings by \`config.enums.finding_categories\` against the lessons document (resolve via \`config.files.artifacts.lessons\`) and the tracks already reviewed. When a category reaches \`\${config.thresholds.lesson_recurrence_threshold}\` distinct tracks, record it in the lessons document using \`config.lessons_document.entry_fields\`, with an \`action\` drawn from \`config.lessons_document.action_layers\` \u2014 never one listed in \`config.lessons_document.forbidden_actions\`. Report the recurrence in the review as its own line: naming the pattern is worth more to the user than the individual finding, because fixing this diff does nothing about the next one. If a lesson already on file has an open action and this review found the same category again, say that the action was never carried out rather than filing a duplicate entry. A missing lessons document follows \`config.lessons_document.missing_policy\` \u2014 create it empty and continue; never halt the review over its absence.",
-    "**Fail closed**: if a required input cannot be read or a check cannot be executed \u2014 missing styleguide, unreadable decisions file, test suite that will not run \u2014 the verdict is the human value from \`config.enums.review_statuses\` with the reason stated. Never treat an unreadable input as an absent problem.",
-    "**Design findings are judged against the declared system, never against taste**: for the \`design\` category in \`config.enums.finding_categories\`, the reference is \`config.files.artifacts.design_system\` \u2014 its tokens, its \`Components\` guidance and its \`Do's and Don'ts\`. Report what contradicts the declared system, not what you would have designed differently. Two things the token gate cannot see and a reviewer can: a token used in a role it was not meant for (an \`error\` colour as decoration), and an interface state the design system requires but the implementation never rendered \u2014 empty, loading, error, focus. Where the gate already ran, do not re-derive its verdict by reading the code; cite its output."
+    "**Fail closed**: if a required input cannot be read or a check cannot be executed \u2014 missing styleguide, unreadable decisions file, test suite that will not run \u2014 the verdict is the human value from \`config.enums.review_statuses\` with the reason stated. Never treat an unreadable input as an absent problem. A required gate that exits 2 is exactly this case and the most deceptive instance of it: per \`config.gates.exit_codes\` it produced no verdict, so there is no finding to report and the review can look clean while the gate's entire subject went unexamined. Read the exit code, not the absence of findings \u2014 list every such gate in the Needs Human Verification section with its command and output, which by the previous constraint makes the human value the only admissible verdict.",
+    "**Design findings are judged against the declared system, never against taste**: for the \`design\` category in \`config.enums.finding_categories\`, the reference is \`config.files.artifacts.design_system\` \u2014 its tokens, its \`Components\` guidance and its \`Do's and Don'ts\`. Report what contradicts the declared system, not what you would have designed differently. Two things the token gate cannot see and a reviewer can: a token used in a role it was not meant for (an \`error\` colour as decoration), and an interface state the design system requires but the implementation never rendered \u2014 empty, loading, error, focus. Where the gate already ran, do not re-derive its verdict by reading the code; cite its output. When \`config.gates.kinds.design_render\` ran with screenshots, LOOK at them before reporting on the interface \u2014 they are the only evidence available here that shows the page rather than the markup, and what they carry is exactly what no gate can express: an illustration that renders as an empty shape, one placeholder standing in for three different product shots the alt text promises, a section that starts invisible and flashes. Reviewing markup for those is guessing. If that gate is absent, state that the interface was reviewed without ever being seen and put it in the human-verification section \u2014 that is a real limit on the review, not a formality. And never let green design gates stand in for a judgement about the interface's quality, per \`config.gates.design_gates_measure_defects_not_quality\`: they establish that the named defects are absent, which is structure and integrity, not art direction. Report them as exactly that. A review that concludes the UI is well designed because the design gates passed has converted the absence of measurable defects into a claim about aesthetic quality that nothing in this framework measured \u2014 and it is the same category of error as reporting an unrun gate as a pass."
   ],
   "skills": [
     "Git diff and log analysis to pinpoint relevant changes.",
@@ -5258,7 +7457,7 @@ main();
     "Discover the quality gates the project already has \u2014 linter, formatter, type checker, test runner, coverage \u2014 and record them in the gate manifest (resolve path via \`config.gates.manifest\`), so that every rule a command can decide stops being prose the agent may reinterpret.",
     "Measure the ratchet baseline (resolve path via \`config.ratchet.baseline_file\`) for each metric in \`config.ratchet.metrics\`, so the gates are adoptable on an existing codebase instead of blocking on its history.",
     "When the project renders a user interface, author the design system (resolve path via \`config.directories.conductor_root\`/\`config.files.artifacts.design_system\`) by choosing one band per axis from the authoring aid at \`config.protocols.design_authoring.path\`, never by averaging bands \u2014 an averaged design system is indistinguishable from no design system.",
-    "When the design system step ran, register the two design gates in the gate manifest (resolve via \`config.gates.manifest\`): \`config.gates.kinds.design\` and \`config.gates.kinds.design_tokens\`. These are the one exception to discovering rather than inventing gate commands \u2014 Conductor ships both scripts, so there is nothing to discover and nothing installed on the user behalf. Record the design baselines in the same step: copy the approved design system to the gates directory as \`design-baseline.md\`, and run the token gate once with \`--update-baseline\`. Both gates are absent per \`config.gates.absent_policy\` when the project has no user interface.",
+    "When the design system step ran, register the two design gates in the gate manifest (resolve via \`config.gates.manifest\`): \`config.gates.kinds.design\` and \`config.gates.kinds.design_tokens\`. These are the one exception to discovering rather than inventing gate commands \u2014 Conductor ships both scripts, so there is nothing to discover and nothing installed on the user behalf. Record the design baselines in the same step, and verify both landed: copy the approved design system to the gates directory as \`design-baseline.md\`, and run the token gate once with \`--update-baseline\`, confirming that \`design-tokens-baseline.json\` now exists. Neither is optional bookkeeping \u2014 the ratchet has nothing to compare against until the baseline file is on disk, and the gate reports that state as unrunnable (exit 2) rather than as a pass. Both gates are absent per \`config.gates.absent_policy\` when the project has no user interface. Then offer the third: \`config.gates.kinds.design_render\` measures the rendered page rather than the declaration, and it is the only check that sees a value delivered by a utility class or a custom property, or an axis that changes band at a breakpoint. It needs two things the project may not have \u2014 Playwright, and a command that serves the interface. Ask for the serve command, and check whether Playwright resolves from the project. Register the gate with \`--url\` and the viewports the project treats as primary and as desktop only when both are present; when either is missing, register it absent with \`cmd\` null and say which of the two was missing, per \`config.gates.absent_policy\`. Do NOT install Playwright to make the gate registrable \u2014 that is the user's decision, and an absent gate honestly declared is worth more than a command that will exit 2 on every run. Finally register \`config.gates.kinds.design_grammar\` and \`config.gates.kinds.design_assets\`, which need no tooling at all: both read files the project already has. The grammar gate needs each page declared in \`conductor/design/composition.json\` as a grammar plus an ordered list of archetypes \u2014 write that file with the user during the design step, one entry per page they named, choosing archetypes from the shipped vocabulary rather than inventing names. Record the depth band, the motion band and the type pairing in the same pass, in their respective files; every one of them left null is an axis the gates report as unchecked for the life of the project.",
     "On a brownfield project with an existing interface, run \`node \`+\`config.directories.conductor_root\`+\`/gates/design-extract.mjs --src <source dirs> --format json\` BEFORE choosing any band, and present what it found to the user as the starting proposal: the colour roles it inferred, the spacing and type scales in use, and the band nearest to each axis. A design system authored from the bands alone contradicts the interface that already exists, and a design system that contradicts the code is ignored rather than adopted. Frequency is evidence, not endorsement \u2014 the most repeated value may be the most repeated mistake, so every extracted value is confirmed with the user before it becomes a token, and the extractor never writes anything itself."
   ],
   "constraints": [
@@ -6634,14 +8833,20 @@ is confirmed before it becomes a token.
    recorded in \`\${config.files.artifacts.product}\`, and say which band you
    chose and why. Do not fall back to "the safe middle" \u2014 a stated band that
    is wrong is correctable, an averaged one is invisible.
-3. Write \`DESIGN.md\` using the values of the chosen bands verbatim.
+3. Write \`DESIGN.md\` using the values of the chosen bands verbatim, and record
+   the depth band as \`depth.selected\` in
+   \`\${config.directories.conductor_root}/gates/design-bands.json\` \u2014 it is the one
+   axis with no token to carry it, so the gate reads it from there or not at all.
 4. Fill the \`components\` section. It is not optional: the contrast check only
    examines \`backgroundColor\`/\`textColor\` pairs that are actually declared, so
    a design system without components has no accessibility verification at all.
 5. Run \`node \${config.directories.conductor_root}/gates/design-gate.mjs\` and fix what blocks.
-6. Record the baselines: copy the approved file to
-   \`\${config.directories.conductor_root}/gates/design-baseline.md\`, then run
-   \`node \${config.directories.conductor_root}/gates/design-tokens-gate.mjs --update-baseline\`.
+6. Record the baselines, and check both exist afterwards: copy the approved file
+   to \`\${config.directories.conductor_root}/gates/design-baseline.md\`, then run
+   \`node \${config.directories.conductor_root}/gates/design-tokens-gate.mjs --update-baseline\`
+   and confirm \`\${config.directories.conductor_root}/gates/design-tokens-baseline.json\`
+   was written. Until it is, the ratchet has no line to hold and tolerates every
+   finding \u2014 the gate reports that as unrunnable, not as a pass.
 
 ## Axis 1 \u2014 Vertical rhythm
 
@@ -6714,6 +8919,13 @@ an accident unless the whole system commits to that contrast deliberately.
 \`tonal\` and \`bordered\` are much harder to get wrong than \`shadowed\`, and a
 default shadow (\`0 2px 4px rgba(0,0,0,0.1)\`) is the mean answer.
 
+Record the chosen band as \`depth.selected\` in
+\`\${config.directories.conductor_root}/gates/design-bands.json\`. This axis is the
+one that cannot be checked from \`DESIGN.md\`: the bands differ by whether shadows
+exist at all, not by a token value, so the gate checks the code instead. Leave it
+null and the axis is never checked \u2014 which is how a system that declares
+\`bordered\` in prose ships shadowed cards and passes every gate.
+
 ## Banned defaults
 
 If the draft contains any of these, an axis was averaged rather than chosen.
@@ -6735,6 +8947,137 @@ expressible as tokens; they belong in the \`Overview\` and \`Layout\` prose of
 \`DESIGN.md\`, which is what the agent falls back to when no token applies.
 Write those sections as instructions, not adjectives: "prefer the more spacious
 option when unsure" is actionable, "modern and clean" is not.
+
+Note the tension with the opening of this file: prose is exactly what does not
+move a model off the mean. So the prose above is necessary and not sufficient \u2014
+a page composed entirely of centred sections of equal height satisfies every
+band here and every sentence in \`DESIGN.md\`, and is the most recognisable
+generated layout there is.
+
+What carries composition instead is the grammar in
+\`\${config.directories.conductor_root}/gates/design-grammar.json\`, which applies
+this file's own move one level up. Rather than measuring a finished page for
+uniformity, it removes the choice beforehand: a finite vocabulary of section
+archetypes, and a finite set of page shapes built from them. A page declares
+itself as an ordered list of archetype names, and that list must derive from one
+of the grammars \u2014 \`open \u2192 establish \u2192 turn \u2192 prove \u2192 resolve\` for a landing
+page \u2014 as well as satisfy invariants no derivation can satisfy by accident: no
+adjacent repeat, at least four distinct archetypes, something that bleeds, no
+long run of one density, and a cap on how much of the page enters from the
+centre.
+
+The \`turn\` movement deserves a note, because it is the one a generated page
+always omits. It is the section that breaks the pattern the page has been
+building \u2014 a marquee, a full-bleed image, cards off the grid \u2014 and its absence
+is precisely what makes such a page read as a list of features rather than an
+argument. No amount of correct spacing substitutes for it.
+
+Two floors remain measured rather than chosen, in
+\`\${config.directories.conductor_root}/gates/composition-bands.json\`, and are
+counted on the rendered page. They are floors against sameness, not a definition
+of good composition \u2014 nothing in this framework decides that.
+
+## The remaining axes
+
+Three more choices work the same way and are recorded in their own files, each
+of them an axis that is invisible to \`DESIGN.md\` and silent until someone picks:
+
+- **Depth** \u2014 \`depth.selected\` in \`design-bands.json\`. See Axis 5 above.
+- **Motion** \u2014 \`selected\` in \`motion-bands.json\`. Fixes the stagger step and the
+  travel distance, and carries the invariants that make motion safe: nothing
+  above the fold starts hidden, the hidden state is applied by the script that
+  removes it, and reduced motion calms movement rather than removing content.
+- **Type pairing** \u2014 \`selected\` in \`type-pairings.json\`. Choose a pair and copy
+  it verbatim; do not combine the display of one with the body of another, which
+  is composing a new pairing and is what the catalogue exists to avoid. A project
+  with its own licensed brand faces leaves this null and is reported as
+  unchecked, which is correct \u2014 brand type outranks a catalogue.
+
+## What no gate here decides
+
+**A green board does not mean the interface is good.** That sentence is the most
+important one in this file, and it is here because the opposite conclusion is
+the natural one to draw: a wall of passing checks reads as a verdict on quality,
+and it is not one. It is a verdict on the absence of specific defects.
+
+It helps to be concrete about what actually separates a memorable interface from
+a competent one. Roughly, it decomposes into four things:
+
+| | Weight |
+| --- | --- |
+| Art direction and visual identity | 40\u201350% |
+| Exclusive assets \u2014 illustration, 3D, photography, video | part of the above, and the hardest to fake |
+| Interaction and motion | 20\u201330% |
+| Structure and UX | 20\u201330% |
+
+**This framework addresses the fourth, and part of the third.** Nothing here
+reaches art direction or produces an asset. What the gates cover is real and
+worth having \u2014 composition, cadence, hierarchy, and integrity \u2014 and it is enough
+to move a page off "generic template" and onto "clearly designed product". It is
+not enough to make it distinctive, and no amount of additional gates would be:
+the missing half is aesthetic intent and original work, which by definition do
+not live in a closed catalogue.
+
+So state the aim honestly. The purpose of this framework is not to produce
+award-winning interfaces. It is to raise low-cost interfaces to the level of
+products that are clearly designed, non-generic and visually coherent \u2014 to
+**reduce average mediocrity, not to guarantee brilliance**. Those are different
+goals, and only the first one is achievable by machine.
+
+The practical consequence, for whoever reads a green board: every check passing
+means no defect this framework can name is present. Whether the artwork is any
+good, whether the product shot shows the product, whether the motion lands,
+whether the copy earns its space, whether anyone will remember the page \u2014 none
+of that was measured, and a page can pass everything here and still be
+forgettable. When the gates are green, what remains is judgement, and it needs a
+human or at least an eye on the actual page.
+
+### Where the boundary actually falls
+
+Useful when deciding whether some new concern deserves a gate. Three tiers, and
+the tier a concern falls into predicts how much a gate will help far better than
+how important the concern is:
+
+**Instrumentable \u2014 a gate settles it.** Spatial consistency, structural
+hierarchy, visual rhythm, asset integrity, motion safety, composition floors,
+accessibility, responsiveness. These share one property: a correct answer is
+decidable from the artefact, without knowing what the page is for.
+
+**Weakly instrumentable \u2014 a gate helps and does not settle it.** Visual
+identity, personality, art direction, storytelling, visual tension,
+memorability. A gate can establish necessary conditions here (a page with one
+type size has no hierarchy; a page with no bleed has no tension) but never
+sufficient ones. Floors, not verdicts.
+
+**Not instrumentable.** Originality, surprise, aesthetic signature, cultural
+value. Not because nobody has built the check yet \u2014 because a closed catalogue
+is the wrong shape for the question. Anything a catalogue can express is, by the
+time it is in the catalogue, no longer surprising.
+
+The returns diminish sharply down that list, and they diminish *within* the
+first tier too: the fifteenth gate on spatial consistency is worth far less than
+the first composition archetype, which is worth far less than one set of
+original illustrations. If a proposed gate lands in tier two or three, the
+honest answer is usually that the work belongs to a person, and the framework's
+job is to say so rather than to approximate it.
+
+### The property this rests on
+
+> **Gates can prove the absence of known defects. They can never prove the
+> presence of quality.**
+
+This is a property of what a gate is, not a limitation of this implementation,
+and no amount of further work moves it. It is the dual of the familiar result
+about tests \u2014 testing shows the presence of bugs, never their absence \u2014 with one
+difference worth knowing: these gates ARE exhaustive inside the domain they
+cover. Every declared value, every configured viewport, every declared page is
+checked. The limit is not coverage; it is that the domain is closed, and quality
+lives outside it.
+
+So the correct reading of a green board is never "the page is good". It is
+"none of the defects we know how to name are present". Those are different
+statements, and treating the first as though it were the second is how a
+framework built to prevent the average result ends up certifying one.
 `
       },
       {
@@ -7319,8 +9662,11 @@ var init_config = __esm({
           test: "The full test suite.",
           coverage: "Coverage measurement. Compared against config.thresholds per config.thresholds.coverage_mode.",
           structure: "Project-specific structural checks that no off-the-shelf tool covers. Generated at setup from what the user described \u2014 e.g. tenant scoping, no server imports in client code, required auth on endpoints, environment variables complete, documentation in sync with the API, files within config.thresholds.file_max_lines.",
-          design: "Soundness of the design system itself: broken token references, WCAG AA contrast on declared component pairs, whether each numeric axis landed on a declared band rather than between bands, and \u2014 against the recorded baseline \u2014 any widening or flattening of the token scales from inside an implementation task. Runs config.gates.scripts_dir/design-gate.mjs. Absent when the project has no user interface.",
-          design_tokens: "Whether the code actually uses the design system: colour and dimension literals that appear in source but in no token. Ratcheted against a recorded baseline so a legacy interface can adopt it without being rewritten. Runs config.gates.scripts_dir/design-tokens-gate.mjs. Absent when the project has no user interface."
+          design: "Soundness of the design system itself: broken token references, WCAG AA contrast on declared component pairs, whether each numeric axis landed on a declared band rather than between bands, whether the type families match the selected pairing from config.gates.scripts_dir/type-pairings.json and number no more than two, and \u2014 against the recorded baseline \u2014 any widening or flattening of the token scales from inside an implementation task. Runs config.gates.scripts_dir/design-gate.mjs. Absent when the project has no user interface.",
+          design_grammar: "Whether each page's declared composition is a valid sentence in the composition grammar (config.gates.scripts_dir/design-grammar.json): a page is an ordered list of archetypes drawn from a finite vocabulary, and it must derive from one of the declared page grammars as well as satisfy the variety invariants \u2014 no adjacent repeat, a floor on distinct archetypes, a cap on centred entry, alternating density. This is the earliest and cheapest design gate: it reads a list of names, so it runs while the page is still an outline. That is the point \u2014 composition is decided when the page is planned, and an agent asked to recompose a layout it already built will nudge rather than recompose. Runs config.gates.scripts_dir/design-grammar-gate.mjs. Absent when the project has no user interface.",
+          design_assets: "Whether the images the page presents as content are actually content: one asset referenced with several different alt texts, and assets used as illustration that are too simple to be one. Not a judgement of artistic quality, which no gate can make \u2014 a check that the asset exists at the fidelity the markup claims for it, which is the same kind of check as a broken link and fails for the same reason. Ratcheted. Runs config.gates.scripts_dir/design-assets-gate.mjs. Absent when the project has no user interface.",
+          design_render: "What the page actually renders, measured in a browser at each configured viewport: whether every style axis lands on its declared band AND lands on the SAME band at every breakpoint, whether the shadow count matches the declared depth band, whether the page BUILT the composition it declared to the grammar gate, the motion invariants that only a browser can settle (nothing above the fold starts hidden, the page survives with JavaScript disabled, reduced motion calms movement rather than removing content), and the composition floors in config.gates.scripts_dir/composition-bands.json. This is the only gate that reads the rendered result rather than a declaration, which is what lets it see the two things every other design check is blind to \u2014 a utility class or custom property that carries no literal for the token scan to find, and a media query that silently moves an axis to a different band in the viewport the project calls primary. Optionally writes per-viewport screenshots, the only artefact that lets a later step review the page instead of the markup. Runs config.gates.scripts_dir/design-render-gate.mjs and needs a running page (--url) plus Playwright resolvable from the project. Playwright is NOT installed on the user's behalf: when it is absent this gate is registered absent per config.gates.absent_policy, never with a command that cannot run.",
+          design_tokens: "Whether the code actually uses the design system: colour and dimension literals that appear in source but in no token. Ratcheted against a recorded baseline so a legacy interface can adopt it without being rewritten. Runs config.gates.scripts_dir/design-tokens-gate.mjs. The baseline MUST be recorded when the gate is registered \u2014 an unarmed ratchet has no line to hold, so it tolerates every finding, and the gate exits 2 rather than 0 to keep that from reading as a pass. Absent when the project has no user interface."
         },
         entry_fields: {
           cmd: "The exact command, runnable from the project root. Null when the project has no such tool.",
@@ -7329,6 +9675,13 @@ var init_config = __esm({
         },
         absent_policy: "A gate whose cmd is null is DECLARED, never silently skipped and never installed on the user's behalf \u2014 choosing a linter is the project's decision, not Conductor's. Setup may offer to configure one; it must not configure one unasked. Every skill that would have run an absent gate states in its report which checks therefore fall back to human judgement. An absent gate is an unverified check, not a passed one.",
         exit_contract: "A gate is proven by its exit code and its output, read in the run that is being reported. Never infer a gate passed because the code looks right, and never carry a result over from an earlier run or an earlier phase.",
+        exit_codes: {
+          "0": "Pass. The check ran and the project satisfies it.",
+          "1": "Verdict. The check ran and the project failed it \u2014 the output names what to fix, and fixing it is the work.",
+          "2": "Unrunnable. The check did NOT run: the tool is missing, a runner refused to start, an input is unreadable, output was unparsable. There is no verdict, so there is nothing to fix in the code and no finding to act on."
+        },
+        design_gates_measure_defects_not_quality: "A green board is not a verdict on whether the interface is good. The design gates decompose into what a machine can settle \u2014 an internally sound token system, valid contrast, axes on their bands, a page that derives from the composition grammar and renders what it declared, assets that exist at the fidelity the markup claims. That is structure and integrity, which is roughly the UX quarter of what actually separates a memorable interface from a competent one, plus part of the motion share. Art direction, visual identity and original assets are the larger part and are absent from this framework entirely \u2014 they are aesthetic intent and creative work, which do not live in a closed catalogue and cannot be gated. So never report passing design gates as evidence that the interface is well designed, attractive, or of high quality: report them as the absence of the specific defects they name. The aim of these gates is to raise a low-cost interface to clearly-designed, non-generic and visually coherent \u2014 to reduce average mediocrity, not to guarantee brilliance. A page can pass every check here and still be forgettable, and saying so plainly is more useful to the user than a summary that implies otherwise.",
+        unrunnable_policy: "Exit 2 is not a soft failure and it is not a human to-do. A required gate that could not run leaves its whole subject unverified \u2014 the same position as if the gate did not exist, except that the project believes it does. Record every such gate in config.state_document.frontmatter_fields.unrunnable_gates with the exact command and the complete output including stderr, and treat the list as closed: while it is non-empty, no task may be marked done, the state document may not carry the done status, and the track may not be archived. Never reclassify an exit 2 as a pending manual check, an environment quirk, or an absent gate. Absent (config.gates.absent_policy) means the project declared it has no such tool and the skills report the check as resting on human judgement; unrunnable means the project declared a tool, the framework tried to run it, and it broke \u2014 a defect to repair, not a judgement to defer. Conflating the two is how a broken gate acquires the same standing as a deliberate decision, and it is the cheaper path every time, which is why it is named here rather than left to judgement. When the gate cannot be repaired in the current session, the resolution is to say so to the user and stop, or \u2014 with the user's explicit and recorded decision \u2014 to redeclare the gate absent in the manifest, which is a visible change to the project's contract rather than a silent one.",
         missing_manifest_policy: "A project set up before gates existed has no manifest, and that is not an error to halt on. Say so once, offer to run the gate-configuration step of the setup skill, and proceed with every check treated as absent per absent_policy \u2014 which means the work continues and the report states plainly that nothing was machine-verified. Never fabricate a manifest to keep going, and never let the absence read as though the gates passed."
       },
       gate_hooks: {
@@ -7473,6 +9826,7 @@ var init_config = __esm({
           task: "Id of the task currently in progress, or null.",
           wave: "Wave number currently executing, or null.",
           last_commit: "SHA of the last commit produced by Conductor.",
+          unrunnable_gates: "Array of required gates that exited 2 during this track, each as { kind, cmd, output }. Empty is the normal state. While it is non-empty the track is blocked per config.gates.unrunnable_policy: the status may not be the done value and the track may not be archived. This field exists because a gate that cannot run has no category of its own otherwise, and the categories that are available \u2014 a blocker to fix, a human check to defer \u2014 both misdescribe it, the second one harmlessly enough that it is the one that gets used.",
           updated_at: "ISO-8601 timestamp of the last write."
         },
         body_sections: ["Current Position", "Open Decisions", "Blockers", "Resume Hint"]

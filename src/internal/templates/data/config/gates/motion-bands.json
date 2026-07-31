@@ -1,0 +1,60 @@
+{
+  "description": "Motion choreography, in the same band form as the style axes. Duration tokens already live in DESIGN.md; what they never say is WHAT moves, WHEN, and in what order — which is all of what separates motion that reads as considered from motion that reads as a library default.",
+  "selected": null,
+  "why_bands": "Asked to 'add some animation', a model reaches for the same thing every time: fade-and-rise on everything, staggered by a round number nobody chose. That is the mean answer for motion, and prose does not move it any more than it moved spacing. Picking a band fixes the two numbers that matter and, more importantly, fixes how much of the page is allowed to move at all.",
+
+  "bands": {
+    "restrained": {
+      "stagger": 0,
+      "travel": 0,
+      "opacity_only": true,
+      "note": "Nothing translates. Elements resolve in place. The right answer for dense product interfaces, and for any page whose content is the argument."
+    },
+    "measured": {
+      "stagger": 60,
+      "travel": 12,
+      "opacity_only": false,
+      "note": "The default for marketing pages. Perceptible, cheap to render, survives a slow device."
+    },
+    "kinetic": {
+      "stagger": 90,
+      "travel": 24,
+      "opacity_only": false,
+      "note": "Motion is part of the brand. Only choose this if someone will art-direct it — at this amplitude, sloppy timing is more visible than no motion at all."
+    }
+  },
+
+  "invariants": {
+    "nothing_above_the_fold_starts_hidden": {
+      "rule": "No element visible in the initial viewport may start at opacity 0 or otherwise invisible.",
+      "why": "An entrance animation on content that is already on screen has nothing to enter from. What the user sees is a flash of empty page while the observer catches up, and on a slow connection or with JS disabled they may see nothing at all. This is the most common motion defect in generated pages and it degrades the one impression that cannot be retaken.",
+      "severity": "fail"
+    },
+    "progressive_enhancement": {
+      "rule": "The hidden state must be applied BY the script that will reveal it, never authored into the markup or the stylesheet.",
+      "why": "If the hidden state ships in CSS and the script fails, the content is gone. Applying it from the same code that removes it makes the failure mode 'no animation' instead of 'no page'.",
+      "severity": "fail"
+    },
+    "reduced_motion_keeps_content": {
+      "rule": "`prefers-reduced-motion: reduce` must disable travel and stagger, and must never leave content hidden.",
+      "why": "The frequent mistake is to disable the transition while keeping the hidden state, which makes reduced-motion mean invisible. Reduced motion is a request for less movement, not less content.",
+      "severity": "fail"
+    },
+    "stagger_needs_a_series": {
+      "rule": "Stagger applies only to sets of 3 or more sibling elements.",
+      "why": "Staggering two elements is not a rhythm, it is a delay. It reads as lag rather than as sequence.",
+      "severity": "warn"
+    },
+    "stagger_is_bounded": {
+      "rule": "Total stagger across one series must not exceed 400ms.",
+      "value": 400,
+      "why": "Past roughly 400ms the last item arrives after the user has already started reading the first, so the sequence stops being perceived as one gesture and starts being perceived as slowness.",
+      "severity": "warn"
+    },
+    "declared_delays_come_from_the_band": {
+      "rule": "Stagger delays must be multiples of the band's stagger value.",
+      "why": "0/50/100/150ms in a system whose motion tokens are 150/250/400ms is the same defect as a 13px padding: a number that came from nowhere and matches nothing.",
+      "severity": "fail"
+    }
+  }
+}

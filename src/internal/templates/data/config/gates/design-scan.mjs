@@ -27,6 +27,43 @@ export const FUNC_COLOR_RE = /\b(?:rgba?|hsla?)\s*\([^)]*\)/gi;
 export const DIM_RE = /(-?\d*\.?\d+)(px|rem)\b/g;
 export const FONT_FAMILY_RE = /(?:font-family\s*:|fontFamily\s*:)\s*([^;,\n}]+)/gi;
 
+/**
+ * Shadow declarations, for the depth axis. Matches the CSS property, its
+ * camelCase form in style objects, and the Tailwind-family utility class.
+ *
+ * Depth is the one band that cannot be anchored on a token value: `tonal`,
+ * `bordered` and `shadowed` differ by whether shadows exist at all, not by a
+ * number a design system declares. So it is checked where the evidence is — a
+ * project that chose `bordered` and then shipped `box-shadow: 0 8px 32px` has
+ * left its declared band, and nothing in DESIGN.md would ever show it.
+ */
+export const SHADOW_RE = /(?:box-shadow|boxShadow)\s*:\s*([^;,\n}]*(?:,[^;\n}]*)*)|(?:^|[\s"'`])(shadow-(?:sm|md|lg|xl|2xl|inner|\[[^\]]+\]))(?=$|[\s"'`])/gi;
+
+/**
+ * Stagger delays. Only `*-delay`, never `*-duration`: duration is a design token
+ * that DESIGN.md already declares, while the delay is the sequencing decision
+ * the motion band owns and nothing else checks.
+ */
+export const DELAY_RE = /(?:transition-delay|animation-delay|transitionDelay|animationDelay)\s*:\s*([^;,\n}]+)/gi;
+
+/** Delay values in milliseconds, dropping the zero, which every band allows. */
+export function delaysOf(value) {
+  const out = [];
+  for (const match of String(value).matchAll(/(-?\d*\.?\d+)(ms|s)\b/g)) {
+    const n = Number(match[1]) * (match[2] === 's' ? 1000 : 1);
+    if (Number.isFinite(n) && n !== 0) out.push(n);
+  }
+  return out;
+}
+
+/** Whether a matched shadow declaration actually paints one. */
+export function isRealShadow(match) {
+  const value = (match[1] ?? '').trim().toLowerCase();
+  if (match[2]) return true; // utility class: `shadow-none` is not in the pattern
+  if (!value) return false;
+  return value !== 'none' && value !== 'unset' && value !== 'initial' && value !== 'inherit';
+}
+
 /** #abc -> #aabbcc, and a fully opaque alpha channel dropped so #141517ff === #141517. */
 export function normalizeHex(hex) {
   let h = hex.toLowerCase();

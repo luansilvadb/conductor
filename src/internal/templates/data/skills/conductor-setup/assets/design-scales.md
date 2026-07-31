@@ -48,14 +48,20 @@ is confirmed before it becomes a token.
    recorded in `${config.files.artifacts.product}`, and say which band you
    chose and why. Do not fall back to "the safe middle" — a stated band that
    is wrong is correctable, an averaged one is invisible.
-3. Write `DESIGN.md` using the values of the chosen bands verbatim.
+3. Write `DESIGN.md` using the values of the chosen bands verbatim, and record
+   the depth band as `depth.selected` in
+   `${config.directories.conductor_root}/gates/design-bands.json` — it is the one
+   axis with no token to carry it, so the gate reads it from there or not at all.
 4. Fill the `components` section. It is not optional: the contrast check only
    examines `backgroundColor`/`textColor` pairs that are actually declared, so
    a design system without components has no accessibility verification at all.
 5. Run `node ${config.directories.conductor_root}/gates/design-gate.mjs` and fix what blocks.
-6. Record the baselines: copy the approved file to
-   `${config.directories.conductor_root}/gates/design-baseline.md`, then run
-   `node ${config.directories.conductor_root}/gates/design-tokens-gate.mjs --update-baseline`.
+6. Record the baselines, and check both exist afterwards: copy the approved file
+   to `${config.directories.conductor_root}/gates/design-baseline.md`, then run
+   `node ${config.directories.conductor_root}/gates/design-tokens-gate.mjs --update-baseline`
+   and confirm `${config.directories.conductor_root}/gates/design-tokens-baseline.json`
+   was written. Until it is, the ratchet has no line to hold and tolerates every
+   finding — the gate reports that as unrunnable, not as a pass.
 
 ## Axis 1 — Vertical rhythm
 
@@ -128,6 +134,13 @@ an accident unless the whole system commits to that contrast deliberately.
 `tonal` and `bordered` are much harder to get wrong than `shadowed`, and a
 default shadow (`0 2px 4px rgba(0,0,0,0.1)`) is the mean answer.
 
+Record the chosen band as `depth.selected` in
+`${config.directories.conductor_root}/gates/design-bands.json`. This axis is the
+one that cannot be checked from `DESIGN.md`: the bands differ by whether shadows
+exist at all, not by a token value, so the gate checks the code instead. Leave it
+null and the axis is never checked — which is how a system that declares
+`bordered` in prose ships shadowed cards and passes every gate.
+
 ## Banned defaults
 
 If the draft contains any of these, an axis was averaged rather than chosen.
@@ -149,3 +162,134 @@ expressible as tokens; they belong in the `Overview` and `Layout` prose of
 `DESIGN.md`, which is what the agent falls back to when no token applies.
 Write those sections as instructions, not adjectives: "prefer the more spacious
 option when unsure" is actionable, "modern and clean" is not.
+
+Note the tension with the opening of this file: prose is exactly what does not
+move a model off the mean. So the prose above is necessary and not sufficient —
+a page composed entirely of centred sections of equal height satisfies every
+band here and every sentence in `DESIGN.md`, and is the most recognisable
+generated layout there is.
+
+What carries composition instead is the grammar in
+`${config.directories.conductor_root}/gates/design-grammar.json`, which applies
+this file's own move one level up. Rather than measuring a finished page for
+uniformity, it removes the choice beforehand: a finite vocabulary of section
+archetypes, and a finite set of page shapes built from them. A page declares
+itself as an ordered list of archetype names, and that list must derive from one
+of the grammars — `open → establish → turn → prove → resolve` for a landing
+page — as well as satisfy invariants no derivation can satisfy by accident: no
+adjacent repeat, at least four distinct archetypes, something that bleeds, no
+long run of one density, and a cap on how much of the page enters from the
+centre.
+
+The `turn` movement deserves a note, because it is the one a generated page
+always omits. It is the section that breaks the pattern the page has been
+building — a marquee, a full-bleed image, cards off the grid — and its absence
+is precisely what makes such a page read as a list of features rather than an
+argument. No amount of correct spacing substitutes for it.
+
+Two floors remain measured rather than chosen, in
+`${config.directories.conductor_root}/gates/composition-bands.json`, and are
+counted on the rendered page. They are floors against sameness, not a definition
+of good composition — nothing in this framework decides that.
+
+## The remaining axes
+
+Three more choices work the same way and are recorded in their own files, each
+of them an axis that is invisible to `DESIGN.md` and silent until someone picks:
+
+- **Depth** — `depth.selected` in `design-bands.json`. See Axis 5 above.
+- **Motion** — `selected` in `motion-bands.json`. Fixes the stagger step and the
+  travel distance, and carries the invariants that make motion safe: nothing
+  above the fold starts hidden, the hidden state is applied by the script that
+  removes it, and reduced motion calms movement rather than removing content.
+- **Type pairing** — `selected` in `type-pairings.json`. Choose a pair and copy
+  it verbatim; do not combine the display of one with the body of another, which
+  is composing a new pairing and is what the catalogue exists to avoid. A project
+  with its own licensed brand faces leaves this null and is reported as
+  unchecked, which is correct — brand type outranks a catalogue.
+
+## What no gate here decides
+
+**A green board does not mean the interface is good.** That sentence is the most
+important one in this file, and it is here because the opposite conclusion is
+the natural one to draw: a wall of passing checks reads as a verdict on quality,
+and it is not one. It is a verdict on the absence of specific defects.
+
+It helps to be concrete about what actually separates a memorable interface from
+a competent one. Roughly, it decomposes into four things:
+
+| | Weight |
+| --- | --- |
+| Art direction and visual identity | 40–50% |
+| Exclusive assets — illustration, 3D, photography, video | part of the above, and the hardest to fake |
+| Interaction and motion | 20–30% |
+| Structure and UX | 20–30% |
+
+**This framework addresses the fourth, and part of the third.** Nothing here
+reaches art direction or produces an asset. What the gates cover is real and
+worth having — composition, cadence, hierarchy, and integrity — and it is enough
+to move a page off "generic template" and onto "clearly designed product". It is
+not enough to make it distinctive, and no amount of additional gates would be:
+the missing half is aesthetic intent and original work, which by definition do
+not live in a closed catalogue.
+
+So state the aim honestly. The purpose of this framework is not to produce
+award-winning interfaces. It is to raise low-cost interfaces to the level of
+products that are clearly designed, non-generic and visually coherent — to
+**reduce average mediocrity, not to guarantee brilliance**. Those are different
+goals, and only the first one is achievable by machine.
+
+The practical consequence, for whoever reads a green board: every check passing
+means no defect this framework can name is present. Whether the artwork is any
+good, whether the product shot shows the product, whether the motion lands,
+whether the copy earns its space, whether anyone will remember the page — none
+of that was measured, and a page can pass everything here and still be
+forgettable. When the gates are green, what remains is judgement, and it needs a
+human or at least an eye on the actual page.
+
+### Where the boundary actually falls
+
+Useful when deciding whether some new concern deserves a gate. Three tiers, and
+the tier a concern falls into predicts how much a gate will help far better than
+how important the concern is:
+
+**Instrumentable — a gate settles it.** Spatial consistency, structural
+hierarchy, visual rhythm, asset integrity, motion safety, composition floors,
+accessibility, responsiveness. These share one property: a correct answer is
+decidable from the artefact, without knowing what the page is for.
+
+**Weakly instrumentable — a gate helps and does not settle it.** Visual
+identity, personality, art direction, storytelling, visual tension,
+memorability. A gate can establish necessary conditions here (a page with one
+type size has no hierarchy; a page with no bleed has no tension) but never
+sufficient ones. Floors, not verdicts.
+
+**Not instrumentable.** Originality, surprise, aesthetic signature, cultural
+value. Not because nobody has built the check yet — because a closed catalogue
+is the wrong shape for the question. Anything a catalogue can express is, by the
+time it is in the catalogue, no longer surprising.
+
+The returns diminish sharply down that list, and they diminish *within* the
+first tier too: the fifteenth gate on spatial consistency is worth far less than
+the first composition archetype, which is worth far less than one set of
+original illustrations. If a proposed gate lands in tier two or three, the
+honest answer is usually that the work belongs to a person, and the framework's
+job is to say so rather than to approximate it.
+
+### The property this rests on
+
+> **Gates can prove the absence of known defects. They can never prove the
+> presence of quality.**
+
+This is a property of what a gate is, not a limitation of this implementation,
+and no amount of further work moves it. It is the dual of the familiar result
+about tests — testing shows the presence of bugs, never their absence — with one
+difference worth knowing: these gates ARE exhaustive inside the domain they
+cover. Every declared value, every configured viewport, every declared page is
+checked. The limit is not coverage; it is that the domain is closed, and quality
+lives outside it.
+
+So the correct reading of a green board is never "the page is good". It is
+"none of the defects we know how to name are present". Those are different
+statements, and treating the first as though it were the second is how a
+framework built to prevent the average result ends up certifying one.

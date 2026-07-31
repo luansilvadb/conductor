@@ -76,6 +76,7 @@ function parseArgs(argv) {
     file: 'conductor/DESIGN.md',
     baseline: 'conductor/gates/design-baseline.md',
     bands: 'conductor/gates/design-bands.json',
+    pairings: 'conductor/gates/type-pairings.json',
     verbose: false,
   };
   for (let i = 0; i < argv.length; i += 1) {
@@ -84,6 +85,7 @@ function parseArgs(argv) {
     else if (arg === '--file') opts.file = argv[++i];
     else if (arg === '--baseline') opts.baseline = argv[++i];
     else if (arg === '--bands') opts.bands = argv[++i];
+    else if (arg === '--pairings') opts.pairings = argv[++i];
     else if (arg === '--verbose') opts.verbose = true;
   }
   if (opts.mode !== 'implement' && opts.mode !== 'design') {
@@ -220,6 +222,85 @@ function checkBands(designFile, bandsFile) {
   return { name: 'bands', blocking, advisory };
 }
 
+/**
+ * Checks the type pairing against the catalogue, and the family count against
+ * the one rule that holds regardless of catalogue.
+ *
+ * Pairing type well is a craft skill, and the failure mode is not ugliness — it
+ * is sameness: the same two or three families appear in every generated
+ * interface, so the page reads as related to every other generated page. A
+ * catalogue removes the composition step, exactly as the bands did for spacing.
+ *
+ * A project with its own licensed brand faces leaves `selected` null and is
+ * reported as unchecked. That is correct: brand type always outranks a
+ * catalogue entry, and the catalogue exists for the case where nobody chose,
+ * which is the case where the mean answer wins by default.
+ */
+function checkType(designFile, pairingsFile) {
+  const blocking = [];
+  const advisory = [];
+  if (!existsSync(pairingsFile)) return { name: 'type', blocking, advisory };
+
+  let spec;
+  try {
+    spec = JSON.parse(readFileSync(pairingsFile, 'utf-8'));
+  } catch (err) {
+    fail(2, 'type pairings at ' + pairingsFile + ' are unreadable (' + err.message + ')');
+  }
+
+  const dtcg = runDesignMd(['export', '--format', 'dtcg', designFile]);
+  const typography = dtcg.typography ?? {};
+  const familyOf = (token) => {
+    const raw = typography[token]?.$value?.fontFamily;
+    if (!raw) return null;
+    return String(Array.isArray(raw) ? raw[0] : raw).split(',')[0].replace(/["']/g, '').trim();
+  };
+
+  const families = new Set();
+  for (const [name, token] of Object.entries(typography)) {
+    if (name.startsWith('$')) continue;
+    const raw = token?.$value?.fontFamily;
+    if (!raw) continue;
+    families.add(String(Array.isArray(raw) ? raw[0] : raw).split(',')[0].replace(/["']/g, '').trim());
+  }
+  if (families.size > 2) {
+    blocking.push(
+      'typography uses ' + families.size + ' families (' + [...families].join(', ') +
+      '). More than two is an unresolved decision, not a richer system',
+    );
+  }
+
+  const selected = spec.selected;
+  if (!selected) {
+    advisory.push('type pairing: none selected in ' + pairingsFile + ', so the pairing was not checked');
+    return { name: 'type', blocking, advisory };
+  }
+
+  const pairing = spec.pairings?.[selected];
+  if (!pairing) {
+    fail(2, pairingsFile + ' selects the pairing "' + selected + '", which it does not define.');
+  }
+
+  const display = familyOf('display');
+  const body = familyOf('body');
+  const norm = (s) => (s ?? '').toLowerCase();
+
+  if (display && norm(display) !== norm(pairing.display)) {
+    blocking.push(
+      'typography.display is `' + display + '`, but the selected pairing `' + selected + '` is `' +
+      pairing.display + '`. Pick a pairing and copy it — recombining halves of two pairings is composing ' +
+      'a new one, which is what the catalogue exists to avoid',
+    );
+  }
+  if (body && norm(body) !== norm(pairing.body)) {
+    blocking.push(
+      'typography.body is `' + body + '`, but the selected pairing `' + selected + '` is `' + pairing.body + '`',
+    );
+  }
+
+  return { name: 'type', blocking, advisory };
+}
+
 // --- Report -----------------------------------------------------------------
 function report(sections, opts) {
   const blocking = sections.flatMap((s) => s.blocking);
@@ -246,6 +327,13 @@ function report(sections, opts) {
       process.stderr.write(
         '\nBand findings mean an axis was averaged rather than chosen. Go back to the band table, ' +
         'pick one band for that axis and copy its value — do not nudge the current value toward the nearest band.\n',
+      );
+    }
+    if (failed.includes('type')) {
+      process.stderr.write(
+        '\nType findings are fixed by copying the selected pairing into ' + opts.file + ' verbatim, ' +
+        'or by selecting a different pairing deliberately. Editing the catalogue to match what was ' +
+        'already written is the same move as widening a token to fit a component.\n',
       );
     }
     if (failed.includes('ratchet')) {
@@ -279,7 +367,7 @@ function main() {
     fail(2, opts.file + ' is empty.');
   }
 
-  const sections = [checkSpec(opts.file)];
+  const sections = [checkSpec(opts.file), checkType(opts.file, opts.pairings)];
 
   if (existsSync(opts.bands)) {
     sections.push(checkBands(opts.file, opts.bands));

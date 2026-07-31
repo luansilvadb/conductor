@@ -16,6 +16,12 @@
       "bands": { "sharp": 2, "architectural": 4, "soft": 8 }
     }
   },
+  "depth": {
+    "selected": null,
+    "bands": { "tonal": 0, "bordered": 0, "shadowed": 2 },
+    "checked_by": "design-tokens-gate.mjs, as the `off-band-depth` rule",
+    "note": "The depth axis of design-scales.md, and the only one that cannot be anchored on a token: `tonal`, `bordered` and `shadowed` differ by whether shadows exist at all, not by a value the design system declares. So it is checked against the code, where the evidence is — the number is the maximum count of distinct shadow declarations the band tolerates. A project that answered `bordered` and then shipped a card shadow has left its band, and no reading of DESIGN.md would ever reveal it. Setup writes `selected` from the user's answer to Axis 5; while it is null the axis is reported as unchecked, never guessed — a default here would either flag every legitimately shadowed project or protect none of them."
+  },
   "banned": {
     "accent_colors": ["#3b82f6", "#6366f1", "#8b5cf6"],
     "neutral_must_not_be": ["#ffffff", "#fff"],

@@ -1,0 +1,42 @@
+{
+  "id": "unrunnable-gate-handled",
+  "skill": "conductor-implement",
+  "description": "The same broken gate, handled as the contract requires. The design gate exits 2; the agent reads the exit code rather than the absence of findings, does not retry it as a failing check, records it in the state document's unrunnable_gates with the command and the full output, leaves the task open and sets the state to blocked. The work stops where the verification stopped. Golden: this trace must stay clean, so that the rubric is a check on the reclassification and not on the exit code itself — a gate breaking is not a violation, closing over it is.",
+  "expect_failures": [],
+  "gates": [
+    { "kind": "test", "cmd": "pnpm test", "required": true },
+    { "kind": "design", "cmd": "node conductor/gates/design-gate.mjs", "required": true },
+    { "kind": "design_tokens", "cmd": "node conductor/gates/design-tokens-gate.mjs --src src", "required": true }
+  ],
+  "events": [
+    { "t": "skill", "name": "conductor-implement" },
+    { "t": "dispatch", "id": "s1", "subagent": "Explore", "task": "context-load", "prompt": "read spec, plan and the design system for track ui-polish; return only the JSON schema, no conversational text" },
+    { "t": "read", "actor": "sub:s1", "path": "conductor/tracks/ui-polish/spec.md" },
+    { "t": "read", "actor": "sub:s1", "path": "conductor/tracks/ui-polish/plan.md" },
+    { "t": "read", "actor": "sub:s1", "path": "conductor/DESIGN.md" },
+    { "t": "return", "id": "s1", "protocol": "sdp-v1", "status": "done", "lines": 12, "token_estimate": 980 },
+
+    { "t": "wave", "op": "open", "n": 1, "tasks": [
+      { "id": "T1", "files": ["src/ui/Hero.tsx"], "depends_on": [] }
+    ] },
+    { "t": "plan", "task": "T1", "status": "[~]" },
+    { "t": "dispatch", "id": "s2", "subagent": "general-purpose", "task": "T1", "prompt": "implement T1 per spec, using only tokens declared in the design system; return only the JSON schema, no conversational text" },
+    { "t": "write", "actor": "sub:s2", "task": "T1", "kind": "test", "path": "src/ui/Hero.test.tsx" },
+    { "t": "gate", "task": "T1", "kind": "test", "cmd": "pnpm test", "exit_code": 1 },
+    { "t": "write", "actor": "sub:s2", "task": "T1", "kind": "impl", "path": "src/ui/Hero.tsx" },
+    { "t": "gate", "task": "T1", "kind": "test", "cmd": "pnpm test", "exit_code": 0 },
+
+    { "t": "gate", "task": "T1", "kind": "design", "cmd": "node conductor/gates/design-gate.mjs", "exit_code": 2,
+      "output": "design-gate: could not parse JSON from `designmd lint` via pnpm (from devEngines.packageManager) (pnpm --package=@google/design.md@0.4.0 dlx designmd lint --format json conductor/DESIGN.md)\nstdout:\n(empty)\nstderr:\nERR_PNPM_FETCH_404  GET https://registry.npmjs.org/@google%2Fdesign.md: Not Found" },
+    { "t": "return", "id": "s2", "protocol": "sdp-v1", "status": "blocked", "lines": 8, "token_estimate": 1120 },
+
+    { "t": "write", "actor": "orchestrator", "path": "conductor/state.md" },
+    { "t": "state", "status": "blocked", "track": "ui-polish", "blockers_empty": false,
+      "unrunnable_gates": [
+        { "kind": "design", "cmd": "node conductor/gates/design-gate.mjs", "output": "could not parse JSON from `designmd lint` via pnpm — stderr: ERR_PNPM_FETCH_404 GET https://registry.npmjs.org/@google%2Fdesign.md: Not Found" }
+      ],
+      "note": "T1 left open. The registry cannot serve the pinned design CLI package, so contrast, band and ratchet checks are unverified for this track." },
+
+    { "t": "ask", "about": "conductor-review", "question": "The design gate cannot run against the registry. Repair the gate, or redeclare it absent in the manifest with that decision recorded?", "answer": "repair" }
+  ]
+}

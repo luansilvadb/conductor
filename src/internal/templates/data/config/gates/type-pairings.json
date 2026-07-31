@@ -1,0 +1,51 @@
+{
+  "description": "Curated display/body pairings. Same move as the bands: choose from a finite set rather than compose a new combination, because pairing type is a craft skill and the mean answer is recognisable on sight.",
+  "selected": null,
+  "why": "Asked to pick fonts, a model reaches for the handful it has seen most: Inter with Inter, Poppins with Poppins, a geometric sans with itself at two weights. None of those is wrong, and all of them are why generated pages look related to each other. A pairing is also the cheapest large change available — swapping the pair transforms a page far more than any token in DESIGN.md, at no structural cost.",
+  "how_to_use": "Pick one entry, then write its `display` and `body` into DESIGN.md's typography tokens verbatim. The scale, weights and sizes still come from the type contrast band — a pairing decides which families, never how big.",
+
+  "pairings": {
+    "editorial-serif": {
+      "display": "Fraunces",
+      "body": "Inter",
+      "feel": "Warm, bookish, opinionated. A soft serif with real optical sizing against a neutral workhorse.",
+      "suits": "Consumer products with a human story, D2C, anything that wants to feel made rather than shipped."
+    },
+    "swiss": {
+      "display": "Inter Tight",
+      "body": "Inter",
+      "feel": "Neutral, dense, engineered. One family at two optical widths; the hierarchy comes from scale, not contrast.",
+      "suits": "Developer tools, infrastructure, dashboards — anywhere the content is the argument and the type should get out of the way."
+    },
+    "brutal": {
+      "display": "Archivo Black",
+      "body": "Archivo",
+      "feel": "Loud, flat, confident. Very heavy display against a plain companion.",
+      "suits": "Launches, events, anything that would rather be remembered than trusted."
+    },
+    "humanist": {
+      "display": "Playfair Display",
+      "body": "Source Sans 3",
+      "feel": "High-contrast serif with a calm humanist sans. Traditional, legible, slightly formal.",
+      "suits": "Finance, health, education — products where credibility outranks personality."
+    },
+    "technical": {
+      "display": "Space Grotesk",
+      "body": "IBM Plex Sans",
+      "feel": "Quirky geometric display with a workmanlike body. Reads modern without reading generic.",
+      "suits": "Data products, AI tooling, anything technical that does not want to look like a bank."
+    },
+    "monospace-led": {
+      "display": "JetBrains Mono",
+      "body": "Inter",
+      "feel": "Monospace as display voice. Distinctive, and cheap to get wrong at large sizes — check the headline before committing.",
+      "suits": "Developer-facing products where the audience reads code all day."
+    }
+  },
+
+  "rules": {
+    "one_pairing": "Use exactly one pairing. A third family is not a design decision, it is an unresolved one.",
+    "no_composing": "Do not mix the display of one pairing with the body of another. These are chosen for how the two behave together — the pairing IS the unit, and recombining them puts you back to composing a new one, which is what this file exists to avoid.",
+    "substitution": "Any pairing may be replaced wholesale with the product's own brand faces when it has them. Licensed brand type always beats a catalogue entry; the catalogue exists for the case where nobody has chosen, which is the case where the mean answer wins by default."
+  }
+}

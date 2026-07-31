@@ -1,0 +1,189 @@
+{
+  "description": "The composition grammar: a finite vocabulary of section archetypes and a finite set of valid page shapes built from them. Every other design file here constrains style — what a value may be. This one constrains form — what a page may be built out of, and in what order.",
+  "why": "The band architecture stops at style by its own admission, and hands composition to the prose of DESIGN.md. The same document explains why that cannot hold: prose does not move a model off the mean, and the mean of every landing page ever written is a stack of centred sections of equal height. Floors ('do not be uniform') detect that after the fact. A grammar prevents it, because the model is no longer composing — it is choosing a path through a graph someone else drew. That is the same move the bands made for spacing, applied one level up, and it gets stronger as the model gets weaker: a model that cannot invent a good layout can still walk a valid derivation.",
+  "not_a_style_guide": "An archetype is a skeleton, never an appearance. It fixes where the eye enters, how the measure is divided and what breaks the frame; it says nothing about colour, radius or type, which the bands already own. Two pages built from the same derivation with different bands look nothing alike — which is the point. This file removes the choice of STRUCTURE only.",
+
+  "archetypes": {
+    "hero-split": {
+      "role": "open",
+      "structure": "Asymmetric two-column: copy in the narrower column, a single large visual in the wider one. The visual bleeds off one edge.",
+      "grid": "5fr 7fr",
+      "entry": "left",
+      "bleeds": true,
+      "density": "low"
+    },
+    "hero-full-bleed": {
+      "role": "open",
+      "structure": "One edge-to-edge image or canvas with the headline set over it. Nothing else above the fold.",
+      "grid": "1fr",
+      "entry": "center",
+      "bleeds": true,
+      "density": "low"
+    },
+    "hero-editorial": {
+      "role": "open",
+      "structure": "Type-led opening: an oversized headline on a plain field, the supporting line hanging beneath it, the visual deferred to the next section entirely.",
+      "grid": "1fr",
+      "entry": "left",
+      "bleeds": false,
+      "density": "low"
+    },
+    "feature-triptych": {
+      "role": "establish",
+      "structure": "Three equal columns, each an icon or number with a short block beneath. The most conventional archetype here, and the reason the invariants cap how often it may appear.",
+      "grid": "repeat(3, 1fr)",
+      "entry": "center",
+      "bleeds": false,
+      "density": "medium"
+    },
+    "editorial-offset": {
+      "role": "establish",
+      "structure": "Single column held to a reading measure and offset from centre, with the heading in the empty margin beside it rather than above it.",
+      "grid": "1fr",
+      "entry": "left",
+      "bleeds": false,
+      "density": "medium"
+    },
+    "stat-band": {
+      "role": "establish",
+      "structure": "A horizontal band of three or four numbers at display scale, on a contrasting field, with no supporting copy beyond a caption each.",
+      "grid": "repeat(auto-fit, minmax(0, 1fr))",
+      "entry": "left",
+      "bleeds": true,
+      "density": "low"
+    },
+    "overlap-cards": {
+      "role": "turn",
+      "structure": "Cards on a staggered baseline that overlap the section edge or each other, so the grid is visibly broken rather than filled.",
+      "grid": "repeat(2, 1fr)",
+      "entry": "left",
+      "bleeds": true,
+      "density": "high"
+    },
+    "marquee": {
+      "role": "turn",
+      "structure": "A single line of oversized type or logos running past both edges of the viewport, read as texture rather than as content.",
+      "grid": "1fr",
+      "entry": "left",
+      "bleeds": true,
+      "density": "low"
+    },
+    "full-bleed-media": {
+      "role": "turn",
+      "structure": "One edge-to-edge visual with no container and no heading, used as a breath between two dense sections.",
+      "grid": "1fr",
+      "entry": "center",
+      "bleeds": true,
+      "density": "low"
+    },
+    "demo-sticky-scroll": {
+      "role": "prove",
+      "structure": "A pinned visual on one side while the copy beside it advances through steps. The visual changes with the step.",
+      "grid": "6fr 6fr",
+      "entry": "right",
+      "bleeds": false,
+      "density": "high"
+    },
+    "testimonial-mosaic": {
+      "role": "prove",
+      "structure": "Quotes at deliberately unequal sizes in an irregular mosaic, never a row of equal cards.",
+      "grid": "masonry",
+      "entry": "left",
+      "bleeds": false,
+      "density": "high"
+    },
+    "data-grid": {
+      "role": "prove",
+      "structure": "A dense comparison table or spec grid, the densest thing on the page, placed where density is the argument.",
+      "grid": "table",
+      "entry": "left",
+      "bleeds": false,
+      "density": "high"
+    },
+    "cta-split": {
+      "role": "resolve",
+      "structure": "Two columns: the ask on one side, a single reason to act on the other. Not centred.",
+      "grid": "7fr 5fr",
+      "entry": "left",
+      "bleeds": false,
+      "density": "low"
+    },
+    "centered-statement": {
+      "role": "resolve",
+      "structure": "One centred line at display scale with a single action beneath it. The most-reached-for shape on the web, which is why the invariants limit it rather than ban it — used once, at the end, it resolves; used everywhere, it IS the generic page.",
+      "grid": "1fr",
+      "entry": "center",
+      "bleeds": false,
+      "density": "low"
+    }
+  },
+
+  "grammars": {
+    "landing": {
+      "description": "A marketing page with something to sell. The arc is deliberately musical: state, establish, break, prove, resolve. The `turn` movement is the one a generated page always omits, and its absence is what makes such a page feel like a list rather than an argument.",
+      "movements": [
+        { "role": "open", "count": 1 },
+        { "role": "establish", "count": [1, 2] },
+        { "role": "turn", "count": 1 },
+        { "role": "prove", "count": [1, 2] },
+        { "role": "resolve", "count": 1 }
+      ]
+    },
+    "product": {
+      "description": "A page for something the reader already knows they want. Opens flatter, proves harder, turns late.",
+      "movements": [
+        { "role": "open", "count": 1 },
+        { "role": "prove", "count": [1, 2] },
+        { "role": "establish", "count": [1, 2] },
+        { "role": "turn", "count": [0, 1] },
+        { "role": "resolve", "count": 1 }
+      ]
+    },
+    "editorial": {
+      "description": "Long-form, where the argument is the content. Almost no turn, and the resolve is quiet.",
+      "movements": [
+        { "role": "open", "count": 1 },
+        { "role": "establish", "count": [2, 4] },
+        { "role": "turn", "count": [0, 1] },
+        { "role": "resolve", "count": 1 }
+      ]
+    }
+  },
+
+  "invariants": {
+    "no_adjacent_repeat": {
+      "rule": "No two consecutive sections may use the same archetype.",
+      "why": "Repetition between neighbours is what reads as a template. It is also the single cheapest thing to do, which is why it is stated as a rule rather than left to taste."
+    },
+    "max_centered_statement": {
+      "rule": "At most 2 sections may use `centered-statement`.",
+      "value": 2,
+      "why": "One centred statement resolves a page. Every section centred is the signature of a page nobody composed."
+    },
+    "min_distinct_archetypes": {
+      "rule": "A page must use at least 4 distinct archetypes.",
+      "value": 4,
+      "why": "Below four, the page has a pattern rather than a shape, however many sections it has."
+    },
+    "min_bleeding_sections": {
+      "rule": "At least 1 section must have `bleeds: true`.",
+      "value": 1,
+      "why": "A page where nothing ever leaves the container never varies its own frame, and reads as a document rather than a designed page."
+    },
+    "max_consecutive_same_density": {
+      "rule": "At most 2 consecutive sections may share the same density.",
+      "value": 2,
+      "why": "Density is tempo. Three dense sections in a row exhausts the reader; three sparse ones in a row reads as padding. Alternation is most of what makes a page feel paced."
+    },
+    "max_consecutive_centered_entry": {
+      "rule": "At most 2 consecutive sections may use `entry: center`.",
+      "value": 2,
+      "why": "Where the eye enters is the axis a generated page never varies — every heading centred, forever. Note this constrains centre only, not `left`: a run of left-entering sections is the reading direction doing its job, and forcing alternation there would push content to the right for no reason, which is a different kind of arbitrary. The failure being prevented is specifically the centred stack."
+    },
+    "max_centered_entry_ratio": {
+      "rule": "At most half the sections may use `entry: center`.",
+      "value": 0.5,
+      "why": "The run limit alone is satisfied by alternating centre and left forever, which still reads as centred. This bounds the page globally: if most sections enter from the middle, the page has one axis however the runs are arranged."
+    }
+  }
+}

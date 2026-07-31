@@ -21,11 +21,12 @@
 // Usage:
 //   node conductor/gates/design-tokens-gate.mjs [--src <dir>]... [--strict]
 //        [--file <DESIGN.md>] [--baseline <json>] [--update-baseline]
+//        [--allow-unarmed]
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { dirname } from 'node:path';
+import { dirname, relative, sep } from 'node:path';
 import { fail, runDesignMd } from './design-cli.mjs';
-import { dimKey, eachLine, normalizeHex, HEX_RE, FUNC_COLOR_RE, DIM_RE, STYLESHEET_EXTS } from './design-scan.mjs';
+import { dimKey, delaysOf, eachLine, normalizeHex, isRealShadow, HEX_RE, FUNC_COLOR_RE, DELAY_RE, DIM_RE, SHADOW_RE, STYLESHEET_EXTS } from './design-scan.mjs';
 
 // --- Policy -----------------------------------------------------------------
 // Dimensions every design system tolerates regardless of its scale: the zero,
@@ -35,22 +36,38 @@ const ALWAYS_ALLOWED_DIMS = new Set(['0px', '1px']);
 
 const MAX_SHOWN_PER_RULE = 15;
 
+/** This script's own path, relative to the project root, so the remedy printed
+ *  on failure is a command the reader can paste rather than an absolute path
+ *  from whichever machine happened to run it. */
+function selfPath() {
+  const abs = process.argv[1];
+  if (!abs) return 'conductor/gates/design-tokens-gate.mjs';
+  const rel = relative(process.cwd(), abs).split(sep).join('/');
+  return rel.startsWith('..') ? abs : rel;
+}
+
 // --- Args -------------------------------------------------------------------
 function parseArgs(argv) {
   const opts = {
     file: 'conductor/DESIGN.md',
     baseline: 'conductor/gates/design-tokens-baseline.json',
+    bands: 'conductor/gates/design-bands.json',
+    motion: 'conductor/gates/motion-bands.json',
     src: [],
     strict: false,
     updateBaseline: false,
+    allowUnarmed: false,
   };
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
     if (arg === '--file') opts.file = argv[++i];
     else if (arg === '--baseline') opts.baseline = argv[++i];
+    else if (arg === '--bands') opts.bands = argv[++i];
+    else if (arg === '--motion') opts.motion = argv[++i];
     else if (arg === '--src') opts.src.push(argv[++i]);
     else if (arg === '--strict') opts.strict = true;
     else if (arg === '--update-baseline') opts.updateBaseline = true;
+    else if (arg === '--allow-unarmed') opts.allowUnarmed = true;
   }
   if (opts.src.length === 0) opts.src.push('.');
   return opts;
@@ -95,6 +112,53 @@ function collectAllowed(designFile) {
 }
 
 // --- Scan -------------------------------------------------------------------
+/**
+ * The depth band the project chose, and the shadow budget it implies.
+ * Returns null when no band file exists or none was selected — an unchecked
+ * axis, which the caller reports rather than guesses.
+ */
+function readDepthBand(bandsFile) {
+  if (!existsSync(bandsFile)) return null;
+  let spec;
+  try {
+    spec = JSON.parse(readFileSync(bandsFile, 'utf-8'));
+  } catch (err) {
+    fail(2, 'band definitions at ' + bandsFile + ' are unreadable (' + err.message + ')');
+  }
+  const depth = spec.depth;
+  const selected = depth?.selected;
+  if (!depth || !selected) return null;
+  const limit = depth.bands?.[selected];
+  if (typeof limit !== 'number') {
+    fail(2, bandsFile + ' selects the depth band "' + selected + '", which is not defined in its bands table.');
+  }
+  return { name: selected, limit };
+}
+
+/**
+ * The stagger step of the selected motion band, or null when no band was chosen
+ * — in which case delays are not checked at all rather than checked against a
+ * guess. A `restrained` band has a stagger of 0, which means no delay is ever
+ * in band; that is the band saying nothing should be sequenced, and it is
+ * returned as-is so the caller reports it plainly.
+ */
+function readStagger(motionFile) {
+  if (!existsSync(motionFile)) return null;
+  let spec;
+  try {
+    spec = JSON.parse(readFileSync(motionFile, 'utf-8'));
+  } catch (err) {
+    fail(2, 'motion bands at ' + motionFile + ' are unreadable (' + err.message + ')');
+  }
+  const selected = spec?.selected;
+  if (!selected) return null;
+  const band = spec.bands?.[selected];
+  if (!band || typeof band.stagger !== 'number') {
+    fail(2, motionFile + ' selects the motion band "' + selected + '", which is not defined in its bands table.');
+  }
+  return band.stagger === 0 ? null : band.stagger;
+}
+
 function scanLine(line, at, ext, allowed, findings) {
   // Outside a stylesheet, `#123` is an issue reference or a URL fragment far more
   // often than a colour, and flagging it tells the agent to "replace the literal
@@ -118,6 +182,23 @@ function scanLine(line, at, ext, allowed, findings) {
   for (const match of line.matchAll(DIM_RE)) {
     if (!allowed.dims.has(dimKey(match[1], match[2]))) {
       findings['off-scale-dimension'].push(at + '  ' + match[0]);
+    }
+  }
+
+  // Collected unconditionally; whether they are findings depends on the band,
+  // which is decided once in main() rather than per line.
+  for (const match of line.matchAll(SHADOW_RE)) {
+    // match[2] is the utility class alone; match[0] carries the delimiter that
+    // anchored it, which would print as `"shadow-lg`.
+    if (isRealShadow(match)) findings['off-band-depth'].push(at + '  ' + (match[2] ?? match[0]).trim());
+  }
+
+  for (const match of line.matchAll(DELAY_RE)) {
+    for (const ms of delaysOf(match[1])) {
+      if (allowed.stagger === null) continue;
+      if (ms % allowed.stagger !== 0) {
+        findings['off-band-motion'].push(at + '  ' + ms + 'ms (not a multiple of the ' + allowed.stagger + 'ms stagger)');
+      }
     }
   }
 }
@@ -168,7 +249,9 @@ function main() {
   }
 
   const allowed = collectAllowed(opts.file);
-  const findings = { 'hardcoded-color': [], 'off-scale-dimension': [] };
+  const depth = readDepthBand(opts.bands);
+  allowed.stagger = readStagger(opts.motion);
+  const findings = { 'hardcoded-color': [], 'off-scale-dimension': [], 'off-band-depth': [], 'off-band-motion': [] };
 
   for (const root of opts.src) {
     if (!existsSync(root)) fail(2, 'source path not found: ' + root);
@@ -189,8 +272,32 @@ function main() {
   const baseline = readBaseline(opts.baseline);
   const regressions = [];
   for (const [rule, count] of Object.entries(counts)) {
+    // Depth is budgeted by the declared band, not by zero: `shadowed` tolerates
+    // two shadow levels by definition, so holding it to zero would reject the
+    // very band the user chose. An unselected band leaves the axis unchecked.
+    if (rule === 'off-band-depth') {
+      if (depth === null) continue;
+      const limit = opts.strict ? depth.limit : Math.max(depth.limit, baseline?.[rule] ?? 0);
+      if (count > limit) regressions.push({ rule, count, limit });
+      continue;
+    }
+    // An unselected motion band leaves delays unchecked rather than held to zero,
+    // which would flag every project that never answered the question.
+    if (rule === 'off-band-motion' && allowed.stagger === null) continue;
     const limit = opts.strict || baseline === null ? 0 : (baseline[rule] ?? 0);
     if (count > limit) regressions.push({ rule, count, limit });
+  }
+
+  // A brownfield project that adopted the ratchet above its band is held to not
+  // getting worse, which is the promise the ratchet makes everywhere else. Being
+  // over the band is still said out loud, because the alternative is a project
+  // that reads `bordered` in its design system and ships shadows forever.
+  if (depth !== null && counts['off-band-depth'] > depth.limit &&
+      !regressions.some((r) => r.rule === 'off-band-depth')) {
+    process.stderr.write(
+      '\nDepth band `' + depth.name + '` tolerates ' + depth.limit + ' shadow declaration(s); the code has ' +
+      counts['off-band-depth'] + '. Held at the baseline rather than blocked, but the declared band and the code disagree.\n',
+    );
   }
 
   // Detail always goes to stderr: the point of this gate is that the agent
@@ -206,15 +313,31 @@ function main() {
     }
   }
 
-  if (baseline === null && !opts.strict && total > 0) {
-    // Honest middle ground: an unarmed ratchet must not read as a pass, and
-    // must not block a brownfield project on its first run either.
-    process.stderr.write(
-      '\nNo baseline at ' + opts.baseline + ' — nothing was enforced this run.\n' +
-      'Record where the project stands with --update-baseline, and the gate will hold that line from then on.\n',
+  if (baseline === null && !opts.strict) {
+    // An unarmed ratchet has not checked anything: with no baseline there is no
+    // line to hold, so every finding is tolerated. Exiting 0 here made that
+    // indistinguishable from a pass — the caller reads the exit code, and the
+    // honest sentence on stderr does not travel with it. That is the same defect
+    // as a gate that silently fails to run, so it is reported the same way.
+    //
+    // This is not a brownfield tax: the fix is one command, it is what setup is
+    // already instructed to do, and it makes the project's real starting point
+    // explicit instead of leaving it unmeasured.
+    if (opts.allowUnarmed) {
+      process.stderr.write(
+        '\nNo baseline at ' + opts.baseline + ' — nothing was enforced this run, and --allow-unarmed was passed.\n' +
+        'This gate verified nothing. Record where the project stands with --update-baseline to arm it.\n',
+      );
+      process.stdout.write('design-tokens: NOT ENFORCED (' + total + ' findings, no baseline)\n');
+      process.exit(0);
+    }
+    fail(
+      2,
+      'no baseline at ' + opts.baseline + ', so the ratchet is unarmed and this run checked nothing ' +
+      '(' + total + ' findings across ' + scanned + ' files went untested).\n' +
+      'Arm it with: node ' + selfPath() + ' --update-baseline\n' +
+      'Pass --allow-unarmed to accept an unverified run instead, or --strict to require zero findings.',
     );
-    process.stdout.write('design-tokens: NOT ENFORCED (' + total + ' findings, no baseline)\n');
-    process.exit(0);
   }
 
   if (regressions.length > 0) {
@@ -222,10 +345,33 @@ function main() {
     for (const r of regressions) {
       process.stderr.write('  x ' + r.rule + ': ' + r.count + ' (allowed ' + r.limit + ')\n');
     }
-    process.stderr.write(
-      '\nReplace the literal values with tokens from ' + opts.file + '. ' +
-      'Adding the invented value to the design system instead is the move this gate exists to catch.\n',
-    );
+    const BAND_RULES = new Set(['off-band-depth', 'off-band-motion']);
+    if (regressions.some((r) => !BAND_RULES.has(r.rule))) {
+      process.stderr.write(
+        '\nReplace the literal values with tokens from ' + opts.file + '. ' +
+        'Adding the invented value to the design system instead is the move this gate exists to catch.\n',
+      );
+    }
+    if (regressions.some((r) => r.rule === 'off-band-motion')) {
+      // There is no token for a stagger delay, so pointing at DESIGN.md would
+      // send the agent to add one — which is the widening this gate prevents.
+      process.stderr.write(
+        '\nMotion findings are stagger delays that came from nowhere. Use multiples of the band\'s stagger ' +
+        'step in ' + opts.motion + '; a sequence of 0/50/100/150ms in a system whose motion tokens are ' +
+        'something else is the same defect as a 13px padding. Changing the selected band to fit the ' +
+        'delays is a design decision and belongs to a design track.\n',
+      );
+    }
+    if (regressions.some((r) => r.rule === 'off-band-depth')) {
+      // Pointing this one at the token set would be actively wrong: there is no
+      // token to reach for, and the only edit that silences it there is widening
+      // the band the user picked.
+      process.stderr.write(
+        '\nDepth findings are shadows in a `' + depth.name + '` system. Remove them — depth in this band comes from ' +
+        'background layering and 1px borders, not from box-shadow. Changing the selected band in ' + opts.bands +
+        ' to make this pass is a design decision and belongs to a design track, not to this task.\n',
+      );
+    }
     process.stdout.write('design-tokens: FAIL (' + total + ' findings)\n');
     process.exit(1);
   }
@@ -240,7 +386,19 @@ function main() {
       '. Re-record with --update-baseline so the gain is held.\n',
     );
   }
-  process.stdout.write('design-tokens: PASS (' + total + ' findings, ' + scanned + ' files)\n');
+  if (depth === null && counts['off-band-depth'] > 0) {
+    // Said every run, not once: an axis nobody selected is an axis nobody is
+    // checking, and the shadows are already in the code.
+    process.stderr.write(
+      '\nDepth axis unchecked: no band selected in ' + opts.bands + ' (`depth.selected` is null), ' +
+      'while ' + counts['off-band-depth'] + ' shadow declaration(s) are present. ' +
+      'Set it to the band this project chose to bring the axis under the gate.\n',
+    );
+  }
+  process.stdout.write(
+    'design-tokens: PASS (' + total + ' findings, ' + scanned + ' files' +
+    (depth === null ? ', depth unchecked' : ', depth ' + depth.name) + ')\n',
+  );
   process.exit(0);
 }
 

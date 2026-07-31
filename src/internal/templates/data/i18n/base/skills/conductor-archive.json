@@ -18,6 +18,7 @@
   ],
   "constraints": [
     "You MUST NEVER archive a track that is currently pending or in progress.",
+    "**Never archive over an unrunnable gate**: before archiving, read the `unrunnable_gates` field of the state document (`config.state_document.frontmatter_fields`). If it is non-empty, refuse the archive and report each entry with its command and output — per `config.gates.unrunnable_policy` the track is blocked while any required gate has failed to run, because archiving is what converts an open question into a settled record. The track's own status is not sufficient evidence here: a track can reach the done status while carrying an unrunnable gate, and this is the last point at which that can still be caught.",
     "Context Isolation (SDP): All project file access MUST follow the [Subagent Dispatch Protocol](${config.protocols.subagent_dispatch.path}). The orchestrator NEVER reads context files directly.",
     "Always ask for user confirmation before executing any file manipulation commands."
   ],

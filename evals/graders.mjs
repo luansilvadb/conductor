@@ -428,6 +428,78 @@ export const graders = [
   },
 
   {
+    id: 'unrunnable-gate',
+    contract: 'config.gates.unrunnable_policy and config.gates.exit_codes — config.state_document.frontmatter_fields.unrunnable_gates',
+    why: 'Exit 2 means the gate never ran, so it produces no findings — and a check with no findings reads exactly like a check that passed. Every category the agent has available for it (a blocker to fix, a manual verification to defer) describes something else, and the deferral is both wrong and free, which is why an unrunnable gate reliably becomes a footnote while the task closes over the top of it.',
+    grade(trace, config) {
+      const out = [];
+      const manifest = trace.gates ?? [];
+      const requiredKinds = new Set(manifest.filter((g) => g.required).map((g) => g.kind));
+      const doneStatus = config.enums.task_statuses.done;
+
+      // Every required gate that failed to RUN, in trace order. A later clean run
+      // of the same kind repairs it: the gate executed and returned a verdict.
+      const unrunnable = [];
+      for (const [i, e] of of(trace, 'gate')) {
+        if (!requiredKinds.has(e.kind)) continue;
+        if (e.exit_code === 2) unrunnable.push({ index: i, kind: e.kind, task: e.task });
+        else if (e.exit_code === 0 || e.exit_code === 1) {
+          for (let k = unrunnable.length - 1; k >= 0; k -= 1) {
+            if (unrunnable[k].kind === e.kind) unrunnable.splice(k, 1);
+          }
+        }
+      }
+
+      const standingAt = (index) => unrunnable.filter((u) => u.index < index);
+
+      for (const u of unrunnable) {
+        // Recorded in the closed category, or it has no category at all.
+        const recorded = of(trace, 'state').some(
+          ([j, s]) => j > u.index && (s.unrunnable_gates ?? []).some((g) => g.kind === u.kind),
+        );
+        if (!recorded) {
+          out.push(`#${u.index} the required ${u.kind} gate exited 2 and was never recorded in the state document's unrunnable_gates — an unrunnable gate with no category becomes a note in Blockers and stops blocking anything`);
+        }
+        // Exit 2 is not a failing check, so retrying it spends the fix budget on
+        // a gate that will keep not running.
+        const retried = of(trace, 'fix').filter(([j, f]) => j > u.index && f.task === u.task && f.of_gate === u.kind);
+        if (retried.length > 0) {
+          out.push(`#${u.index} ${u.kind} exited 2 and ${retried.length} fix attempt(s) followed — exit 2 is not a verdict (config.gates.exit_codes), so there is no finding to fix`);
+        }
+      }
+
+      // Nothing may close over a standing unrunnable gate.
+      for (const [i, e] of of(trace, 'plan')) {
+        if (e.status !== doneStatus) continue;
+        const standing = standingAt(i).filter((u) => u.task === e.task);
+        if (standing.length > 0) {
+          out.push(`#${i} task ${e.task} marked ${doneStatus} while its ${standing.map((u) => u.kind).join(', ')} gate had not run`);
+        }
+      }
+
+      for (const [i, e] of of(trace, 'state')) {
+        const standing = standingAt(i);
+        if (standing.length === 0) continue;
+        if (e.status === 'done') {
+          out.push(`#${i} state document set to done while ${standing.map((u) => u.kind).join(', ')} had not run`);
+        }
+        if (e.blockers_empty && (e.unrunnable_gates ?? []).length === 0) {
+          out.push(`#${i} state document declares no blockers while ${standing.map((u) => u.kind).join(', ')} could not run — that is the reclassification config.gates.unrunnable_policy forbids`);
+        }
+      }
+
+      for (const [i, e] of of(trace, 'archive')) {
+        const standing = standingAt(i);
+        if (standing.length > 0) {
+          out.push(`#${i} track ${e.track ?? ''} archived while ${standing.map((u) => u.kind).join(', ')} had not run — archiving is what turns the open question into a settled record`);
+        }
+      }
+
+      return out;
+    },
+  },
+
+  {
     id: 'commit-traceability',
     contract: 'workflow.json Standard Task Workflow — config.commit_conventions.plan_update_prefix',
     why: 'The note and the SHA in the plan are what revert reads to reconstruct a track. A task that closes without them is delivered work the framework can no longer undo or explain.',
@@ -525,4 +597,4 @@ export const graders = [
 export const graderIds = graders.map((g) => g.id);
 
 /** Event shapes the graders understand. A trace using anything else is a dataset bug, not a pass. */
-export const eventTypes = ['skill', 'read', 'write', 'dispatch', 'return', 'commit', 'note', 'plan', 'gate', 'fix', 'ask', 'handoff', 'wave', 'verdict', 'run'];
+export const eventTypes = ['skill', 'read', 'write', 'dispatch', 'return', 'commit', 'note', 'plan', 'gate', 'fix', 'ask', 'handoff', 'wave', 'verdict', 'run', 'state', 'archive'];

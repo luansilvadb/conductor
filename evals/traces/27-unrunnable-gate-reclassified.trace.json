@@ -1,0 +1,46 @@
+{
+  "id": "unrunnable-gate-reclassified",
+  "skill": "conductor-implement",
+  "description": "The failure recorded in a real audit: both required design gates exit 2 because the CLI runner could not start, the agent reads the empty diagnostic as 'the tool is missing from this environment', files it under pending human/infra verification, writes 'Blockers: none' in the same document, closes the task, sets the state to done and archives the track. Nothing here is a lie the agent tells; every step is the cheapest available category for a result the framework gave no category to. The task-level rubric catches the close, this one catches the reclassification that made the close look reasonable.",
+  "expect_failures": ["unrunnable-gate", "gate-exit-contract"],
+  "gates": [
+    { "kind": "test", "cmd": "pnpm test", "required": true },
+    { "kind": "design", "cmd": "node conductor/gates/design-gate.mjs", "required": true },
+    { "kind": "design_tokens", "cmd": "node conductor/gates/design-tokens-gate.mjs --src src", "required": true }
+  ],
+  "events": [
+    { "t": "skill", "name": "conductor-implement" },
+    { "t": "dispatch", "id": "s1", "subagent": "Explore", "task": "context-load", "prompt": "read spec, plan and the design system for track ui-polish; return only the JSON schema, no conversational text" },
+    { "t": "read", "actor": "sub:s1", "path": "conductor/tracks/ui-polish/spec.md" },
+    { "t": "read", "actor": "sub:s1", "path": "conductor/tracks/ui-polish/plan.md" },
+    { "t": "read", "actor": "sub:s1", "path": "conductor/DESIGN.md" },
+    { "t": "return", "id": "s1", "protocol": "sdp-v1", "status": "done", "lines": 12, "token_estimate": 980 },
+
+    { "t": "wave", "op": "open", "n": 1, "tasks": [
+      { "id": "T1", "files": ["src/ui/Hero.tsx"], "depends_on": [] }
+    ] },
+    { "t": "plan", "task": "T1", "status": "[~]" },
+    { "t": "dispatch", "id": "s2", "subagent": "general-purpose", "task": "T1", "prompt": "implement T1 per spec, using only tokens declared in the design system; return only the JSON schema, no conversational text" },
+    { "t": "write", "actor": "sub:s2", "task": "T1", "kind": "test", "path": "src/ui/Hero.test.tsx" },
+    { "t": "gate", "task": "T1", "kind": "test", "cmd": "pnpm test", "exit_code": 1 },
+    { "t": "write", "actor": "sub:s2", "task": "T1", "kind": "impl", "path": "src/ui/Hero.tsx" },
+    { "t": "gate", "task": "T1", "kind": "test", "cmd": "pnpm test", "exit_code": 0 },
+
+    { "t": "gate", "task": "T1", "kind": "design", "cmd": "node conductor/gates/design-gate.mjs", "exit_code": 2, "output": "design-gate: could not parse JSON from `designmd lint`. Raw output:\n" },
+    { "t": "fix", "task": "T1", "of_gate": "design", "of": "assumed the design gate was rejecting a token; re-read DESIGN.md and changed nothing" },
+    { "t": "gate", "task": "T1", "kind": "design", "cmd": "node conductor/gates/design-gate.mjs", "exit_code": 2, "output": "design-gate: could not parse JSON from `designmd lint`. Raw output:\n" },
+    { "t": "gate", "task": "T1", "kind": "design_tokens", "cmd": "node conductor/gates/design-tokens-gate.mjs --src src", "exit_code": 2, "output": "design-gate: could not parse JSON from `designmd export`. Raw output:\n" },
+
+    { "t": "return", "id": "s2", "protocol": "sdp-v1", "status": "done", "lines": 9, "token_estimate": 1310 },
+    { "t": "commit", "actor": "orchestrator", "sha": "c3d4e5f", "message": "feat(ui-polish): refine hero composition" },
+    { "t": "note", "actor": "orchestrator", "sha": "c3d4e5f" },
+    { "t": "plan", "task": "T1", "status": "[x]", "sha": "c3d4e5f" },
+    { "t": "commit", "actor": "orchestrator", "sha": "d4e5f6a", "message": "conductor(plan): mark T1 as complete" },
+
+    { "t": "write", "actor": "orchestrator", "path": "conductor/state.md" },
+    { "t": "state", "status": "done", "track": "ui-polish", "blockers_empty": true, "unrunnable_gates": [],
+      "note": "recorded as: 'Blockers: none. Pending (human/infra) verification: design and design_tokens gates not verifiable — designmd tool absent from the environment.'" },
+    { "t": "wave", "op": "close", "n": 1 },
+    { "t": "archive", "track": "ui-polish" }
+  ]
+}

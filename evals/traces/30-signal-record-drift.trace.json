@@ -1,0 +1,58 @@
+{
+  "id": "signal-record-drift",
+  "skill": "conductor-implement",
+  "description": "Signals get appended with a vocabulary invented at the call site: a kind nobody declared, an origin layer spelled as the review's own name, and one record written straight from inside a subagent. Every line is individually readable, which is exactly why this survives review — the ledger keeps working as prose and stops working as a tally, and a threshold measured against it silently counts nothing.",
+  "expect_failures": [
+    "signal-record-shape"
+  ],
+  "gates": [],
+  "events": [
+    {
+      "t": "skill",
+      "name": "conductor-implement"
+    },
+    {
+      "t": "signal",
+      "actor": "orchestrator",
+      "kind": "coverage_dropped",
+      "layer": "gate",
+      "origin_layer": "gate",
+      "task": "T1",
+      "detail": "coverage fell after T1"
+    },
+    {
+      "t": "signal",
+      "actor": "orchestrator",
+      "kind": "finding",
+      "layer": "review",
+      "origin_layer": "implementation",
+      "task": "T1",
+      "detail": "null check missing on the session path"
+    },
+    {
+      "t": "dispatch",
+      "id": "s1",
+      "subagent": "general-purpose",
+      "task": "T2",
+      "prompt": "implement T2 per spec; return only the JSON schema, no conversational text"
+    },
+    {
+      "t": "signal",
+      "actor": "sub:s1",
+      "kind": "fix_attempt",
+      "layer": "task",
+      "origin_layer": "task",
+      "task": "T2",
+      "detail": "retried the failing assertion"
+    },
+    {
+      "t": "return",
+      "id": "s1",
+      "protocol": "sdp-v1",
+      "status": "done",
+      "lines": 9,
+      "token_estimate": 1180,
+      "evidence": "verified"
+    }
+  ]
+}

@@ -2,11 +2,31 @@
   "id": "oversized-return",
   "skill": "conductor-review",
   "description": "A read-only subagent quotes the styleguide back at the orchestrator across 42 lines. The dispatch is in the trace, so the isolation looks like it happened while every token it was meant to keep out landed anyway.",
-  "expect_failures": ["return-discipline"],
+  "expect_failures": [
+    "return-discipline"
+  ],
   "gates": [],
   "events": [
-    { "t": "skill", "name": "conductor-review" },
-    { "t": "dispatch", "id": "r1", "subagent": "Explore", "task": "rules", "prompt": "load the judgement layer of the styleguides; return only the JSON schema, no conversational text" },
-    { "t": "return", "id": "r1", "protocol": "sdp-v1", "status": "done", "lines": 42, "quotes_file_text": true, "token_estimate": 6400 }
+    {
+      "t": "skill",
+      "name": "conductor-review"
+    },
+    {
+      "t": "dispatch",
+      "id": "r1",
+      "subagent": "Explore",
+      "task": "rules",
+      "prompt": "load the judgement layer of the styleguides; return only the JSON schema, no conversational text"
+    },
+    {
+      "t": "return",
+      "id": "r1",
+      "protocol": "sdp-v1",
+      "status": "done",
+      "lines": 42,
+      "quotes_file_text": true,
+      "token_estimate": 6400,
+      "evidence": "verified"
+    }
   ]
 }

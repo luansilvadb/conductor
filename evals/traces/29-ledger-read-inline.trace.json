@@ -1,0 +1,42 @@
+{
+  "id": "ledger-read-inline",
+  "skill": "conductor-implement",
+  "description": "The orchestrator opens signals.jsonl itself to check what this project keeps getting wrong, and a retrieval subagent loads the whole ledger rather than querying it. Both work on the day they are written: the file is short, the answer is right, and nothing in the run looks wrong. The ledger is the one artifact designed to append forever, so the cost arrives later and arrives silently — and because it is deliberately absent from context_files, the golden rule never sees either read.",
+  "expect_failures": [
+    "signal-ledger-read"
+  ],
+  "gates": [],
+  "events": [
+    {
+      "t": "skill",
+      "name": "conductor-implement"
+    },
+    {
+      "t": "read",
+      "actor": "orchestrator",
+      "path": "conductor/signals.jsonl"
+    },
+    {
+      "t": "dispatch",
+      "id": "s1",
+      "subagent": "Explore",
+      "task": "signal-prior",
+      "prompt": "read the signal ledger and tell me what recurs; return only the JSON schema, no conversational text"
+    },
+    {
+      "t": "read",
+      "actor": "sub:s1",
+      "path": "conductor/signals.jsonl",
+      "whole_file": true
+    },
+    {
+      "t": "return",
+      "id": "s1",
+      "protocol": "sdp-v1",
+      "status": "done",
+      "lines": 12,
+      "token_estimate": 5400,
+      "evidence": "verified"
+    }
+  ]
+}

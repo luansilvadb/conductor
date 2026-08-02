@@ -1,27 +1,11 @@
 {
-  "id": "gate-result-carried-over",
+  "id": "signal-never-recorded",
   "skill": "conductor-implement",
-  "description": "The task closes on a test result from the previous task's run and never declares the absent coverage gate. Both make an unverified check read as a passed one.",
+  "description": "A task takes two fix attempts and lands green, and the track closes without either attempt reaching the ledger. Nothing about the run reads as a failure — that is the point. The architecture gate counts failed fixes across the whole track including earlier sessions, and the recurrence triggers count patterns across tracks; both read from a ledger that this run left empty, so the next session inherits a project that appears never to have struggled with anything.",
   "expect_failures": [
-    "gate-exit-contract"
+    "signal-recording"
   ],
-  "gates": [
-    {
-      "kind": "test",
-      "cmd": "npm test",
-      "required": true
-    },
-    {
-      "kind": "lint",
-      "cmd": "npm run lint",
-      "required": true
-    },
-    {
-      "kind": "coverage",
-      "cmd": null,
-      "required": false
-    }
-  ],
+  "gates": [],
   "events": [
     {
       "t": "skill",
@@ -35,9 +19,12 @@
         {
           "id": "T1",
           "files": [
-            "src/api/routes.ts"
+            "src/auth/session.ts"
           ],
-          "depends_on": []
+          "depends_on": [],
+          "covers": [
+            "S1"
+          ]
         }
       ]
     },
@@ -51,14 +38,14 @@
       "id": "s1",
       "subagent": "general-purpose",
       "task": "T1",
-      "prompt": "implement T1; return only the JSON schema, no conversational text"
+      "prompt": "implement T1 per spec; return only the JSON schema, no conversational text"
     },
     {
       "t": "write",
       "actor": "sub:s1",
       "task": "T1",
       "kind": "test",
-      "path": "src/api/routes.test.ts"
+      "path": "src/auth/session.test.ts"
     },
     {
       "t": "gate",
@@ -71,22 +58,26 @@
       "t": "write",
       "actor": "sub:s1",
       "task": "T1",
-      "kind": "impl",
-      "path": "src/api/routes.ts"
+      "kind": "code",
+      "path": "src/auth/session.ts"
     },
     {
       "t": "gate",
       "task": "T1",
       "kind": "test",
       "cmd": "npm test",
-      "exit_code": 0,
-      "carried_over": true
+      "exit_code": 1
+    },
+    {
+      "t": "fix",
+      "task": "T1",
+      "of": "root cause: session TTL read from the wrong config key"
     },
     {
       "t": "gate",
       "task": "T1",
-      "kind": "lint",
-      "cmd": "npm run lint",
+      "kind": "test",
+      "cmd": "npm test",
       "exit_code": 0
     },
     {
@@ -94,32 +85,37 @@
       "id": "s1",
       "protocol": "sdp-v1",
       "status": "done",
-      "lines": 8,
-      "token_estimate": 1180,
+      "lines": 10,
+      "token_estimate": 1520,
       "evidence": "verified"
     },
     {
       "t": "commit",
       "actor": "orchestrator",
-      "sha": "3c4d5e6",
-      "message": "feat(api): add routes"
+      "sha": "b7c1d90",
+      "message": "feat(auth): honour session TTL"
     },
     {
       "t": "note",
       "actor": "orchestrator",
-      "sha": "3c4d5e6"
+      "sha": "b7c1d90"
     },
     {
       "t": "plan",
       "task": "T1",
       "status": "[x]",
-      "sha": "3c4d5e6"
+      "sha": "b7c1d90"
     },
     {
       "t": "commit",
       "actor": "orchestrator",
-      "sha": "4d5e6f7",
+      "sha": "e5f6a71",
       "message": "conductor(plan): mark T1 as complete"
+    },
+    {
+      "t": "wave",
+      "op": "close",
+      "n": 1
     }
   ]
 }

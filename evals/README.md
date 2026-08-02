@@ -70,6 +70,12 @@ drift away from the framework they grade without saying so.
 | `handoff-confirmation` | A skill hands off only to a known skill, and only after the user was asked. |
 | `handoff-readiness` | A handoff fires only once every task is closed and every subagent has returned. |
 | `review-verdict` | The verdict comes from the enum, and `passed` requires an empty human-verification list. |
+| `signal-ledger-read` | The ledger is queried by dispatch and consumed as a digest — never read inline, never loaded whole. |
+| `signal-record-shape` | Ledger records use the declared `kinds` and `origin_layers`, and only the orchestrator appends. |
+| `signal-recording` | A fix attempt, an unrunnable gate and a wave downgrade each reach the ledger when observed. |
+| `evidence-contract` | Every return carries an evidence level, and `done` below `verified` is recorded, re-dispatched, or deferred to a human. |
+| `lessons-section-scope` | A lessons dispatch names its sections, and asks only for the layers `config.lessons_document.consumers` grants the skill. |
+| `clause-coverage` | Every task declares `covers`, every clause it names exists, and every spec clause is covered by some task. |
 
 ## Adding a trace
 

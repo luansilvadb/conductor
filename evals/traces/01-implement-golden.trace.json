@@ -4,82 +4,489 @@
   "description": "Two waves through the standard task workflow: delegated context load, parallel wave with disjoint files, red/green per task, fresh gates, commit + note + plan SHA, confirmed handoff to review once every task closed and every subagent returned.",
   "expect_failures": [],
   "gates": [
-    { "kind": "test", "cmd": "npm test", "required": true },
-    { "kind": "lint", "cmd": "npm run lint", "required": true },
-    { "kind": "coverage", "cmd": null, "required": false }
+    {
+      "kind": "test",
+      "cmd": "npm test",
+      "required": true
+    },
+    {
+      "kind": "lint",
+      "cmd": "npm run lint",
+      "required": true
+    },
+    {
+      "kind": "coverage",
+      "cmd": null,
+      "required": false
+    }
   ],
   "events": [
-    { "t": "skill", "name": "conductor-implement" },
-    { "t": "run", "actor": "orchestrator", "cmd": "git status --porcelain" },
-    { "t": "run", "actor": "orchestrator", "cmd": "git checkout -b track/auth" },
-    { "t": "dispatch", "id": "s1", "subagent": "Explore", "task": "context-load", "prompt": "read spec, plan and workflow for track auth; return only the JSON schema, no conversational text" },
-    { "t": "read", "actor": "sub:s1", "path": "conductor/tracks/auth/spec.md" },
-    { "t": "read", "actor": "sub:s1", "path": "conductor/tracks/auth/plan.md" },
-    { "t": "read", "actor": "sub:s1", "path": "conductor/lessons.md" },
-    { "t": "return", "id": "s1", "protocol": "sdp-v1", "status": "done", "lines": 12, "token_estimate": 840 },
-
-    { "t": "wave", "op": "open", "n": 1, "tasks": [
-      { "id": "T1", "files": ["src/auth/login.ts"], "depends_on": [] },
-      { "id": "T2", "files": ["src/auth/token.ts"], "depends_on": [] }
-    ] },
-    { "t": "plan", "task": "T1", "status": "[~]" },
-    { "t": "plan", "task": "T2", "status": "[~]" },
-    { "t": "dispatch", "id": "s2", "subagent": "general-purpose", "task": "T1", "prompt": "implement T1 per spec; return only the JSON schema, no conversational text" },
-    { "t": "dispatch", "id": "s3", "subagent": "general-purpose", "task": "T2", "prompt": "implement T2 per spec; return only the JSON schema, no conversational text" },
-
-    { "t": "write", "actor": "sub:s2", "task": "T1", "kind": "test", "path": "src/auth/login.test.ts" },
-    { "t": "gate", "task": "T1", "kind": "test", "cmd": "npm test", "exit_code": 1 },
-    { "t": "write", "actor": "sub:s2", "task": "T1", "kind": "impl", "path": "src/auth/login.ts" },
-    { "t": "gate", "task": "T1", "kind": "test", "cmd": "npm test", "exit_code": 0 },
-    { "t": "gate", "task": "T1", "kind": "lint", "cmd": "npm run lint", "exit_code": 0 },
-    { "t": "gate", "task": "T1", "kind": "coverage", "cmd": null, "declared_absent": true },
-    { "t": "run", "actor": "sub:s2", "cmd": "git diff --stat src/auth/login.ts" },
-    { "t": "write", "actor": "orchestrator", "task": "T1", "path": "conductor/gates/baseline.json" },
-    { "t": "return", "id": "s2", "protocol": "sdp-v1", "status": "done", "lines": 9, "token_estimate": 1450 },
-    { "t": "commit", "actor": "orchestrator", "sha": "a1b2c3d", "message": "feat(auth): add login handler" },
-    { "t": "note", "actor": "orchestrator", "sha": "a1b2c3d" },
-    { "t": "plan", "task": "T1", "status": "[x]", "sha": "a1b2c3d" },
-    { "t": "commit", "actor": "orchestrator", "sha": "b2c3d4e", "message": "conductor(plan): mark T1 as complete" },
-
-    { "t": "write", "actor": "sub:s3", "task": "T2", "kind": "test", "path": "src/auth/token.test.ts" },
-    { "t": "gate", "task": "T2", "kind": "test", "cmd": "npm test", "exit_code": 1 },
-    { "t": "write", "actor": "sub:s3", "task": "T2", "kind": "impl", "path": "src/auth/token.ts" },
-    { "t": "gate", "task": "T2", "kind": "test", "cmd": "npm test", "exit_code": 0 },
-    { "t": "gate", "task": "T2", "kind": "lint", "cmd": "npm run lint", "exit_code": 0 },
-    { "t": "gate", "task": "T2", "kind": "coverage", "cmd": null, "declared_absent": true },
-    { "t": "return", "id": "s3", "protocol": "sdp-v1", "status": "done", "lines": 8, "token_estimate": 1310 },
-    { "t": "commit", "actor": "orchestrator", "sha": "c3d4e5f", "message": "feat(auth): add token refresh" },
-    { "t": "note", "actor": "orchestrator", "sha": "c3d4e5f" },
-    { "t": "plan", "task": "T2", "status": "[x]", "sha": "c3d4e5f" },
-    { "t": "commit", "actor": "orchestrator", "sha": "d4e5f6a", "message": "conductor(plan): mark T2 as complete" },
-    { "t": "write", "actor": "orchestrator", "path": "conductor/state.md" },
-    { "t": "wave", "op": "close", "n": 1 },
-
-    { "t": "wave", "op": "open", "n": 2, "tasks": [
-      { "id": "T3", "files": ["src/auth/session.ts"], "depends_on": ["T1"] }
-    ] },
-    { "t": "plan", "task": "T3", "status": "[~]" },
-    { "t": "dispatch", "id": "s4", "subagent": "general-purpose", "task": "T3", "prompt": "implement T3 per spec; return only the JSON schema, no conversational text" },
-    { "t": "return", "id": "s4", "protocol": "sdp-v1", "status": "needs_context", "lines": 4, "token_estimate": 190 },
-    { "t": "dispatch", "id": "s5", "subagent": "general-purpose", "task": "T3", "prompt": "implement T3 per spec, session schema and acceptance criteria attached; return only the JSON schema, no conversational text" },
-    { "t": "write", "actor": "sub:s5", "task": "T3", "kind": "test", "path": "src/auth/session.test.ts" },
-    { "t": "gate", "task": "T3", "kind": "test", "cmd": "npm test", "exit_code": 1 },
-    { "t": "write", "actor": "sub:s5", "task": "T3", "kind": "impl", "path": "src/auth/session.ts" },
-    { "t": "gate", "task": "T3", "kind": "test", "cmd": "npm test", "exit_code": 1 },
-    { "t": "fix", "task": "T3", "of": "root cause: session TTL read from the wrong config key" },
-    { "t": "gate", "task": "T3", "kind": "test", "cmd": "npm test", "exit_code": 0 },
-    { "t": "gate", "task": "T3", "kind": "lint", "cmd": "npm run lint", "exit_code": 0 },
-    { "t": "gate", "task": "T3", "kind": "coverage", "cmd": null, "declared_absent": true },
-    { "t": "return", "id": "s5", "protocol": "sdp-v1", "status": "done", "lines": 10, "token_estimate": 1620 },
-    { "t": "commit", "actor": "orchestrator", "sha": "e5f6a7b", "message": "feat(auth): persist session" },
-    { "t": "note", "actor": "orchestrator", "sha": "e5f6a7b" },
-    { "t": "plan", "task": "T3", "status": "[x]", "sha": "e5f6a7b" },
-    { "t": "commit", "actor": "orchestrator", "sha": "f6a7b8c", "message": "conductor(plan): mark T3 as complete" },
-    { "t": "write", "actor": "orchestrator", "path": "conductor/state.md" },
-    { "t": "wave", "op": "close", "n": 2 },
-    { "t": "run", "actor": "orchestrator", "cmd": "git push origin track/auth" },
-
-    { "t": "ask", "about": "conductor-review", "question": "Would you like a formal code review?", "answer": "yes" },
-    { "t": "handoff", "to": "conductor-review", "confirmed": true }
+    {
+      "t": "skill",
+      "name": "conductor-implement"
+    },
+    {
+      "t": "spec",
+      "track": "auth",
+      "clauses": [
+        "S1",
+        "S2",
+        "S3"
+      ]
+    },
+    {
+      "t": "run",
+      "actor": "orchestrator",
+      "cmd": "git status --porcelain"
+    },
+    {
+      "t": "run",
+      "actor": "orchestrator",
+      "cmd": "git checkout -b track/auth"
+    },
+    {
+      "t": "dispatch",
+      "id": "s1",
+      "subagent": "Explore",
+      "task": "context-load",
+      "prompt": "read spec, plan and workflow for track auth; return only the JSON schema, no conversational text",
+      "sections": [
+        "lint",
+        "script"
+      ]
+    },
+    {
+      "t": "read",
+      "actor": "sub:s1",
+      "path": "conductor/tracks/auth/spec.md"
+    },
+    {
+      "t": "read",
+      "actor": "sub:s1",
+      "path": "conductor/tracks/auth/plan.md"
+    },
+    {
+      "t": "read",
+      "actor": "sub:s1",
+      "path": "conductor/lessons.md"
+    },
+    {
+      "t": "return",
+      "id": "s1",
+      "protocol": "sdp-v1",
+      "status": "done",
+      "lines": 12,
+      "token_estimate": 840,
+      "evidence": "verified"
+    },
+    {
+      "t": "dispatch",
+      "id": "s0",
+      "subagent": "Explore",
+      "task": "signal-prior",
+      "prompt": "query the signal ledger for track auth: counts by kind and origin_layer; return only the JSON schema, no conversational text"
+    },
+    {
+      "t": "read",
+      "actor": "sub:s0",
+      "path": "conductor/signals.jsonl"
+    },
+    {
+      "t": "return",
+      "id": "s0",
+      "protocol": "sdp-v1",
+      "status": "done",
+      "lines": 11,
+      "token_estimate": 410,
+      "evidence": "verified"
+    },
+    {
+      "t": "wave",
+      "op": "open",
+      "n": 1,
+      "tasks": [
+        {
+          "id": "T1",
+          "files": [
+            "src/auth/login.ts"
+          ],
+          "depends_on": [],
+          "covers": [
+            "S1"
+          ]
+        },
+        {
+          "id": "T2",
+          "files": [
+            "src/auth/token.ts"
+          ],
+          "depends_on": [],
+          "covers": [
+            "S2"
+          ]
+        }
+      ]
+    },
+    {
+      "t": "plan",
+      "task": "T1",
+      "status": "[~]"
+    },
+    {
+      "t": "plan",
+      "task": "T2",
+      "status": "[~]"
+    },
+    {
+      "t": "dispatch",
+      "id": "s2",
+      "subagent": "general-purpose",
+      "task": "T1",
+      "prompt": "implement T1 per spec; return only the JSON schema, no conversational text"
+    },
+    {
+      "t": "dispatch",
+      "id": "s3",
+      "subagent": "general-purpose",
+      "task": "T2",
+      "prompt": "implement T2 per spec; return only the JSON schema, no conversational text"
+    },
+    {
+      "t": "write",
+      "actor": "sub:s2",
+      "task": "T1",
+      "kind": "test",
+      "path": "src/auth/login.test.ts"
+    },
+    {
+      "t": "gate",
+      "task": "T1",
+      "kind": "test",
+      "cmd": "npm test",
+      "exit_code": 1
+    },
+    {
+      "t": "write",
+      "actor": "sub:s2",
+      "task": "T1",
+      "kind": "impl",
+      "path": "src/auth/login.ts"
+    },
+    {
+      "t": "gate",
+      "task": "T1",
+      "kind": "test",
+      "cmd": "npm test",
+      "exit_code": 0
+    },
+    {
+      "t": "gate",
+      "task": "T1",
+      "kind": "lint",
+      "cmd": "npm run lint",
+      "exit_code": 0
+    },
+    {
+      "t": "gate",
+      "task": "T1",
+      "kind": "coverage",
+      "cmd": null,
+      "declared_absent": true
+    },
+    {
+      "t": "run",
+      "actor": "sub:s2",
+      "cmd": "git diff --stat src/auth/login.ts"
+    },
+    {
+      "t": "write",
+      "actor": "orchestrator",
+      "task": "T1",
+      "path": "conductor/gates/baseline.json"
+    },
+    {
+      "t": "return",
+      "id": "s2",
+      "protocol": "sdp-v1",
+      "status": "done",
+      "lines": 9,
+      "token_estimate": 1450,
+      "evidence": "verified"
+    },
+    {
+      "t": "commit",
+      "actor": "orchestrator",
+      "sha": "a1b2c3d",
+      "message": "feat(auth): add login handler"
+    },
+    {
+      "t": "note",
+      "actor": "orchestrator",
+      "sha": "a1b2c3d"
+    },
+    {
+      "t": "plan",
+      "task": "T1",
+      "status": "[x]",
+      "sha": "a1b2c3d"
+    },
+    {
+      "t": "commit",
+      "actor": "orchestrator",
+      "sha": "b2c3d4e",
+      "message": "conductor(plan): mark T1 as complete"
+    },
+    {
+      "t": "write",
+      "actor": "sub:s3",
+      "task": "T2",
+      "kind": "test",
+      "path": "src/auth/token.test.ts"
+    },
+    {
+      "t": "gate",
+      "task": "T2",
+      "kind": "test",
+      "cmd": "npm test",
+      "exit_code": 1
+    },
+    {
+      "t": "write",
+      "actor": "sub:s3",
+      "task": "T2",
+      "kind": "impl",
+      "path": "src/auth/token.ts"
+    },
+    {
+      "t": "gate",
+      "task": "T2",
+      "kind": "test",
+      "cmd": "npm test",
+      "exit_code": 0
+    },
+    {
+      "t": "gate",
+      "task": "T2",
+      "kind": "lint",
+      "cmd": "npm run lint",
+      "exit_code": 0
+    },
+    {
+      "t": "gate",
+      "task": "T2",
+      "kind": "coverage",
+      "cmd": null,
+      "declared_absent": true
+    },
+    {
+      "t": "return",
+      "id": "s3",
+      "protocol": "sdp-v1",
+      "status": "done",
+      "lines": 8,
+      "token_estimate": 1310,
+      "evidence": "verified"
+    },
+    {
+      "t": "commit",
+      "actor": "orchestrator",
+      "sha": "c3d4e5f",
+      "message": "feat(auth): add token refresh"
+    },
+    {
+      "t": "note",
+      "actor": "orchestrator",
+      "sha": "c3d4e5f"
+    },
+    {
+      "t": "plan",
+      "task": "T2",
+      "status": "[x]",
+      "sha": "c3d4e5f"
+    },
+    {
+      "t": "commit",
+      "actor": "orchestrator",
+      "sha": "d4e5f6a",
+      "message": "conductor(plan): mark T2 as complete"
+    },
+    {
+      "t": "write",
+      "actor": "orchestrator",
+      "path": "conductor/state.md"
+    },
+    {
+      "t": "wave",
+      "op": "close",
+      "n": 1
+    },
+    {
+      "t": "wave",
+      "op": "open",
+      "n": 2,
+      "tasks": [
+        {
+          "id": "T3",
+          "files": [
+            "src/auth/session.ts"
+          ],
+          "depends_on": [
+            "T1"
+          ],
+          "covers": [
+            "S3"
+          ]
+        }
+      ]
+    },
+    {
+      "t": "plan",
+      "task": "T3",
+      "status": "[~]"
+    },
+    {
+      "t": "dispatch",
+      "id": "s4",
+      "subagent": "general-purpose",
+      "task": "T3",
+      "prompt": "implement T3 per spec; return only the JSON schema, no conversational text"
+    },
+    {
+      "t": "return",
+      "id": "s4",
+      "protocol": "sdp-v1",
+      "status": "needs_context",
+      "lines": 4,
+      "token_estimate": 190,
+      "evidence": "verified"
+    },
+    {
+      "t": "dispatch",
+      "id": "s5",
+      "subagent": "general-purpose",
+      "task": "T3",
+      "prompt": "implement T3 per spec, session schema and acceptance criteria attached; return only the JSON schema, no conversational text"
+    },
+    {
+      "t": "write",
+      "actor": "sub:s5",
+      "task": "T3",
+      "kind": "test",
+      "path": "src/auth/session.test.ts"
+    },
+    {
+      "t": "gate",
+      "task": "T3",
+      "kind": "test",
+      "cmd": "npm test",
+      "exit_code": 1
+    },
+    {
+      "t": "write",
+      "actor": "sub:s5",
+      "task": "T3",
+      "kind": "impl",
+      "path": "src/auth/session.ts"
+    },
+    {
+      "t": "gate",
+      "task": "T3",
+      "kind": "test",
+      "cmd": "npm test",
+      "exit_code": 1
+    },
+    {
+      "t": "fix",
+      "task": "T3",
+      "of": "root cause: session TTL read from the wrong config key"
+    },
+    {
+      "t": "signal",
+      "actor": "orchestrator",
+      "kind": "fix_attempt",
+      "layer": "task",
+      "origin_layer": "task",
+      "task": "T3",
+      "detail": "root cause: session TTL read from the wrong config key"
+    },
+    {
+      "t": "gate",
+      "task": "T3",
+      "kind": "test",
+      "cmd": "npm test",
+      "exit_code": 0
+    },
+    {
+      "t": "gate",
+      "task": "T3",
+      "kind": "lint",
+      "cmd": "npm run lint",
+      "exit_code": 0
+    },
+    {
+      "t": "gate",
+      "task": "T3",
+      "kind": "coverage",
+      "cmd": null,
+      "declared_absent": true
+    },
+    {
+      "t": "return",
+      "id": "s5",
+      "protocol": "sdp-v1",
+      "status": "done",
+      "lines": 10,
+      "token_estimate": 1620,
+      "evidence": "verified"
+    },
+    {
+      "t": "commit",
+      "actor": "orchestrator",
+      "sha": "e5f6a7b",
+      "message": "feat(auth): persist session"
+    },
+    {
+      "t": "note",
+      "actor": "orchestrator",
+      "sha": "e5f6a7b"
+    },
+    {
+      "t": "plan",
+      "task": "T3",
+      "status": "[x]",
+      "sha": "e5f6a7b"
+    },
+    {
+      "t": "commit",
+      "actor": "orchestrator",
+      "sha": "f6a7b8c",
+      "message": "conductor(plan): mark T3 as complete"
+    },
+    {
+      "t": "write",
+      "actor": "orchestrator",
+      "path": "conductor/state.md"
+    },
+    {
+      "t": "wave",
+      "op": "close",
+      "n": 2
+    },
+    {
+      "t": "run",
+      "actor": "orchestrator",
+      "cmd": "git push origin track/auth"
+    },
+    {
+      "t": "ask",
+      "about": "conductor-review",
+      "question": "Would you like a formal code review?",
+      "answer": "yes"
+    },
+    {
+      "t": "handoff",
+      "to": "conductor-review",
+      "confirmed": true
+    }
   ]
 }

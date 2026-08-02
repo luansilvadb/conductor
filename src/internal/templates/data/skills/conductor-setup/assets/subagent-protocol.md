@@ -31,6 +31,8 @@ FUNCTION loadConfig():
 
 All values referenced below (directories, file names, thresholds, subagent types, schema names, tool names, enums) are resolved from this config object. **Never use a string literal** where a config key exists.
 
+Three of those keys are contracts rather than values, and this protocol cites them instead of restating them, per `config.gates.where_a_rule_belongs`: `config.protocol.evidence_contract` (what qualifies a return's claim), `config.signal_ledger` (who writes the ledger, when, and how it is read back), and `config.enums.origin_layer_policy` (which layer a signal is attributed to). Where a rule below is one line and the reasoning is a paragraph, the paragraph lives at the key — a protocol that paraphrases them owns a second copy that will disagree with the first.
+
 ---
 
 ## 1. Dispatch Decision Matrix (DDM)
@@ -49,6 +51,7 @@ Every dispatch decision follows this matrix. The orchestrator MUST consult it BE
 | Operation is an analysis (diff, coverage, lint, test) | **DELEGATE** via the subagent type whose `config.subagent_types[].capabilities` contains `analysis` |
 | Operation writes any file | **DELEGATE** only via a type whose `config.subagent_types[].write_forbidden` is false — never to a retrieval type, per Subagent Rule 8 |
 | Parallelism is possible (tasks with no dependencies) | **DELEGATE** in parallel via multiple subagents (max: `${config.thresholds.max_parallel_subagents}`) |
+| Operation needs anything out of `config.files.artifacts.signals` | **DELEGATE** to a retrieval type with the question as the prompt; consume `config.schemas.signal_digest` — never the records, never the file |
 | Task writes any file listed in `config.files.control_files[]` | **ORCHESTRATOR** executes inline (subagents NEVER write control files) |
 | Task is trivial: 1-step operation with no file reading | **ORCHESTRATOR** executes inline |
 | `config.dispatch_tool_aliases[]` is empty, or no tool it names is available in the environment | **ORCHESTRATOR** executes inline with `${config.protocol.degraded_mode}` warning |
@@ -57,6 +60,8 @@ Every dispatch decision follows this matrix. The orchestrator MUST consult it BE
 > **Tool name resolution:** `config.dispatch_tool_aliases[]` is checked in order against the toolset present at runtime, and the first match wins. The list is generated from the tool registry for this environment specifically — it is not a menu of every tool's names. An empty list means dispatch is unavailable here by declaration; see `config.dispatch_policy`. Never assume a tool name, and never substitute one from another environment when the declared name is absent: a dispatch that misses is reported as degraded, and a dispatch invented to avoid reporting it is a silent failure.
 
 > **Degraded mode is a supported mode, and it changes what may be claimed.** The orchestrator reads inline exactly what it would have delegated, so the Golden Rule and the CIL are suspended for the duration — they describe a boundary that does not exist here. Every skill that ran degraded states it in its report. What must never happen is prose asserting isolation while the work ran inline: the rest of this protocol is only true when dispatch is available.
+
+> **The signal ledger is queried, never loaded.** `config.files.artifacts.signals` is deliberately absent from `config.files.context_files[]` — see `config.files.context_files_policy` — so the Golden Rule alone would not cover it, and the row above exists because the omission reads like permission. It is not: the ledger grows without bound by design (`config.signal_ledger.read_policy`), so reading it inline spends on raw records exactly the budget the CIL exists to protect, and it gets worse every track rather than better. Dispatch a retrieval subagent with the question being asked — a track id, a kind, a layer, a window of dates — and consume `config.schemas.signal_digest`: counts and the identifiers behind them. This is the same boundary `config.drafts_policy` draws for output too large to travel in a return (Subagent Rule 7), turned around and applied to input too large to load. The cheap wrong move is to read "just the last few lines" and reason from them, which answers a question about the whole ledger from an arbitrary tail of it.
 
 ### Task Classification Algorithm (Dynamic)
 
@@ -111,9 +116,10 @@ The CIL is an architectural boundary between the orchestrator and subagents. It 
 1. **FORBIDDEN** to read any file matching paths in `config.files.context_files[]`. Use subagent.
 2. **FORBIDDEN** to read any file under `config.directories.source_code` with > `${config.thresholds.delegate_lines}` lines directly. Use subagent.
 3. **FORBIDDEN** to keep intermediate subagent output in context after consuming the schema. The CIL auto-discards.
-4. **MANDATORY** to validate that the subagent return contains the field defined in `config.protocol.protocol_field` with value `${config.protocol.version_string}`.
-5. **MANDATORY** to report each subagent's `${config.protocol.token_estimate_field}` at the end of the operation.
+4. **MANDATORY** to validate that the subagent return contains the field defined in `config.protocol.protocol_field` with value `${config.protocol.version_string}`, and the field defined in `config.protocol.evidence_field` with a value from `config.enums.evidence_levels`. A return missing the evidence field is NOT read as `verified` by default and is not read as anything else either — it is a protocol violation, handled as `needs_context`, because the absent case and the weakest case must not collapse into one.
+5. **MANDATORY** to report each subagent's `${config.protocol.token_estimate_field}` at the end of the operation, and to flag any return whose estimate exceeds `${config.thresholds.token_warning_threshold}`. Reporting a number nothing is compared against is how a dispatch that costs an order of magnitude more than its neighbours passes unremarked: the figure is present in the report, correct, and read by nobody. The threshold is a warning and never a block — the work is already done by the time the estimate exists, so the only useful response is to name the dispatch, so a prompt that pulls far more context than it needs can be narrowed the next time it runs rather than rediscovered every time.
 6. **MANDATORY** to end subagent prompts with: "return only the JSON schema, no conversational text".
+7. **MANDATORY** to append every signal a return carries to `config.files.artifacts.signals` **at the moment the return is consumed**, per `config.signal_ledger.write_policy` — one record per entry, shaped by `config.signal_ledger.record_fields`, with `kind` from `config.signal_ledger.kinds` and `origin_layer` decided per `config.enums.origin_layer_policy`. Not at task close, not at wave close, not at track close. A ledger written from the orchestrator's own end-of-track summary is a recollection of what it remembers happening, which is precisely the thing `config.signal_ledger` was built to replace — and it is the deferral that always looks harmless, because the records feel available right up until the context that held them is gone. The measurement-bearing schemas name what to append: `config.schemas.gate_execution.measurement_contract`, `config.schemas.plan_lint.dimension_contract`, and `config.schemas.diff_analysis.findings_contract`.
 
 ### Subagent Rules (Enforced)
 
@@ -125,6 +131,7 @@ The CIL is an architectural boundary between the orchestrator and subagents. It 
 6. **FORBIDDEN** to reproduce file contents in the return. A subagent that reads a file returns findings *about* it — assertions, counts, paths, line references — never the text it read. Quoting a file back to the orchestrator defeats the entire isolation layer: the tokens the delegation was meant to keep out land in the orchestrator anyway.
 7. **MANDATORY** to keep the whole return under `${config.thresholds.subagent_return_max_lines}` lines. A subagent whose findings genuinely exceed that budget writes the detail to a file, returns the path in the data envelope, and sets `${config.protocol.status_field}` to `done_with_concerns` with an explanatory entry in `${config.protocol.warnings_field}`. **Where it writes is part of the rule.** When the subagent was dispatched to produce or revise a specific document, it writes to that document's own path — the one the orchestrator gave it — and returns that path. Otherwise it writes under `config.directories.drafts_dir`, per `config.drafts_policy`. It NEVER writes to `config.directories.conductor_root` itself: the root holds the project's governance documents, resolved by name, and an overflow file landing there is indistinguishable from the artifact whose name it borrows. This escape hatch exists so a long result survives the return budget, not so it acquires a new identity on the way out.
 8. **FORBIDDEN** to write any file at all when dispatched as a type whose `config.subagent_types[].write_forbidden` is true. The retrieval type is the one the orchestrator dispatches most, precisely because it cannot change anything, and the DDM routes every read-only operation to it. A write from inside it edits the project through a channel nobody reviews: the dispatch still reads as a lookup, and the change arrives with no task, no gate, and no commit attached to it. A retrieval subagent that finds a defect reports it in `${config.protocol.summary_field}` and `${config.protocol.warnings_field}` — fixing what it was sent to read is outside its scope even when the fix is obvious and correct. If the task genuinely requires a write, that is a misclassification: return `${config.protocol.status_field}` as `needs_context` so the orchestrator re-dispatches it to a type whose capabilities include writing.
+9. **FORBIDDEN** to append to `config.files.artifacts.signals`. The ledger carries a name in `config.files.control_files[]` like every other orchestrator-owned file, so Rule 1 already covers it — it is restated because this is the file where the violation looks like diligence rather than overreach. The subagent that measured something worth recording is the one holding the fact, which makes writing it down itself read as the responsible move; what it actually produces is concurrent appends from parallel dispatches, records the orchestrator never saw and therefore cannot reconcile with the return it acted on, and signals persisted by a dispatch that came back `blocked` and was discarded. A subagent with a signal to record puts it in `${config.protocol.data_envelope}` — shaped by `config.signal_ledger.record_fields` — and the orchestrator appends it per Orchestrator Rule 7 and `config.signal_ledger.write_policy`. This binds the retrieval direction too: a subagent dispatched to READ the ledger returns `config.schemas.signal_digest` and appends nothing, not even a record of having been asked.
 
 ### Subagent Lifecycle (Auto-Cleanup)
 
@@ -134,9 +141,13 @@ The CIL is an architectural boundary between the orchestrator and subagents. It 
 3. SUBAGENT: reads necessary files, processes
 4. SUBAGENT: returns EXCLUSIVELY the JSON schema
 5. ORCHESTRATOR: validates schema (checks config.protocol.protocol_field == config.protocol.version_string)
-6. ORCHESTRATOR: extracts config.protocol.data_envelope.* and DISCARD all intermediate history
-7. CIL: auto-clears subagent context from orchestrator memory
-8. ORCHESTRATOR: records config.protocol.token_estimate_field in audit log
+6. ORCHESTRATOR: reads config.protocol.status_field WITH config.protocol.evidence_field and resolves
+   an unproven completion per config.protocol.evidence_contract before consuming it
+7. ORCHESTRATOR: appends every signal the return carried to config.files.artifacts.signals — HERE,
+   while the return is still in context, never at track close (Orchestrator Rule 7)
+8. ORCHESTRATOR: extracts config.protocol.data_envelope.* and DISCARD all intermediate history
+9. CIL: auto-clears subagent context from orchestrator memory
+10. ORCHESTRATOR: records config.protocol.token_estimate_field in audit log
 ```
 
 ---
@@ -151,6 +162,7 @@ Every subagent MUST return EXACTLY this JSON structure. Schema definitions come 
 {
   "${config.protocol.protocol_field}": "${config.protocol.version_string}",
   "${config.protocol.status_field}": "done" | "done_with_concerns" | "needs_context" | "blocked",
+  "${config.protocol.evidence_field}": "verified" | "asserted" | "assumed",
   "${config.protocol.summary_field}": "<single sentence summarizing the result>",
   "${config.protocol.data_envelope}": {
     // operation-specific schema from config.schemas
@@ -166,12 +178,26 @@ The four values of `${config.protocol.status_field}` are defined in `config.enum
 
 | Status | Subagent means | Orchestrator MUST |
 |---|---|---|
-| `done` | Task complete, evidence included | Consume the schema and continue |
+| `done` | Task complete | Consume the schema and continue — but only as far as `${config.protocol.evidence_field}` allows; see below |
 | `done_with_concerns` | Complete, but with recorded doubts | Continue, and carry the concerns into the review — never drop them because the task "passed" |
 | `needs_context` | The prompt was missing something the task required | Supply the missing input and re-dispatch the SAME task. **This is not a failure and MUST NOT consume a fix attempt** — counting it as one burns the retry budget on the orchestrator's own incomplete prompt |
 | `blocked` | The task cannot proceed as scoped | Escalate: split it, re-plan it, or raise it to the user. Never re-dispatch it unchanged — an identical prompt yields an identical block |
 
 The distinction that matters most is `needs_context` versus `blocked`. Treating a missing input as a block wastes attempts and hides the real problem, which was the dispatch, not the task.
+
+### Evidence Values — Canonical Meanings
+
+`${config.protocol.evidence_field}` is MANDATORY on every return and takes one value from `config.enums.evidence_levels`. The full rule is `config.protocol.evidence_contract`; what follows is how the two fields interact.
+
+| Evidence | Subagent means | Orchestrator MUST |
+|---|---|---|
+| `verified` | A command ran in THIS dispatch and its output supports the claim | Treat the claim as settled. The command that proved it is named in the return |
+| `asserted` | The claim follows from something read, not something run — a symbol found, a type that lines up | Treat as plausible and unproven: record it and resolve it, per the paragraph below |
+| `assumed` | Neither run nor read — the claim rests on what the code appears to do or what the prompt implied | Same handling as `asserted`, with less standing. Never let the summary's confidence stand in for the level |
+
+**`${config.protocol.status_field}` and `${config.protocol.evidence_field}` are orthogonal, and neither substitutes for the other.** Status says whether the task was carried out; evidence says what proved it. `done` + `assumed` is therefore a coherent and common report — the work was done and nothing demonstrated it — and it is exactly the combination status alone cannot express, which is why a subagent MUST NOT downgrade to `done_with_concerns` merely because its evidence is thin. The concern statuses are for recorded doubts about the work; the evidence level is for the proof behind it. Nor may a subagent inflate the level to make the return look complete: `verified` requires a command run in THIS dispatch, so a gate that passed in an earlier phase, a test suite someone else ran, or a result carried over from a prior return is `asserted` at best — the same rule `config.gates.exit_contract` states for gates.
+
+**The orchestrator MUST NOT consume a `done` below `verified` as though the task were settled.** Doing so is the one move this field exists to prevent. It records the gap as a `config.signal_ledger.kinds.unverified_claim` record — appended at consumption time per Orchestrator Rule 7, since this is a signal with no other home, describing work accepted without proof that no other artifact captures — and then takes exactly one of two routes: re-dispatch with the command that would prove the claim, which is the cheap route whenever such a command exists; or carry the item into the review's human-verification section, so a person is asked to check a named claim rather than to re-derive what happened. What it may not do is neither — accept the return, move on, and let the gap surface at review, which was the behaviour before this field existed and which pushed every unproven completion to the latest and most expensive place to find it.
 
 ### Operation-Specific Schemas
 
@@ -189,6 +215,8 @@ All schemas below reference their canonical definitions in `config.schemas`.
 #### Status Report → `config.schemas.status_report`
 #### Plan Lint → `config.schemas.plan_lint`
 #### Wave Index → `config.schemas.wave_index`
+#### Gate Execution → `config.schemas.gate_execution`
+#### Signal Ledger Query → `config.schemas.signal_digest`
 
 ### Return Size Budget
 
@@ -261,13 +289,23 @@ FUNCTION initializeProtocol():
   ELSE:
     mode = config.protocol.full_mode
 
+  // Signal ledger: self-healing per config.signal_ledger.missing_policy.
+  // Absent is the normal state of a project set up before the ledger existed —
+  // create it empty, note it in one line, never halt.
+  ledgerPath = resolvePath(config.signal_ledger.path)
+  IF NOT exists(ledgerPath):
+    createEmpty(ledgerPath)
+    EMIT note: "Signal ledger created empty."
+
   // Verify config integrity
   validateConfigIntegrity(config)
 
-  RETURN { mode, toolset, dispatchTool, config }
+  RETURN { mode, toolset, dispatchTool, ledgerPath, config }
 ```
+
+The ledger is initialized here and read nowhere here: `initializeProtocol` establishes the path the orchestrator appends to, and every read of it goes through the retrieval dispatch in §1. Creating it is an orchestrator write like every other entry in `config.files.control_files[]`, and it is the only ledger operation that happens outside the consumption of a return.
 
 ---
 
 ## Initialization:
-As Subagent Dispatch Protocol Engine v1.0, I resolve ALL dispatch decisions dynamically from the centralized `config.json`. The Context Isolation Layer architecturally enforces that the orchestrator NEVER reads project context files directly, ALWAYS delegates, receives ONLY condensed schemas, and IMMEDIATELY discards intermediate subagent history to save tokens. Every Conductor skill MUST reference this protocol and config instead of hardcoding file paths, subagent type names, thresholds, or schema fields.
+As Subagent Dispatch Protocol Engine v1.0, I resolve ALL dispatch decisions dynamically from the centralized `config.json`. The Context Isolation Layer architecturally enforces that the orchestrator NEVER reads project context files directly, ALWAYS delegates, receives ONLY condensed schemas, and IMMEDIATELY discards intermediate subagent history to save tokens. Every return states not only what was done but what proved it, in `${config.protocol.evidence_field}` per `config.protocol.evidence_contract`, and a completion the orchestrator accepts without proof is recorded in `config.signal_ledger` rather than forgotten — the ledger being written by the orchestrator alone, at the moment each signal is observed, and read back only as `config.schemas.signal_digest` through a retrieval dispatch. Every Conductor skill MUST reference this protocol and config instead of hardcoding file paths, subagent type names, thresholds, or schema fields.

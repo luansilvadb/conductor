@@ -91,7 +91,14 @@ async function generateAllTemplates(ctx: ConductorContext, _targetDir: string, f
     }
   }
 
-  ctx.ui.renderSuccess(`Generation complete: ${formatCount(successCount, 'succeeded')}, ${formatCount(failCount, 'failed')}`);
+  // The summary reports the outcome it actually had. Rendering a success tick over a run
+  // where every file failed is the shape of failure this framework refuses everywhere else:
+  // the last line is the one a user reads, and a green ✓ above "35 failed" is read as noise
+  // about files that were already fine.
+  const summary = `Generation complete: ${successCount} succeeded, ${failCount} failed`;
+  if (failCount === 0) ctx.ui.renderSuccess(summary);
+  else if (successCount === 0) ctx.ui.renderError(summary);
+  else ctx.ui.renderWarning(summary);
 }
 
 async function generateSingleTemplate(ctx: ConductorContext, name: string, force: boolean, output: string, locale?: string): Promise<void> {
@@ -112,9 +119,4 @@ async function generateSingleTemplate(ctx: ConductorContext, name: string, force
       ctx.ui.renderError(r.message);
     }
   }
-}
-
-function formatCount(count: number, label: string): string {
-  if (count === 1) return `1 ${label.slice(0, -1)}`;
-  return `${count} ${label}`;
 }

@@ -2,8 +2,8 @@
 
 - Generated: `npm run eval:traces`
 - Contract source: `src/internal/templates/data/config/config.json`
-- Rubrics: 19 · Traces: 24 (4 golden, 20 regression)
-- Graded as expected: 24/24
+- Rubrics: 25 · Traces: 30 (4 golden, 26 regression)
+- Graded as expected: 30/30
 - Result: **PASS**
 
 ## Traces
@@ -34,6 +34,12 @@
 | `setup-golden` | conductor-setup | — | — | clean |
 | `unrunnable-gate-reclassified` | conductor-implement | `gate-exit-contract`<br>`unrunnable-gate` | `gate-exit-contract`<br>`unrunnable-gate` | caught |
 | `unrunnable-gate-handled` | conductor-implement | — | — | clean |
+| `ledger-read-inline` | conductor-implement | `signal-ledger-read` | `signal-ledger-read` | caught |
+| `signal-record-drift` | conductor-implement | `signal-record-shape` | `signal-record-shape` | caught |
+| `signal-never-recorded` | conductor-implement | `signal-recording` | `signal-recording` | caught |
+| `done-on-assumed-evidence` | conductor-implement | `evidence-contract` | `evidence-contract` | caught |
+| `lessons-loaded-whole` | conductor-review | `lessons-section-scope` | `lessons-section-scope` | caught |
+| `spec-clause-unplanned` | conductor-new-track | `clause-coverage` | `clause-coverage` | caught |
 
 ## Graded findings
 
@@ -70,7 +76,7 @@ Each regression trace is a workflow defect the framework must keep catching. The
 
 ### `fix-budget-overrun` — The test gate keeps failing and the agent keeps trying. The third attempt is past the cap that exists to turn a failing gate into a reported blocker instead of an open-ended grind.
 
-- **fix-attempt-budget**: #11 fix attempt 3 on task T1 — the cap is 2, after which the task stops and is reported as blocked
+- **fix-attempt-budget**: #13 fix attempt 3 on task T1 — the cap is 2, after which the task stops and is reported as blocked
 
 ### `parallel-cap-exceeded` — A six-task wave is dispatched in one go. Nothing in the transcript looks wrong; the cost shows up as subagent timeouts and interleaved writes under load.
 
@@ -128,16 +134,48 @@ Each regression trace is a workflow defect the framework must keep catching. The
 
 ### `unrunnable-gate-reclassified` — The failure recorded in a real audit: both remaining required gates exit 2 because the runner could not start, the agent reads the empty diagnostic as 'the tool is missing from this environment', files it under pending human/infra verification, writes 'Blockers: none' in the same document, closes the task, sets the state to done and archives the track. Nothing here is a lie the agent tells; every step is the cheapest available category for a result the framework gave no category to. The task-level rubric catches the close, this one catches the reclassification that made the close look reasonable.
 
-- **gate-exit-contract**: #15 required structure gate exited 2 yet task T1 was marked done
-- **gate-exit-contract**: #16 required coverage gate exited 2 yet task T1 was marked done
+- **gate-exit-contract**: #17 required structure gate exited 2 yet task T1 was marked done
+- **gate-exit-contract**: #19 required coverage gate exited 2 yet task T1 was marked done
 - **unrunnable-gate**: #13 the required structure gate exited 2 and was never recorded in the state document's unrunnable_gates — an unrunnable gate with no category becomes a note in Blockers and stops blocking anything
 - **unrunnable-gate**: #13 structure exited 2 and 1 fix attempt(s) followed — exit 2 is not a verdict (config.gates.exit_codes), so there is no finding to fix
-- **unrunnable-gate**: #15 the required structure gate exited 2 and was never recorded in the state document's unrunnable_gates — an unrunnable gate with no category becomes a note in Blockers and stops blocking anything
-- **unrunnable-gate**: #16 the required coverage gate exited 2 and was never recorded in the state document's unrunnable_gates — an unrunnable gate with no category becomes a note in Blockers and stops blocking anything
-- **unrunnable-gate**: #20 task T1 marked [x] while its structure, structure, coverage gate had not run
-- **unrunnable-gate**: #23 state document set to done while structure, structure, coverage had not run
-- **unrunnable-gate**: #23 state document declares no blockers while structure, structure, coverage could not run — that is the reclassification config.gates.unrunnable_policy forbids
-- **unrunnable-gate**: #25 track api-hardening archived while structure, structure, coverage had not run — archiving is what turns the open question into a settled record
+- **unrunnable-gate**: #17 the required structure gate exited 2 and was never recorded in the state document's unrunnable_gates — an unrunnable gate with no category becomes a note in Blockers and stops blocking anything
+- **unrunnable-gate**: #19 the required coverage gate exited 2 and was never recorded in the state document's unrunnable_gates — an unrunnable gate with no category becomes a note in Blockers and stops blocking anything
+- **unrunnable-gate**: #24 task T1 marked [x] while its structure, structure, coverage gate had not run
+- **unrunnable-gate**: #27 state document set to done while structure, structure, coverage had not run
+- **unrunnable-gate**: #27 state document declares no blockers while structure, structure, coverage could not run — that is the reclassification config.gates.unrunnable_policy forbids
+- **unrunnable-gate**: #29 track api-hardening archived while structure, structure, coverage had not run — archiving is what turns the open question into a settled record
+
+### `ledger-read-inline` — The orchestrator opens signals.jsonl itself to check what this project keeps getting wrong, and a retrieval subagent loads the whole ledger rather than querying it. Both work on the day they are written: the file is short, the answer is right, and nothing in the run looks wrong. The ledger is the one artifact designed to append forever, so the cost arrives later and arrives silently — and because it is deliberately absent from context_files, the golden rule never sees either read.
+
+- **signal-ledger-read**: #1 orchestrator read conductor/signals.jsonl inline — the ledger is queried by dispatch and consumed as config.schemas.signal_digest, never loaded
+- **signal-ledger-read**: #3 sub:s1 loaded the whole ledger — a query carries the question being asked and returns counts, not the file
+
+### `signal-record-drift` — Signals get appended with a vocabulary invented at the call site: a kind nobody declared, an origin layer spelled as the review's own name, and one record written straight from inside a subagent. Every line is individually readable, which is exactly why this survives review — the ledger keeps working as prose and stops working as a tally, and a threshold measured against it silently counts nothing.
+
+- **signal-record-shape**: #1 signal kind "coverage_dropped" is outside config.signal_ledger.kinds (lint_issue, wave_downgrade, fix_attempt, gate_regression, gate_improvement, gate_unrunnable, finding, unverified_claim, architecture_gate)
+- **signal-record-shape**: #2 signal carries origin_layer "implementation", outside config.enums.origin_layers (spec, plan, wave, task, gate)
+- **signal-record-shape**: #2 signal carries layer "review", outside config.enums.origin_layers (spec, plan, wave, task, gate)
+- **signal-record-shape**: #4 sub:s1 appended to the ledger — it is a control file; a subagent returns its signal in the envelope and the orchestrator writes it
+
+### `signal-never-recorded` — A task takes two fix attempts and lands green, and the track closes without either attempt reaching the ledger. Nothing about the run reads as a failure — that is the point. The architecture gate counts failed fixes across the whole track including earlier sessions, and the recurrence triggers count patterns across tracks; both read from a ledger that this run left empty, so the next session inherits a project that appears never to have struggled with anything.
+
+- **signal-recording**: #8 fix attempt on task T1 was never recorded — config.thresholds.fixes_before_architecture_review counts across the whole track, and an unrecorded attempt is invisible to the session that inherits it
+
+### `done-on-assumed-evidence` — A subagent reports done and states honestly that nothing was run to prove it. The orchestrator consumes the return as settled — no ledger record, no re-dispatch with the command that would prove it, nothing carried into human verification. The honesty is in the envelope and is thrown away at the point it would have cost something, which leaves an unproven completion shaped exactly like a proven one for every reader downstream.
+
+- **evidence-contract**: #3 return from s1 was consumed as done on assumed evidence with nothing recorded, re-dispatched, or carried to human verification
+
+### `lessons-loaded-whole` — The review loads the lessons ledger the cheap way: one dispatch that names no section at all, and a second that asks for the lint layer, which belongs to the implementer. Both returns are useful, so nothing complains. What degrades is structural — the skill pays context for entries it has no layer to act on, and the document acquires a size limit it must be truncated to fit, which is how a project's hard-won findings start being deleted to make room for newer ones.
+
+- **lessons-section-scope**: #2 sub:r1 read conductor/lessons.md without its dispatch naming any section — config.lessons_document.read_policy requests sections, never the file
+- **lessons-section-scope**: #5 conductor-review requested lessons section "lint"; config.lessons_document.consumers grants it prose, decision
+
+### `spec-clause-unplanned` — The spec promises four clauses and the plan covers two of them: one task declares no coverage at all, another claims a clause the spec never wrote, and S4 is claimed by nobody. The plan looks complete because everything in it is well formed — and it is the one defect every downstream check is blind to by construction. The tasks that exist all pass, the gates all go green, and the track closes clean around scope that was specified and never planned.
+
+- **clause-coverage**: #2 task T2 declares no "covers" — config.plan_task_fields lists it as required, and without it a finding cannot be traced to the clause it was meant to satisfy
+- **clause-coverage**: #2 task T3 covers clause "S9", which the spec does not declare
+- **clause-coverage**: spec clause "S3" is covered by no task — specified scope that was never planned, attributable to config.enums.origin_layers.spec
+- **clause-coverage**: spec clause "S4" is covered by no task — specified scope that was never planned, attributable to config.enums.origin_layers.spec
 
 ## Rubric coverage
 
@@ -162,3 +200,9 @@ Each regression trace is a workflow defect the framework must keep catching. The
 | `handoff-confirmation` | conductor-implement and conductor-review completion sections — config.skills.names | `handoff-without-confirmation` |
 | `handoff-readiness` | config.enums.task_statuses.in_progress — the state the next skill inherits at a handoff | `handoff-with-work-in-flight` |
 | `review-verdict` | conductor-review verdict constraints — config.enums.review_statuses | `passed-with-unverified-behaviour` |
+| `signal-ledger-read` | config.signal_ledger.read_policy — config.files.artifacts.signals | `ledger-read-inline` |
+| `signal-record-shape` | config.signal_ledger.record_fields, .kinds — config.enums.origin_layers | `signal-record-drift` |
+| `signal-recording` | config.signal_ledger.write_policy — appended when observed, not recalled at closing time | `signal-never-recorded` |
+| `evidence-contract` | config.protocol.evidence_contract — config.enums.evidence_levels | `done-on-assumed-evidence` |
+| `lessons-section-scope` | config.lessons_document.read_policy, .consumers | `lessons-loaded-whole` |
+| `clause-coverage` | config.plan_task_fields.covers — config.enums.origin_layers.spec | `spec-clause-unplanned` |

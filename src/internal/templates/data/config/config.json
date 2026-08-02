@@ -8,6 +8,8 @@
     "version": "1.1"
   },
 
+  "directories_policy": "Every value here is a COMPLETE project-relative path, already carrying whatever prefix it needs. Use one as it stands and never join it to another — `${config.directories.conductor_root}/${config.directories.archive_dir}` resolves to `conductor/conductor/archive`, which is a directory the framework then creates, writes to, and finds empty when it looks in the right place. This differs from `config.files.artifacts.*`, which are bare file names that MUST be resolved against an owning directory per `config.files.artifacts_policy`; the two read alike at the call site and compose in opposite ways, which is why the rule is stated here rather than left to be inferred. The build guards it: `npm run check:paths` fails on any template that joins two directory keys.\n\nOne key here is deliberately not used to build other paths. `skills_dir` nests `${config.tool_dir}`, and a value that nests a placeholder resolves correctly on its own yet leaks the raw text when a TEMPLATE cites it — only `${config.tool_dir}` is substituted after injection, so `config.protocols.subagent_dispatch.path` and `config.catalogs.*` spell that prefix out rather than composing from `skills_dir`. It reads like duplication and is the only form that survives rendering. `npm run check:generate` generates a real project and fails on any placeholder that reaches the rendered output, which is what makes this checkable instead of remembered.",
+
   "directories": {
     "conductor_root": "conductor",
     "source_code": "src",
@@ -31,7 +33,8 @@
       "index": "index.md",
       "tracks_registry": "tracks.md",
       "state": "state.md",
-      "lessons": "lessons.md"
+      "lessons": "lessons.md",
+      "signals": "signals.jsonl"
     },
     "track_artifacts": {
       "plan": "plan.md",
@@ -39,7 +42,7 @@
       "index": "index.md",
       "track_metadata": "metadata.json"
     },
-    "context_files_policy": "These are the PROJECT-scoped files a context load reads when they exist. Track-scoped artifacts are deliberately absent from this list: which plan and which spec are in scope depends on the active track, so they are resolved from `config.files.track_artifacts` against that track's directory, never from a bare file name at the conductor root. Read each entry when it is present on disk, and say nothing when it is not.",
+    "context_files_policy": "These are the PROJECT-scoped files a context load reads when they exist. Track-scoped artifacts are deliberately absent from this list: which plan and which spec are in scope depends on the active track, so they are resolved from `config.files.track_artifacts` against that track's directory, never from a bare file name at the conductor root. Read each entry when it is present on disk, and say nothing when it is not. The signal ledger (`config.files.artifacts.signals`) is deliberately absent too, and for a different reason: it is machine data that grows without bound, and a context load that reads it would spend on raw records the budget the whole isolation layer exists to protect. It is queried by dispatch and consumed as a digest — see `config.signal_ledger.read_policy`.",
     "context_files": [
       "product.md",
       "product-guidelines.md",
@@ -56,7 +59,8 @@
       "index.md",
       "metadata.json",
       "state.md",
-      "lessons.md"
+      "lessons.md",
+      "signals.jsonl"
     ],
     "setup_chain": [
       { "file": "product.md", "step": "Product Definition" },
@@ -66,6 +70,7 @@
       { "file": "code_styleguides", "step": "Code Style Guides", "is_directory": true },
       { "file": "workflow.md", "step": "Workflow Configuration" },
       { "file": "lessons.md", "step": "Lessons Ledger" },
+      { "file": "signals.jsonl", "step": "Signal Ledger" },
       { "file": "gates", "step": "Quality Gates", "is_directory": true }
     ],
     "setup_marker": "index.md"
@@ -186,7 +191,6 @@
     "coverage_mode": "ratchet",
     "max_fix_attempts": 2,
     "max_parallel_subagents": 5,
-    "subagent_timeout_seconds": 120,
     "token_warning_threshold": 5000,
     "state_max_lines": 100,
     "lessons_max_lines": 150,
@@ -215,7 +219,9 @@
     "status_field": "status",
     "summary_field": "summary",
     "warnings_field": "warnings",
-    "token_estimate_field": "token_estimate"
+    "token_estimate_field": "token_estimate",
+    "evidence_field": "evidence",
+    "evidence_contract": "Every return carries this field with one value from config.enums.evidence_levels, and it qualifies the status rather than restating it. The two are independent: `done` + `assumed` is a coherent and common report — the task was carried out and nothing proved it — and it is precisely the combination that the status alone cannot express. The orchestrator MUST NOT consume a `done` return whose evidence is below the verified level as though the task were settled: per config.signal_ledger it records the gap, and it either re-dispatches with the command that would prove the claim or carries the item into the review's human-verification section. This exists because the return schema previously made an unproven completion indistinguishable from a proven one, which pushed every such discovery to the review — the latest and most expensive place to make it."
   },
 
   "dispatch_policy": "The two blocks below are written by `conductor generate` from the contract of the tool this scaffolding was generated for — they are not a list of every tool's names, and they are not editable guesses. An empty `subagent_types` or an empty `dispatch_tool_aliases` is a declaration, not an omission: this environment exposes no subagent dispatch, so the SDP runs in `config.protocol.degraded_mode` and every skill says so in its report. That is a supported way to work — it costs context isolation, never correctness. What is NOT supported is naming a dispatch tool or a subagent type the environment does not have: the dispatch then fails as a lookup miss instead of a declared absence, the framework lands in degraded mode anyway, and the prose keeps claiming an isolation that is not in force. If a tool gains a dispatch contract, declare it in the tool registry and regenerate — never by hand here.",
@@ -243,6 +249,20 @@
     "state_statuses": ["planning", "implementing", "reviewing", "blocked", "paused", "done"],
     "banned_completion_phrasings": ["should work", "should pass", "probably", "seems to", "looks like it works", "appears to work", "I think it's fixed", "must be working now"],
     "banned_plan_phrasings": ["TBD", "to be defined", "handle edge cases", "similar to the previous task", "and so on", "etc. as needed", "adjust as necessary"],
+    "plan_lint_dimensions": ["granularity", "wave_assignment", "scope_sanity", "acceptance_empirical", "acceptance_coverage", "clause_coverage", "placeholders", "interface_consistency", "file_size"],
+    "origin_layers": {
+      "spec": "The scope was wrong or incomplete before any plan existed — a behaviour nobody wrote down, or a clause that contradicted another.",
+      "plan": "The scope was right and its decomposition was wrong — a task sized past one cycle, a missing dependency, an acceptance criterion that covered part of the clause it claimed.",
+      "wave": "The decomposition was right and its scheduling was wrong — a file overlap that serialised work, a dependency the wave order contradicted.",
+      "task": "The scheduling was right and the implementation was wrong — the defect is in the code this task wrote and nowhere upstream.",
+      "gate": "The implementation was right and the check was wrong — a gate absent, unrunnable, or measuring something other than what it claimed."
+    },
+    "origin_layer_policy": "Every finding and every gate regression names the layer that CAUSED it, which is rarely the layer that FOUND it. This is the distinction the whole ledger exists to record: a review is where correctness defects surface, and it is almost never where they originate. Attribute to the earliest layer that could have prevented the finding — a defect in code written to satisfy an acceptance criterion that never covered the behaviour is `plan`, not `task`, because fixing the code leaves the next track free to repeat it. When the evidence genuinely does not distinguish two layers, attribute to the later one and say so in the record: over-attributing upstream invents a planning problem out of an ordinary bug, and a ledger that cries `spec` at every defect is one nobody will consult.",
+    "evidence_levels": {
+      "verified": "A command was run in THIS dispatch, its output read, and that output supports the claim. The record names the command.",
+      "asserted": "The claim follows from something read rather than something run — a symbol found in a file, a type that lines up. Plausible and unproven.",
+      "assumed": "Neither run nor read. The claim rests on what the code appears to do or on what the prompt implied."
+    },
     "subagent_report_statuses": {
       "done": "Task complete; the return carries the evidence that proves it.",
       "done_with_concerns": "Task complete, but the subagent recorded doubts the orchestrator must weigh before moving on.",
@@ -280,19 +300,35 @@
 
   "lessons_document": {
     "path": "${config.directories.conductor_root}/${config.files.artifacts.lessons}",
-    "description": "What this project learned the hard way. Written only by the orchestrator, never by a subagent, and only on the triggers below — it is not a journal and not a changelog. Its purpose is to stop the framework from making the same mistake in a later track: it is listed in config.files.context_files[], so every skill that loads project context reads it before planning or implementing.",
+    "description": "What this project learned the hard way. Written only by the orchestrator, never by a subagent, and only on the triggers below — it is not a journal and not a changelog. Its purpose is to stop the framework from making the same mistake in a later track. It is listed in config.files.context_files[], so it is loaded by dispatch and never read inline; what a skill asks for is one section of it, per config.lessons_document.read_policy.",
+    "sections": {
+      "description": "The document is organised under one heading per entry in config.lessons_document.action_layers, in that order, and every entry lives under the heading matching its own `action`. A lesson whose action is a lint rule and a lesson whose action is an unrecorded decision are read by different skills at different moments, and filing both in one undifferentiated list is what forced every skill to read the whole document to find the two lines that concerned it.",
+      "heading_format": "## <action layer key>",
+      "empty_section_policy": "A layer with no lessons keeps its heading and stands empty. A missing heading is indistinguishable from a section a dispatch failed to read, and the reader that cannot tell those apart will assume the wrong one."
+    },
+    "consumers": {
+      "description": "Which section each skill loads. A skill requests its own sections BY NAME in the dispatch prompt and never asks for the document — this is what keeps the ledger's growth off the context budget of skills that cannot act on most of it.",
+      "conductor-new-track": ["plan", "decision"],
+      "conductor-implement": ["lint", "script"],
+      "conductor-review": ["prose", "decision"]
+    },
+    "read_policy": "Request sections, never the file. The dispatch prompt names the headings the skill consumes per config.lessons_document.consumers, and the subagent returns only entries under those headings whose action is still open. Two consequences are the point of the design: the document may grow past what any single skill could afford to read, and a skill is never handed lessons it has no layer to act on. A skill that finds its sections empty says so in one line and proceeds — an empty section is a fact about the project, not a failed read.",
     "triggers": [
       "The architecture gate fired: config.thresholds.fixes_before_architecture_review failed fixes accumulated on the same underlying problem. Record it whichever way the user then decided, including deciding to proceed unchanged.",
       "A review closed with a finding whose category (config.enums.finding_categories) has now appeared in config.thresholds.lesson_recurrence_threshold or more distinct tracks. The repetition is the lesson, not the individual finding.",
-      "A wave was downgraded to sequential by file overlap for the same file in more than one track — the file is a structural bottleneck, not an unlucky coincidence."
+      "A wave was downgraded to sequential by file overlap for the same file in more than one track — the file is a structural bottleneck, not an unlucky coincidence.",
+      "A signal digest reports any entry under `recurring` that has reached config.thresholds.lesson_recurrence_threshold distinct tracks, whatever its kind. This trigger generalises the three above and is the one that fires without anybody remembering: the others describe patterns a human noticed twice, and this one describes every pattern the ledger counted."
     ],
+    "recurrence_source": "Recurrence is READ from config.signal_ledger, never recalled. Query the ledger through a retrieval subagent and consume config.schemas.signal_digest — its `recurring` entries carry the distinct track ids behind each count, so the threshold is checked against a list that can be inspected rather than against a number nobody can retrace. Before this ledger existed the count had no source at all, which made the recurrence triggers depend on a skill remembering tracks it had never read, and a trigger that cannot fire reliably is one that reads as satisfied every time it is skipped.",
     "entry_fields": {
       "date": "ISO-8601 date the lesson was recorded.",
       "track": "Id of the track where the pattern surfaced.",
       "category": "One of config.enums.finding_categories, or the literal 'architecture' when the architecture gate fired.",
       "pattern": "What actually repeated, stated so it is recognisable next time. Not the symptom of one occurrence.",
       "cause": "Why it repeated. If unknown, write 'unknown' — a fabricated cause is worse than an absent one.",
-      "action": "The layer the rule must move to. MUST be one of config.lessons_document.action_layers."
+      "action": "The layer the rule must move to. MUST be one of config.lessons_document.action_layers, and it decides which section of this document the entry is filed under.",
+      "origin_layer": "The layer that CAUSED the pattern, from config.enums.origin_layers. Distinct from `action`, which is where the fix belongs: a defect originating in `plan` is very often fixed by a `script` gate, and recording only the second loses the information that this project's planning is where the cost accumulates.",
+      "occurrences": "How many distinct tracks the pattern has appeared in, taken from the signal ledger rather than counted by hand. This is what the recurrence threshold measures, and reading it from config.signal_ledger makes it an observation instead of a recollection."
     },
     "action_layers": {
       "lint": "A tool rule can catch this. Name the gate in config.gates and the rule to add.",
@@ -308,6 +344,36 @@
       "keep in mind",
       "avoid doing this again"
     ]
+  },
+
+  "signal_ledger": {
+    "path": "${config.directories.conductor_root}/${config.files.artifacts.signals}",
+    "description": "Append-only record of every error signal this framework already measures and used to discard. The skills produce far more of it than they keep: the plan linter grades each task on a named dimension, the gates return per-metric measurements against a baseline, the review classifies each finding by category and severity, and every one of those numbers is computed, reported once in prose, and lost. Four measurements survived a track — the ones in config.ratchet.baseline_file — and the rest left no trace, so the question 'what does this project get wrong' had no answer except a human's memory of it. This file is that answer. It is data, not prose: nothing here is read by a person, and nothing here is authoritative over the documents — a signal is an observation, and config.lessons_document is where an observation that recurred becomes a rule.",
+    "format": "JSON Lines — one self-contained JSON object per line, appended, never rewritten. The format is chosen so a concurrent append cannot corrupt an earlier record and so a partial write costs one line rather than the file.",
+    "record_fields": {
+      "ts": "ISO-8601 date the signal was recorded.",
+      "track": "Id of the track the signal was produced in.",
+      "layer": "The layer that OBSERVED the signal, from config.enums.origin_layers.",
+      "origin_layer": "The layer that CAUSED it, from config.enums.origin_layers, per config.enums.origin_layer_policy. Equal to `layer` when the defect is where it surfaced; different whenever an upstream layer could have prevented it, which is the case the ledger exists to make countable.",
+      "kind": "One of config.signal_ledger.kinds.",
+      "task": "Task id the signal attaches to, or null when it is track-scoped.",
+      "detail": "One short factual clause naming what was measured. Never a judgement, never a recommendation, and never more than a line — the analysis happens when the ledger is read, not when it is written."
+    },
+    "kinds": {
+      "lint_issue": "A plan-lint iteration reported an issue. Carries the dimension and severity from config.schemas.plan_lint.",
+      "wave_downgrade": "A wave was downgraded to sequential by file overlap. Carries the shared file, which is what makes a structural bottleneck countable across tracks.",
+      "fix_attempt": "A fix attempt was consumed against a task. A `needs_context` re-dispatch is NOT one of these, per config.enums.subagent_report_statuses.",
+      "gate_regression": "A metric came back worse than config.ratchet.baseline_file. Carries the metric, the baseline, and the measurement.",
+      "gate_improvement": "A metric beat the baseline. Recorded because a ledger of failures alone cannot tell a project that stopped regressing from a project nobody measured.",
+      "gate_unrunnable": "A required gate exited 2. Carries the command, so a gate that breaks repeatedly is visible as an infrastructure defect rather than as scattered blocked tracks.",
+      "finding": "A review finding. Carries category and severity from config.enums.",
+      "unverified_claim": "A return came back `done` with evidence below the verified level, per config.protocol.evidence_contract. This is the signal with no other home: it describes work that was accepted without proof, which no existing artifact records.",
+      "architecture_gate": "The architecture gate fired per config.thresholds.fixes_before_architecture_review."
+    },
+    "write_policy": "Orchestrator-only and append-only. The file carries a name in config.files.control_files[], so subagents never write it — a subagent that has a signal to record returns it in its envelope and the orchestrator appends it. Append at the moment the signal is observed rather than at the end of the track: a ledger written from the orchestrator's summary at closing time is a recollection, which is the thing it was built to replace. Never edit or delete a line to correct it; append a new record. Never write a signal for work that did not happen, and never omit one because the track ended well — a track that passed after three fix attempts is exactly the history this file exists to keep, and it is the one nobody writes down.",
+    "read_policy": "NEVER read inline and NEVER load whole. The ledger is absent from config.files.context_files[] deliberately: it grows without bound while a context file must stay affordable to read every run, and those two properties cannot hold in one document. Read it by dispatching a retrieval subagent with the question being asked — a track id, a kind, a layer, a window of dates — and consume config.schemas.signal_digest. The subagent returns counts and the records that support them, never the file. This is the same boundary config.drafts_policy draws for output too large to return, applied to input too large to load.",
+    "retention": "Records for a track are compacted when that track is archived: the archive keeps the track's own records, and the project ledger keeps the aggregate — counts per kind, per layer and per origin layer — with the individual lines dropped. What must survive compaction is the count, because the count is what config.thresholds.lesson_recurrence_threshold measures. Never truncate the ledger to a line budget the way config.state_document and config.lessons_document are truncated: those are documents a skill reads whole, and this is not.",
+    "missing_policy": "Self-healing, exactly as config.lessons_document.missing_policy. A project set up before the ledger existed has none, and no skill may halt over its absence: create it empty, note it in one line, and continue. An empty ledger and a missing ledger carry the same information, and a framework upgrade must never present itself to an existing user as a broken project."
   },
 
   "plan_task_fields": {
@@ -330,6 +396,11 @@
       "type": "string[]",
       "required": true,
       "description": "Empirically checkable acceptance criteria; each entry MUST match one of config.enums.acceptance_criteria_kinds."
+    },
+    "covers": {
+      "type": "string[]",
+      "required": true,
+      "description": "Ids of the spec clauses this task implements. The spec numbers every clause of its scope, and each id appears in the `covers` of at least one task — a clause covered by no task is scope that was specified and never planned, which is the defect config.enums.origin_layers.spec names and which nothing detected before this field existed. It is also what makes attribution possible downstream: a finding against a task resolves to the clause it was meant to satisfy, so a defect in code written against a criterion that never covered its clause is attributable to `plan` instead of being filed as an ordinary bug in `task`."
     }
   },
 
@@ -362,8 +433,9 @@
       "fields": {
         "commit_range": "string",
         "files_changed": "string[]",
-        "findings": "Finding[]"
-      }
+        "findings": [{ "category": "string", "severity": "string", "file": "string", "line": "number", "task": "string", "clause": "string", "origin_layer": "string", "summary": "string" }]
+      },
+      "findings_contract": "`category` comes from config.enums.finding_categories and `severity` from config.enums.finding_severities. `origin_layer` comes from config.enums.origin_layers and is decided per config.enums.origin_layer_policy — it is the layer that caused the finding, which for a review is seldom the review itself. `task` and `clause` are what make that decision checkable rather than asserted: the task the diff came from, and the spec clause that task declared it covered in its `covers` field. A finding whose clause resolves to a task whose acceptance criteria never asserted the behaviour is attributable upstream, and this is the field set that lets the reader see it."
     },
     "gate_execution": {
       "type": "object",
@@ -372,10 +444,23 @@
         "absent": "string[]",
         "measurements": { "coverage_percent": "number", "typecheck_errors": "number", "lint_findings": "number", "files_over_max_lines": "number" },
         "baseline": { "coverage_percent": "number", "typecheck_errors": "number", "lint_findings": "number", "files_over_max_lines": "number" },
-        "regressions": "string[]",
-        "improvements": "string[]",
+        "regressions": [{ "metric": "string", "baseline": "number", "measured": "number" }],
+        "improvements": [{ "metric": "string", "baseline": "number", "measured": "number" }],
         "blocked": "boolean"
-      }
+      },
+      "measurement_contract": "Regressions and improvements carry the two numbers that produced the verdict, not a sentence describing it. A string saying coverage fell is a report; the pair (baseline, measured) is a signal that config.signal_ledger can record and later count. The orchestrator appends one config.signal_ledger.kinds.gate_regression or .gate_improvement record per entry here."
+    },
+    "signal_digest": {
+      "type": "object",
+      "fields": {
+        "query": "string",
+        "records_scanned": "number",
+        "by_kind": "object",
+        "by_origin_layer": "object",
+        "recurring": [{ "pattern": "string", "kind": "string", "origin_layer": "string", "tracks": "string[]", "occurrences": "number" }],
+        "top_files": [{ "path": "string", "signals": "number" }]
+      },
+      "contract": "The only shape in which config.signal_ledger enters an orchestrator's context. It is counts and the identifiers behind them — never the records themselves, and never the file. `recurring` is the field with teeth: a pattern appearing in as many distinct tracks as config.thresholds.lesson_recurrence_threshold is what promotes a signal to a lesson, and returning the track ids rather than a count alone is what lets the orchestrator verify the promotion instead of trusting it. Empty results are reported as empty; a digest that finds nothing is a fact about a healthy project, and inventing a pattern to fill the field would poison the one input the planner is meant to trust."
     },
     "test_execution": {
       "type": "object",
@@ -431,6 +516,7 @@
       "fields": {
         "iteration": "number",
         "issues": [{ "task_id": "string", "dimension": "string", "severity": "string", "fix_hint": "string" }],
+        "dimension_contract": "`dimension` MUST be one of config.enums.plan_lint_dimensions and `severity` one of config.enums.finding_severities. Free text here is why three iterations of lint findings per track could be produced and never counted: two runs naming the same defect differently are two facts to a reader and no fact at all to a tally. The orchestrator appends one config.signal_ledger.kinds.lint_issue record per issue, with `plan` as the origin layer.",
         "blocker_count": "number",
         "warning_count": "number",
         "revised_path": "string"

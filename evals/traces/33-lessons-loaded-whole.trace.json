@@ -1,0 +1,60 @@
+{
+  "id": "lessons-loaded-whole",
+  "skill": "conductor-review",
+  "description": "The review loads the lessons ledger the cheap way: one dispatch that names no section at all, and a second that asks for the lint layer, which belongs to the implementer. Both returns are useful, so nothing complains. What degrades is structural — the skill pays context for entries it has no layer to act on, and the document acquires a size limit it must be truncated to fit, which is how a project's hard-won findings start being deleted to make room for newer ones.",
+  "expect_failures": [
+    "lessons-section-scope"
+  ],
+  "gates": [],
+  "events": [
+    {
+      "t": "skill",
+      "name": "conductor-review"
+    },
+    {
+      "t": "dispatch",
+      "id": "r1",
+      "subagent": "Explore",
+      "task": "lessons-load",
+      "prompt": "read the lessons ledger; return only the JSON schema, no conversational text"
+    },
+    {
+      "t": "read",
+      "actor": "sub:r1",
+      "path": "conductor/lessons.md"
+    },
+    {
+      "t": "return",
+      "id": "r1",
+      "protocol": "sdp-v1",
+      "status": "done",
+      "lines": 14,
+      "token_estimate": 2100,
+      "evidence": "verified"
+    },
+    {
+      "t": "dispatch",
+      "id": "r2",
+      "subagent": "Explore",
+      "task": "lessons-load",
+      "prompt": "read the lint lessons; return only the JSON schema, no conversational text",
+      "sections": [
+        "lint"
+      ]
+    },
+    {
+      "t": "read",
+      "actor": "sub:r2",
+      "path": "conductor/lessons.md"
+    },
+    {
+      "t": "return",
+      "id": "r2",
+      "protocol": "sdp-v1",
+      "status": "done",
+      "lines": 6,
+      "token_estimate": 480,
+      "evidence": "verified"
+    }
+  ]
+}

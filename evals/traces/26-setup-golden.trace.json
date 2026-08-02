@@ -5,20 +5,88 @@
   "expect_failures": [],
   "gates": [],
   "events": [
-    { "t": "skill", "name": "conductor-setup" },
-    { "t": "run", "actor": "orchestrator", "cmd": "python conductor/skills/conductor-setup/scripts/resume.py", "setup_complete": false },
-    { "t": "dispatch", "id": "s1", "subagent": "Explore", "task": "audit-project", "prompt": "report this project's entry points, dependency manifests and directory layout; return only the JSON schema, no conversational text" },
-    { "t": "read", "actor": "sub:s1", "path": "package.json" },
-    { "t": "return", "id": "s1", "protocol": "sdp-v1", "status": "done", "lines": 6, "token_estimate": 540 },
-    { "t": "write", "actor": "orchestrator", "path": "conductor/product.md" },
-    { "t": "write", "actor": "orchestrator", "path": "conductor/product-guidelines.md" },
-    { "t": "write", "actor": "orchestrator", "path": "conductor/tech-stack.md" },
-    { "t": "write", "actor": "orchestrator", "path": "conductor/decisions.md" },
-    { "t": "write", "actor": "orchestrator", "path": "conductor/workflow.md" },
-    { "t": "write", "actor": "orchestrator", "path": "conductor/gates/gates.json" },
-    { "t": "write", "actor": "orchestrator", "path": "conductor/index.md" },
-    { "t": "commit", "actor": "orchestrator", "sha": "c0ffee1", "message": "conductor(setup): initialize project" },
-    { "t": "ask", "about": "conductor-new-track", "question": "Would you like to start planning your initial product implementation (MVP) now?", "answer": "yes" },
-    { "t": "handoff", "to": "conductor-new-track", "confirmed": true }
+    {
+      "t": "skill",
+      "name": "conductor-setup"
+    },
+    {
+      "t": "run",
+      "actor": "orchestrator",
+      "cmd": "python conductor/skills/conductor-setup/scripts/resume.py",
+      "setup_complete": false
+    },
+    {
+      "t": "dispatch",
+      "id": "s1",
+      "subagent": "Explore",
+      "task": "audit-project",
+      "prompt": "report this project's entry points, dependency manifests and directory layout; return only the JSON schema, no conversational text"
+    },
+    {
+      "t": "read",
+      "actor": "sub:s1",
+      "path": "package.json"
+    },
+    {
+      "t": "return",
+      "id": "s1",
+      "protocol": "sdp-v1",
+      "status": "done",
+      "lines": 6,
+      "token_estimate": 540,
+      "evidence": "verified"
+    },
+    {
+      "t": "write",
+      "actor": "orchestrator",
+      "path": "conductor/product.md"
+    },
+    {
+      "t": "write",
+      "actor": "orchestrator",
+      "path": "conductor/product-guidelines.md"
+    },
+    {
+      "t": "write",
+      "actor": "orchestrator",
+      "path": "conductor/tech-stack.md"
+    },
+    {
+      "t": "write",
+      "actor": "orchestrator",
+      "path": "conductor/decisions.md"
+    },
+    {
+      "t": "write",
+      "actor": "orchestrator",
+      "path": "conductor/workflow.md"
+    },
+    {
+      "t": "write",
+      "actor": "orchestrator",
+      "path": "conductor/gates/gates.json"
+    },
+    {
+      "t": "write",
+      "actor": "orchestrator",
+      "path": "conductor/index.md"
+    },
+    {
+      "t": "commit",
+      "actor": "orchestrator",
+      "sha": "c0ffee1",
+      "message": "conductor(setup): initialize project"
+    },
+    {
+      "t": "ask",
+      "about": "conductor-new-track",
+      "question": "Would you like to start planning your initial product implementation (MVP) now?",
+      "answer": "yes"
+    },
+    {
+      "t": "handoff",
+      "to": "conductor-new-track",
+      "confirmed": true
+    }
   ]
 }

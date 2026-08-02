@@ -1,0 +1,60 @@
+{
+  "id": "spec-clause-unplanned",
+  "skill": "conductor-new-track",
+  "description": "The spec promises four clauses and the plan covers two of them: one task declares no coverage at all, another claims a clause the spec never wrote, and S4 is claimed by nobody. The plan looks complete because everything in it is well formed — and it is the one defect every downstream check is blind to by construction. The tasks that exist all pass, the gates all go green, and the track closes clean around scope that was specified and never planned.",
+  "expect_failures": [
+    "clause-coverage"
+  ],
+  "gates": [],
+  "events": [
+    {
+      "t": "skill",
+      "name": "conductor-new-track"
+    },
+    {
+      "t": "spec",
+      "track": "auth",
+      "clauses": [
+        "S1",
+        "S2",
+        "S3",
+        "S4"
+      ]
+    },
+    {
+      "t": "wave",
+      "op": "open",
+      "n": 1,
+      "tasks": [
+        {
+          "id": "T1",
+          "files": [
+            "src/auth/login.ts"
+          ],
+          "depends_on": [],
+          "covers": [
+            "S1"
+          ]
+        },
+        {
+          "id": "T2",
+          "files": [
+            "src/auth/token.ts"
+          ],
+          "depends_on": []
+        },
+        {
+          "id": "T3",
+          "files": [
+            "src/auth/session.ts"
+          ],
+          "depends_on": [],
+          "covers": [
+            "S2",
+            "S9"
+          ]
+        }
+      ]
+    }
+  ]
+}

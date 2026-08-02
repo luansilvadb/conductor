@@ -2,14 +2,45 @@
   "id": "orchestrator-reads-context-inline",
   "skill": "conductor-implement",
   "description": "The orchestrator delegates the spec, then reads plan.md itself because it is 'just one file'. The run succeeds, and the context budget the delegation protects is spent anyway.",
-  "expect_failures": ["cil-golden-rule"],
+  "expect_failures": [
+    "cil-golden-rule"
+  ],
   "gates": [],
   "events": [
-    { "t": "skill", "name": "conductor-implement" },
-    { "t": "dispatch", "id": "s1", "subagent": "Explore", "task": "context-load", "prompt": "read the track spec; return only the JSON schema, no conversational text" },
-    { "t": "read", "actor": "sub:s1", "path": "conductor/tracks/auth/spec.md" },
-    { "t": "return", "id": "s1", "protocol": "sdp-v1", "status": "done", "lines": 9, "token_estimate": 620 },
-    { "t": "read", "actor": "orchestrator", "path": "conductor/tracks/auth/plan.md" },
-    { "t": "read", "actor": "orchestrator", "path": "conductor/lessons.md" }
+    {
+      "t": "skill",
+      "name": "conductor-implement"
+    },
+    {
+      "t": "dispatch",
+      "id": "s1",
+      "subagent": "Explore",
+      "task": "context-load",
+      "prompt": "read the track spec; return only the JSON schema, no conversational text"
+    },
+    {
+      "t": "read",
+      "actor": "sub:s1",
+      "path": "conductor/tracks/auth/spec.md"
+    },
+    {
+      "t": "return",
+      "id": "s1",
+      "protocol": "sdp-v1",
+      "status": "done",
+      "lines": 9,
+      "token_estimate": 620,
+      "evidence": "verified"
+    },
+    {
+      "t": "read",
+      "actor": "orchestrator",
+      "path": "conductor/tracks/auth/plan.md"
+    },
+    {
+      "t": "read",
+      "actor": "orchestrator",
+      "path": "conductor/lessons.md"
+    }
   ]
 }

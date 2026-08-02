@@ -1,0 +1,44 @@
+{
+  "id": "done-on-assumed-evidence",
+  "skill": "conductor-implement",
+  "description": "A subagent reports done and states honestly that nothing was run to prove it. The orchestrator consumes the return as settled — no ledger record, no re-dispatch with the command that would prove it, nothing carried into human verification. The honesty is in the envelope and is thrown away at the point it would have cost something, which leaves an unproven completion shaped exactly like a proven one for every reader downstream.",
+  "expect_failures": [
+    "evidence-contract"
+  ],
+  "gates": [],
+  "events": [
+    {
+      "t": "skill",
+      "name": "conductor-implement"
+    },
+    {
+      "t": "dispatch",
+      "id": "s1",
+      "subagent": "general-purpose",
+      "task": "T1",
+      "prompt": "wire the session middleware per spec; return only the JSON schema, no conversational text"
+    },
+    {
+      "t": "write",
+      "actor": "sub:s1",
+      "task": "T1",
+      "kind": "code",
+      "path": "src/auth/middleware.ts"
+    },
+    {
+      "t": "return",
+      "id": "s1",
+      "protocol": "sdp-v1",
+      "status": "done",
+      "lines": 7,
+      "token_estimate": 940,
+      "evidence": "assumed"
+    },
+    {
+      "t": "commit",
+      "actor": "orchestrator",
+      "sha": "c04ae21",
+      "message": "feat(auth): wire session middleware"
+    }
+  ]
+}

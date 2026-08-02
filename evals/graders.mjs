@@ -558,9 +558,185 @@ export const graders = [
       return out;
     },
   },
+  {
+    id: 'signal-ledger-read',
+    contract: 'config.signal_ledger.read_policy — config.files.artifacts.signals',
+    why: 'The ledger is the one project file designed to outgrow the context window: it appends forever and is never truncated. Reading it inline works perfectly on the day it is written and fails silently a year later, when it quietly consumes the budget every other delegation in the run was protecting. It is absent from config.files.context_files precisely so the golden rule cannot catch this, which is why it needs its own.',
+    grade(trace, config) {
+      const ledger = base(resolve(config.signal_ledger.path, config));
+      const out = [];
+      for (const [i, e] of of(trace, 'read')) {
+        if (base(e.path) !== ledger) continue;
+        if (!isSub(e.actor)) {
+          out.push(`#${i} orchestrator read ${e.path} inline — the ledger is queried by dispatch and consumed as ${config.schemas.signal_digest ? 'config.schemas.signal_digest' : 'a digest'}, never loaded`);
+        } else if (e.whole_file) {
+          out.push(`#${i} ${e.actor} loaded the whole ledger — a query carries the question being asked and returns counts, not the file`);
+        }
+      }
+      return out;
+    },
+  },
+
+  {
+    id: 'signal-record-shape',
+    contract: 'config.signal_ledger.record_fields, .kinds — config.enums.origin_layers',
+    why: 'A ledger whose records do not share a vocabulary is a log, and a log answers no question a threshold can be checked against. Two runs naming the same defect differently are two facts to a reader and no fact at all to a tally, which is the exact failure that made every earlier measurement unusable.',
+    grade(trace, config) {
+      const kinds = Object.keys(config.signal_ledger.kinds);
+      const layers = Object.keys(config.enums.origin_layers);
+      const out = [];
+      for (const [i, e] of of(trace, 'signal')) {
+        if (isSub(e.actor)) {
+          out.push(`#${i} ${e.actor} appended to the ledger — it is a control file; a subagent returns its signal in the envelope and the orchestrator writes it`);
+        }
+        if (!kinds.includes(e.kind)) {
+          out.push(`#${i} signal kind ${JSON.stringify(e.kind)} is outside config.signal_ledger.kinds (${kinds.join(', ')})`);
+        }
+        if (!layers.includes(e.origin_layer)) {
+          out.push(`#${i} signal carries origin_layer ${JSON.stringify(e.origin_layer)}, outside config.enums.origin_layers (${layers.join(', ')})`);
+        }
+        if (e.layer !== undefined && !layers.includes(e.layer)) {
+          out.push(`#${i} signal carries layer ${JSON.stringify(e.layer)}, outside config.enums.origin_layers (${layers.join(', ')})`);
+        }
+      }
+      return out;
+    },
+  },
+
+  {
+    id: 'signal-recording',
+    contract: 'config.signal_ledger.write_policy — appended when observed, not recalled at closing time',
+    why: 'Every signal this rubric checks was already computed by the run that dropped it, and dropping it is free: the track still closes, the report still reads well, and the only thing lost is the answer to what this project keeps getting wrong. A ledger written from the closing summary instead of from the observation is a recollection, which is the thing it was built to replace.',
+    grade(trace, config) {
+      const signals = of(trace, 'signal');
+      const has = (kind, pred) => signals.some(([, s]) => s.kind === kind && (!pred || pred(s)));
+      const out = [];
+
+      for (const [i, e] of of(trace, 'fix')) {
+        if (!has('fix_attempt', (s) => s.task === e.task)) {
+          out.push(`#${i} fix attempt on task ${e.task} was never recorded — config.thresholds.fixes_before_architecture_review counts across the whole track, and an unrecorded attempt is invisible to the session that inherits it`);
+        }
+      }
+
+      for (const [i, e] of of(trace, 'gate')) {
+        if (e.exit_code === 2 && !has('gate_unrunnable', (s) => s.task === e.task)) {
+          out.push(`#${i} gate ${e.kind} exited 2 on task ${e.task} without a ledger record — a gate that breaks repeatedly is an infrastructure defect, and unrecorded it reads as scattered bad luck`);
+        }
+      }
+
+      for (const [i, e] of of(trace, 'wave')) {
+        if (e.op !== 'open' || !e.downgraded) continue;
+        if (!has('wave_downgrade')) {
+          out.push(`#${i} wave ${e.n} was downgraded by file overlap without a ledger record — config.lessons_document.triggers promotes a file that does this in more than one track to a structural bottleneck, and that count has no other source`);
+        }
+      }
+
+      return out;
+    },
+  },
+
+  {
+    id: 'evidence-contract',
+    contract: 'config.protocol.evidence_contract — config.enums.evidence_levels',
+    why: 'Before this field, a return that proved its work and one that merely asserted it were the same shape, so the gap could only be discovered at review — the latest and most expensive place to find it. An accepted `done` that nothing verified is the defect that reaches the user wearing the costume of a finished task.',
+    grade(trace, config) {
+      const levels = Object.keys(config.enums.evidence_levels);
+      const field = config.protocol.evidence_field;
+      const out = [];
+      for (const [i, e] of of(trace, 'return')) {
+        const evidence = e[field];
+        if (evidence === undefined) {
+          out.push(`#${i} return from ${e.id} omits ${field} — an unproven completion must not be shaped like a proven one`);
+          continue;
+        }
+        if (!levels.includes(evidence)) {
+          out.push(`#${i} return from ${e.id} carries ${field}=${JSON.stringify(evidence)}, outside config.enums.evidence_levels (${levels.join(', ')})`);
+          continue;
+        }
+        if (e.status !== 'done' || evidence === 'verified') continue;
+
+        const dispatch = dispatchOf(trace, e.id);
+        const recorded = of(trace, 'signal').some(([j, s]) => j > i && s.kind === 'unverified_claim');
+        const redispatched = dispatch && of(trace, 'dispatch').some(([j, d]) => j > i && d.task === dispatch.task);
+        const deferred = of(trace, 'verdict').some(([j, v]) => j > i && (v.needs_human ?? []).length > 0);
+        if (!recorded && !redispatched && !deferred) {
+          out.push(`#${i} return from ${e.id} was consumed as done on ${evidence} evidence with nothing recorded, re-dispatched, or carried to human verification`);
+        }
+      }
+      return out;
+    },
+  },
+
+  {
+    id: 'lessons-section-scope',
+    contract: 'config.lessons_document.read_policy, .consumers',
+    why: 'The ledger of lessons is read by every skill and acted on by one layer at a time. Loading it whole is the cheap path and it degrades twice over: the skill pays for entries it has no layer to act on, and the document acquires a size limit it must be truncated to fit — which is how a project\'s hard-won findings started being deleted to make room.',
+    grade(trace, config) {
+      const lessons = base(resolve(config.lessons_document.path, config));
+      const skill = of(trace, 'skill')[0]?.[1]?.name;
+      const allowed = config.lessons_document.consumers?.[skill];
+      const layers = Object.keys(config.lessons_document.action_layers);
+      const dispatchOfActor = new Map();
+      for (const [, d] of of(trace, 'dispatch')) dispatchOfActor.set(`sub:${d.id}`, d);
+
+      const out = [];
+      for (const [i, e] of of(trace, 'read')) {
+        if (base(e.path) !== lessons || !isSub(e.actor)) continue;
+        const sections = dispatchOfActor.get(e.actor)?.sections;
+        if (!Array.isArray(sections) || sections.length === 0) {
+          out.push(`#${i} ${e.actor} read ${e.path} without its dispatch naming any section — config.lessons_document.read_policy requests sections, never the file`);
+          continue;
+        }
+        for (const s of sections) {
+          if (!layers.includes(s)) {
+            out.push(`#${i} dispatch for ${e.actor} requested section ${JSON.stringify(s)}, which is not one of config.lessons_document.action_layers (${layers.join(', ')})`);
+          } else if (allowed && !allowed.includes(s)) {
+            out.push(`#${i} ${skill} requested lessons section ${JSON.stringify(s)}; config.lessons_document.consumers grants it ${allowed.join(', ')}`);
+          }
+        }
+      }
+      return out;
+    },
+  },
+
+  {
+    id: 'clause-coverage',
+    contract: 'config.plan_task_fields.covers — config.enums.origin_layers.spec',
+    why: 'A clause the spec promised and no task claims is scope that was specified and never planned. It is the one defect that every downstream check is blind to by construction: the tasks that exist all pass, the gates all go green, and the track closes clean around a hole nobody is looking at.',
+    grade(trace, config) {
+      const spec = of(trace, 'spec')[0]?.[1];
+      if (!spec || !Array.isArray(spec.clauses)) return [];
+
+      const covered = new Set();
+      const out = [];
+      for (const [i, e] of of(trace, 'wave')) {
+        if (e.op !== 'open') continue;
+        for (const t of e.tasks ?? []) {
+          const covers = t.covers;
+          if (!Array.isArray(covers) || covers.length === 0) {
+            out.push(`#${i} task ${t.id} declares no ${JSON.stringify('covers')} — config.plan_task_fields lists it as required, and without it a finding cannot be traced to the clause it was meant to satisfy`);
+            continue;
+          }
+          for (const c of covers) {
+            if (!spec.clauses.includes(c)) {
+              out.push(`#${i} task ${t.id} covers clause ${JSON.stringify(c)}, which the spec does not declare`);
+            }
+            covered.add(c);
+          }
+        }
+      }
+
+      for (const c of spec.clauses) {
+        if (!covered.has(c)) {
+          out.push(`spec clause ${JSON.stringify(c)} is covered by no task — specified scope that was never planned, attributable to config.enums.origin_layers.spec`);
+        }
+      }
+      return out;
+    },
+  },
 ];
 
 export const graderIds = graders.map((g) => g.id);
 
 /** Event shapes the graders understand. A trace using anything else is a dataset bug, not a pass. */
-export const eventTypes = ['skill', 'read', 'write', 'dispatch', 'return', 'commit', 'note', 'plan', 'gate', 'fix', 'ask', 'handoff', 'wave', 'verdict', 'run', 'state', 'archive'];
+export const eventTypes = ['skill', 'read', 'write', 'dispatch', 'return', 'commit', 'note', 'plan', 'gate', 'fix', 'ask', 'handoff', 'wave', 'verdict', 'run', 'state', 'archive', 'signal', 'spec'];

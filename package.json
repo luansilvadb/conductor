@@ -1,6 +1,6 @@
 {
   "name": "@luansilvadb/conductor",
-  "version": "1.3.27",
+  "version": "1.3.28",
   "description": "Conductor - Spec Driven Development",
   "type": "module",
   "bin": {
@@ -18,9 +18,11 @@
     "embed": "node scripts/embed-templates.mjs",
     "clean": "node scripts/clean-dist.mjs",
     "check:i18n": "node scripts/check-i18n-coverage.mjs",
+    "check:paths": "node scripts/check-paths.mjs",
+    "check:generate": "node scripts/check-generate.mjs",
     "eval:traces": "node scripts/eval-traces.mjs",
     "typecheck": "tsc -p tsconfig.json",
-    "build": "npm run clean && npm run check:i18n && npm run eval:traces && npm run embed && npm run typecheck && npm run bundle",
+    "build": "npm run clean && npm run check:i18n && npm run check:paths && npm run eval:traces && npm run embed && npm run typecheck && npm run bundle && npm run check:generate",
     "bundle": "esbuild src/index.ts --bundle --platform=node --format=cjs --outfile=dist/index.cjs --sourcemap --allow-overwrite",
     "prepublishOnly": "npm run build",
     "start": "node dist/index.cjs"

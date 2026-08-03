@@ -3568,7 +3568,21 @@ var init_embedded = __esm({
     "state_statuses": ["planning", "implementing", "reviewing", "blocked", "paused", "done"],
     "banned_completion_phrasings": ["should work", "should pass", "probably", "seems to", "looks like it works", "appears to work", "I think it's fixed", "must be working now"],
     "banned_plan_phrasings": ["TBD", "to be defined", "handle edge cases", "similar to the previous task", "and so on", "etc. as needed", "adjust as necessary"],
-    "plan_lint_dimensions": ["granularity", "wave_assignment", "scope_sanity", "acceptance_empirical", "acceptance_coverage", "clause_coverage", "placeholders", "interface_consistency", "file_size"],
+    "plan_lint_dimensions": ["granularity", "wave_assignment", "scope_sanity", "acceptance_empirical", "acceptance_coverage", "clause_coverage", "placeholders", "interface_consistency", "file_size", "visual_evidence"],
+
+    "plan_lint_dimension_origins_policy": "Which layer a lint issue is charged to, per dimension. Every dimension that existed before this map was a defect in the decomposition, so \`plan\` was safe to hardcode in \`config.schemas.plan_lint.dimension_contract\`. \`visual_evidence\` is the first that is not: a decision the user made on a screen and the spec never recorded was already wrong before any task existed. Charging it to \`plan\` would credit the decomposition with a defect it did not commit, and since \`config.thresholds.lesson_recurrence_threshold\` counts by \`origin_layer\`, the lesson that eventually fires would name the wrong layer \u2014 a miscount that reads as evidence is worse than no count at all.",
+    "plan_lint_dimension_origins": {
+      "granularity": "plan",
+      "wave_assignment": "plan",
+      "scope_sanity": "plan",
+      "acceptance_empirical": "plan",
+      "acceptance_coverage": "plan",
+      "clause_coverage": "plan",
+      "placeholders": "plan",
+      "interface_consistency": "plan",
+      "file_size": "plan",
+      "visual_evidence": "spec"
+    },
     "origin_layers": {
       "spec": "The scope was wrong or incomplete before any plan existed \u2014 a behaviour nobody wrote down, or a clause that contradicted another.",
       "plan": "The scope was right and its decomposition was wrong \u2014 a task sized past one cycle, a missing dependency, an acceptance criterion that covered part of the clause it claimed.",
@@ -3728,6 +3742,24 @@ var init_embedded = __esm({
     "community": "\${config.tool_dir}/skills/conductor-new-track/assets/catalog.md"
   },
 
+  "visual_companion": {
+    "guide": "\${config.tool_dir}/skills/conductor-new-track/assets/visual-companion.md",
+    "script": "\${config.tool_dir}/skills/conductor-new-track/scripts/server.cjs",
+    "track_subdir": "visual",
+    "content_subdir": "content",
+    "state_subdir": "state",
+    "server_info": "server-info.json",
+    "events": "events",
+    "idle_minutes": 240,
+    "offer_policy": "Optional, and offered just in time \u2014 never at the start of the track. Wait until a question would genuinely be clearer shown than described, then offer it as its own message and honour a decline for the rest of the track. An offer made before such a question exists asks the user to pay a round trip for a surface they have no use for yet.",
+    "screen_policy": "One question per screen, no jargon, instructions on the screen itself, and a button that runs the demonstration rather than a procedure the user must perform. A screen whose content could be read aloud without loss is terminal content and belongs in the chat \u2014 an option list rendered as HTML costs a page of tokens to deliver what three lines of chat deliver. Fidelity matches the question: a screen about a product surface carries real names, real values and the complete form, because placeholder boxes hide the very decisions the screen was published to surface.",
+    "state_policy": "Runtime, never artifact. The state directory holds the session key, the pid and the current screen's answers, and the server makes it self-ignoring on startup because the track directory around it is committed \u2014 a key that reaches history cannot be rotated by restarting the companion. Nothing here survives archival, and nothing here is evidence: the durable record of a decision is the spec clause it produced, not the transport that carried it.",
+    "evidence_policy": "A screen that settled a question is evidence for the clause it settled, and the clause names it \u2014 the screen's file name recorded beside the clause it produced, exactly as a task names the clauses it covers. This is what makes a screen's fate decidable later: cited screens are the record of what the scope was agreed against, uncited ones are iterations of a question that was superseded or abandoned. Without the citation the two are indistinguishable, and archival can only choose between hoarding every draft and destroying the evidence along with them. The citation is checked by machine, not remembered: the plan lint's \`visual_evidence\` dimension computes the difference between the screens present in the track and the screens the spec cites. Screens present and NOTHING cited is a blocker \u2014 a track does not publish screens and settle none of them, so that state is a citation the planner never wrote rather than a track that decided nothing visually. Some cited and some not is a warning, because the uncited ones are usually superseded iterations and the framework cannot tell those from an omission without asking. Neither is auto-revised: the linter reports and the orchestrator amends the spec, since a linter that writes citations invents the evidence it was asked to verify.",
+    "archive_policy": "On archival the state directory is dropped outright, and screens are kept only where a spec clause cites them per \`evidence_policy\`. Uncited screens are reported and discarded on confirmation, never silently: a screen nobody cited is usually an iteration, but the framework cannot tell that from a citation the planner forgot to write, and the two failures are not equally recoverable.",
+    "read_policy": "The screen is authored by a subagent writing directly to its final path under the track's visual content directory \u2014 it is far too large to travel in a subagent return (Subagent Rule 7) and the orchestrator never holds it. Only the events file comes back inline: a few JSON lines, read directly, cheap enough that dispatching for it would cost more than it saves.",
+    "missing_policy": "Absence never halts planning. If the companion cannot start, or the events file does not exist, say so in one line and continue in the chat. A screen the user never saw is not an answer, and a planner that narrates one is describing a surface that is not in front of anybody."
+  },
+
   "commit_conventions": {
     "new_track_prefix": "conductor(track):",
     "plan_update_prefix": "conductor(plan):",
@@ -3802,6 +3834,18 @@ var init_embedded = __esm({
         "blockers": "string[]"
       }
     },
+    "companion_event": {
+      "type": "jsonl",
+      "note": "One record per click, appended by the visual companion and read inline by the planner. Not a subagent return: it is a handful of lines the orchestrator reads directly, so dispatching for it would cost more than it saves. \`screen\` binds an answer to the question that was on the glass \u2014 an answer whose screen the planner cannot name is an answer to an unknown question, and belongs in no clause.",
+      "fields": {
+        "ts": "string",
+        "track": "string",
+        "screen": "string",
+        "choice": "string",
+        "label": "string",
+        "selected": "boolean"
+      }
+    },
     "question_seeds": {
       "type": "object",
       "fields": {
@@ -3835,7 +3879,7 @@ var init_embedded = __esm({
       "fields": {
         "iteration": "number",
         "issues": [{ "task_id": "string", "dimension": "string", "severity": "string", "fix_hint": "string" }],
-        "dimension_contract": "\`dimension\` MUST be one of config.enums.plan_lint_dimensions and \`severity\` one of config.enums.finding_severities. Free text here is why three iterations of lint findings per track could be produced and never counted: two runs naming the same defect differently are two facts to a reader and no fact at all to a tally. The orchestrator appends one config.signal_ledger.kinds.lint_issue record per issue, with \`plan\` as the origin layer.",
+        "dimension_contract": "\`dimension\` MUST be one of config.enums.plan_lint_dimensions and \`severity\` one of config.enums.finding_severities. Free text here is why three iterations of lint findings per track could be produced and never counted: two runs naming the same defect differently are two facts to a reader and no fact at all to a tally. The orchestrator appends one config.signal_ledger.kinds.lint_issue record per issue, with the origin layer resolved from config.enums.plan_lint_dimension_origins for that dimension \u2014 \`plan\` for every dimension that describes the decomposition, and never assumed, because a dimension charged to the wrong layer corrupts the recurrence counts that decide which layer a future lesson names. A dimension whose origin is not \`plan\` is reported and never auto-revised: \`revised_path\` covers the plan alone, so an issue rooted in the spec is fixed by the orchestrator between iterations and a linter that edits the spec to clear its own finding has destroyed the record it was checking.",
         "blocker_count": "number",
         "warning_count": "number",
         "revised_path": "string"
@@ -3958,6 +4002,7 @@ var init_embedded = __esm({
     "**Compaction must preserve the count, not merely the lines (CRITICAL)**: archiving a track compacts its signal records per \`config.signal_ledger.retention\` \u2014 the track's own records travel with the track into \`config.directories.archive_dir\`, and \`config.signal_ledger.path\` keeps the aggregate: counts per \`config.signal_ledger.kinds\`, per \`layer\` and per \`origin_layer\` (\`config.enums.origin_layers\`). The count is the part that MUST survive, because it is what \`config.thresholds.lesson_recurrence_threshold\` measures and what \`config.lessons_document.recurrence_source\` reads. Moving the lines and dropping the totals is the cheap reading of 'compact' and it breaks nothing a reader can see: the archive looks complete, the ledger looks tidy, and the next track meets a pattern this project has already hit four times as though it were the first \u2014 a recurrence trigger that never fires is indistinguishable from a project with no recurring problems.",
     "**Never truncate the ledger to a line budget**: \`config.thresholds.state_max_lines\` and \`config.thresholds.lessons_max_lines\` bound \`config.state_document\` and \`config.lessons_document\` because a skill reads each of those whole and must be able to afford it. \`config.signal_ledger\` is never read whole \u2014 \`config.signal_ledger.read_policy\` queries it through a retrieval subagent and the orchestrator consumes \`config.schemas.signal_digest\` \u2014 so dropping its oldest lines to keep the file small spends history to protect a budget that was never at risk. Compaction per \`config.signal_ledger.retention\` is the only shrinking this file accepts, and it is triggered by a track being archived, never by the file's size.",
     "Context Isolation (SDP): All project file access MUST follow the [Subagent Dispatch Protocol](\${config.protocols.subagent_dispatch.path}). The orchestrator NEVER reads context files directly.",
+    "**Prune the track's visual companion before moving it**: a track that used the visual companion carries a directory named by \`config.visual_companion.track_subdir\`, and its contents are not uniform. The state directory inside it (\`config.visual_companion.state_subdir\`) is runtime and is deleted outright per \`config.visual_companion.state_policy\` \u2014 it holds a session key, and archival is precisely the moment that key would otherwise be preserved forever somewhere nobody thinks to look again. The screens are governed by \`config.visual_companion.archive_policy\`: keep every screen a spec clause cites per \`config.visual_companion.evidence_policy\`, list the uncited ones to the user, and discard them only on confirmation. Never drop an uncited screen silently \u2014 an uncited screen is usually a superseded iteration, but it is indistinguishable from one whose citation the planner failed to write, and only one of those two mistakes can be undone afterwards. One case is not a judgement call: screens present and NO clause citing any of them means the citation was lost, not that the track decided nothing \u2014 the \`visual_evidence\` dimension blocks that state at planning time, so reaching archival with it means the guard was bypassed. Do not offer to discard there. Report it as a lost citation, keep every screen, and archive the track intact.",
     "Always ask for user confirmation before executing any file manipulation commands."
   ],
   "skills": [
@@ -3972,6 +4017,7 @@ var init_embedded = __esm({
     "**Handshake & Context Initialization:** Verify existence of \`\${config.directories.conductor_root}/\${config.files.artifacts.index}\` and core files (resolve core files from \`config.files.context_files[]\` dynamically). Halt or offer to run setup if missing.",
     "**Identify Eligible Tracks**: Dispatch a subagent to read the tracks registry \u2014 resolve subagent type via \`config.subagent_types\` using capability-based lookup (\`resolveSubagentByCapability(\\"read_files\\", config)\` from the [Subagent Dispatch Protocol](\${config.protocols.subagent_dispatch.path})) \u2014 and extract only the tracks with status \`\${config.enums.task_statuses.done}\`. Every return MUST contain the protocol field as \`\${config.protocol.protocol_field}: \${config.protocol.version_string}\` as defined in \`[config.json](\${config.directories.conductor_root}/config.json)\`. The orchestrator consumes only the \`\${config.protocol.data_envelope}.*\` schema (\`config.schemas.tracks_registry_parse\`). Discard history.",
     "**Present Options**: Show the list of eligible tracks and ask the user to select which ones to archive via structured multiple-choice options (including an 'Other' option), introducing the list with \\"\${i18n.t(\\"common.choices.select_option\\")}\\" and \u2014 in plain-text chat \u2014 closing it with \\"\${i18n.t(\\"common.choices.reply_with_number\\")}\\". Any confirmation before moving files is a Yes/No question with the labels \\"\${i18n.t(\\"common.confirmations.yes\\")}\\" and \\"\${i18n.t(\\"common.confirmations.no\\")}\\". Do not ask multiple questions simultaneously.",
+    "**Prune the visual companion**: before moving a selected track, if it carries the visual companion directory (\`config.visual_companion.track_subdir\`), delete its state directory (\`config.visual_companion.state_subdir\`) outright per \`config.visual_companion.state_policy\`, then dispatch a subagent to read the track's spec (\`config.files.track_artifacts.spec\`) and return the screen file names its clauses cite. Keep those; present the remaining screens to the user as a list and discard them only on confirmation, per \`config.visual_companion.archive_policy\`. A track that never used the companion has no such directory \u2014 say nothing and carry on.",
     "**Execution**: For each selected track: (a) Use file system tools to move its directory from the active tracks folder (\`\${config.directories.tracks_dir}\`) to the archive directory (\`\${config.directories.archive_dir}\`). (b) Remove the track from the active section of the tracks registry (\`\${config.directories.conductor_root}/\${config.files.artifacts.tracks_registry}\`) and append it to an Archived section.",
     "**Compact the Track's Signals**: For each archived track, dispatch a retrieval subagent (resolve type via \`config.subagent_types\` using capability-based lookup \u2014 \`resolveSubagentByCapability(\\"read_files\\", config)\` from the [Subagent Dispatch Protocol](\${config.protocols.subagent_dispatch.path})) to query \`config.signal_ledger.path\` for that track's records and consume \`config.schemas.signal_digest\`; per \`config.signal_ledger.read_policy\` the orchestrator never loads the ledger itself. Write the track's own records into its directory under \`config.directories.archive_dir\`, then compact \`config.signal_ledger.path\` per \`config.signal_ledger.retention\`: the track's individual lines are dropped and replaced by a single aggregate line carrying the counts by \`kind\`, by \`layer\` and by \`origin_layer\`. Before committing, check that the aggregated totals equal the number of lines removed \u2014 an aggregate that undercounts is worse than no compaction at all, because \`config.thresholds.lesson_recurrence_threshold\` will go on reading it as authoritative; if the numbers disagree, leave the ledger untouched and report it. This is the ONE write to this file that is not an append (\`config.signal_ledger.write_policy\`), and it exists only here. If the ledger is absent, create it empty, note it in one line and continue per \`config.signal_ledger.missing_policy\` \u2014 a track that predates the ledger has no records to compact and that is not an error.",
     "**Commit**: Stage the changes in the registry and the moved files, then commit with a conventional message using prefix resolved from \`config.commit_conventions.archive_prefix\`. **Handoff**: announce completion and offer, as a single-choice \`question\` with the options labelled \\"\${i18n.t(\\"common.confirmations.yes\\")}\\" and \\"\${i18n.t(\\"common.confirmations.no\\")}\\" (recommended first, prefixed \\"\${i18n.t(\\"common.confirmations.recommended\\")}\\"), to invoke the \`\${config.skills.names.status}\` skill for a refreshed progress overview of the now-cleaner workspace; if the user would rather start new work, point them to the \`\${config.skills.names.new_track}\` skill."
@@ -4091,6 +4137,9 @@ var init_embedded = __esm({
     "**Respect negative space**: before proposing to change, remove, or revert anything recorded in the decisions file (resolve path via \`config.files.artifacts.decisions\`), surface the relevant entry to the user and require explicit confirmation before proceeding.",
     "**Read the planning prior from the signal ledger before drafting (CRITICAL)**: before a line of the plan is written, dispatch a retrieval subagent to query \`config.signal_ledger\` and consume \`config.schemas.signal_digest\`. Per \`config.signal_ledger.read_policy\` the ledger is never read inline and never loaded whole, so what enters this context is counts and the identifiers behind them, never records. The digest is the only place that says what THIS project gets wrong: counts by kind and by \`origin_layer\`, the patterns under \`recurring\`, and \`top_files\` \u2014 the files that concentrate signal. Three consequences follow, and each is a planning decision rather than a correction applied later: (1) every dimension of \`config.enums.plan_lint_dimensions\` that recurs in the digest is a constraint on this plan before it is drafted \u2014 if this project's lint fails granularity track after track, slicing finer is decided while writing, because a loop that reports the same defect every track is measuring a habit and not an accident, and fixing a habit at lint time pays for it once per track forever; (2) a file appearing in \`top_files\` is a structural bottleneck, not an unlucky one \u2014 plan the extraction before adding behaviour to it, on the same terms the \`\${config.thresholds.file_max_lines}\`-line rule sets for size but on stronger evidence, since the ledger has already counted what that file costs; (3) an empty digest is declared explicitly and planning proceeds \u2014 per \`config.schemas.signal_digest\` an empty result is a fact about a healthy project, and inventing a pattern to fill the field poisons the one input this constraint exists to make trustworthy. The prior informs the planning and NEVER substitutes for it: a prior cited as the reason not to analyse this track's own scope is worse than no prior at all, because it produces a plan shaped by the last track's defects, blind to this one's, and wearing evidence while it is wrong. Per \`config.signal_ledger.missing_policy\` an absent ledger never interrupts anything \u2014 create it empty, note it in one line, and carry on.",
     "**Consult the lessons before planning**: request THIS skill's sections of the lessons document (resolve via \`config.files.artifacts.lessons\`) \u2014 the headings listed for this skill under \`config.lessons_document.consumers\` \u2014 and never the document itself. Per \`config.lessons_document.read_policy\` the dispatch prompt names those headings explicitly and the subagent returns only the entries under them whose \`action\` is still open; a prompt that asks for the file instead is the whole growth of the ledger charged to a planner that can act on two of its layers. If those sections come back empty, say so in one line and proceed \u2014 an empty section is a fact about the project, not a failed read. Check every returned open entry against the track being planned. If an open lesson touches the area this track will change, the plan MUST either carry a task that performs its \`action\` \u2014 adding the lint rule, writing the structure check, amending the styleguide, recording the decision \u2014 or state explicitly why it is being deferred again. Silently planning a track that walks back into a recorded failure is the specific waste the lessons document exists to prevent; a lesson nobody plans against is indistinguishable from one never written. If the document does not exist, follow \`config.lessons_document.missing_policy\`: create it empty, note it in one line, and carry on \u2014 never halt the handshake over it, since a project set up before the ledger existed is not a broken project.",
+    "**The visual companion is a tool, never a mode**: it is offered only when a question would genuinely be clearer shown than described, per \`config.visual_companion.offer_policy\`, and the decision is made again for EVERY question rather than once for the track. A screen is justified when the user must operate something to answer it \u2014 click, tab, compare side by side, judge spacing. A screen whose content could be read aloud without loss is terminal content, and rendering an option list as HTML spends a page of tokens and a round trip to deliver what three lines of chat deliver. Obey \`config.visual_companion.screen_policy\` for every screen published: one question, no jargon, instructions on the screen, a button that runs the demonstration instead of a procedure the user must perform, and fidelity that matches the question. Never claim a screen was seen \u2014 publishing is an event on the server and seeing is an event in the browser; when the events file is absent, follow \`config.visual_companion.missing_policy\` and continue in the chat rather than narrating a surface that may not be in front of anybody.",
+    "**A screen that settled a question is cited by the clause it produced**: when an answer read from the events file becomes a clause of the spec's scope, record the screen's file name beside that clause per \`config.visual_companion.evidence_policy\`. The citation is what makes the screen's fate decidable once the track closes \u2014 cited screens are the record of what the scope was agreed against, uncited ones are iterations of a question that was superseded, and nothing else in the track distinguishes them. Never cite a screen the answer did not come from: a false citation preserves the wrong artifact and, worse, points a future reader at a question that was never the one being answered.",
+    "**Screens are linted before the user is told to look**: an unbalanced tag or a broken inline script renders the screen as dead text that reports nothing, and it fails silently \u2014 the page loads, the buttons do nothing, and the user reports that every option looks identical. Before ending the turn, confirm every block tag is closed and every inline \`<script>\` parses. This is the same reasoning as the plan lint: a defect that produces plausible-looking output is the one that survives every casual check.",
     "**Empirical acceptance criteria (CRITICAL)**: every task in the plan MUST carry at least one acceptance criterion, and every criterion MUST be checkable without human judgement \u2014 it must fall into one of the kinds listed in \`config.enums.acceptance_criteria_kinds\` from the centralized config (\`[config.json](\${config.directories.conductor_root}/config.json)\`): a source assertion (a named symbol exists in a named file), a behaviour assertion (a concrete input produces a concrete observable output), a test command (a command that exits zero), or a CLI output (a command prints a specific string). NEVER write a criterion using any phrasing listed in \`config.enums.banned_acceptance_phrasings\` or any equivalent subjective wording \u2014 such a criterion is invalid output and MUST be rewritten before the plan is presented to the user.",
     "**Criteria must cover the scope, not merely be checkable (CRITICAL)**: before presenting the plan, walk the spec's scope clause by clause and confirm every behaviour it promises is named by some acceptance criterion. Criteria that are fully empirical and cover only part of the scope are the more dangerous failure, because at the green they are indistinguishable from criteria that cover all of it \u2014 the gates pass, the task closes, and the uncovered half was never built. That is how a scope specifying focus trapping, focus return and background inertness closes green against a criterion that checks only \`aria-expanded\` and \`Escape\`, leaving a panel that announces itself as a modal dialog and behaves like none. Where a promised behaviour genuinely cannot be checked without a human, name it in the plan as an explicit human-verification item. Narrowing the criteria until they fit what is easy to assert is not a way of resolving that, and an unstated gap is the one unacceptable outcome.",
     "**Task metadata is mandatory**: every task in the plan document MUST declare all fields defined in \`config.plan_task_fields\` from the centralized config (\`[config.json](\${config.directories.conductor_root}/config.json)\`) \u2014 the execution wave, the task ids it depends on, the project-relative files it will touch, its acceptance criteria, and the spec clause ids it covers. A task missing any of these fields is invalid output; the plan cannot be presented to the user until every task is complete. The \`files\` field is what allows the implementer to detect write conflicts before parallelising, so listing files a task will not touch is as harmful as omitting files it will. The \`covers\` field is governed by the clause-coverage constraint below and carries the same weight as the others: a task that declares no clause is a task nobody can trace back to the scope it was written for.",
@@ -4101,13 +4150,14 @@ var init_embedded = __esm({
     "**No placeholders in the plan (CRITICAL)**: write the plan for an engineer with zero context on this project. Never use any phrasing from \`config.enums.banned_plan_phrasings\` or any equivalent deferral \u2014 no \\"TBD\\", no \\"handle edge cases\\", no \\"same as the previous task\\". A task that defers its own definition is not a task; it is a decision postponed to the moment it is most expensive to make. Name the actual files, the actual function signatures, and the actual expected values.",
     "**Task granularity**: size each task so one engineer completes the full cycle \u2014 write the test, watch it fail, implement, verify, commit \u2014 in \`\${config.thresholds.task_minutes_min}\` to \`\${config.thresholds.task_minutes_max}\` minutes. A task that cannot be finished in one cycle is really several tasks sharing a checkbox, and it hides its own progress: it is either not started or not finished, never partially verifiable. Split it and let each half carry its own test.",
     "**Interface consistency**: when a task consumes something an earlier task produces, spell out the exact signature or shape at both ends and keep them identical. Mismatched interfaces between tasks are the defect that survives every per-task check and only surfaces at integration, when the cost of fixing it is highest.",
-    "**Plan self-review loop**: after drafting the plan and before presenting it, dispatch an analysis subagent to lint it against the wave assignment rule, the clause-coverage rule and the two previous constraints, returning the schema defined in \`config.schemas.plan_lint\`. Every issue returned MUST carry a \`dimension\` drawn from \`config.enums.plan_lint_dimensions\` \u2014 including \`clause_coverage\`, which is how the spec-clause sweep above is checked by machine rather than by memory \u2014 and a \`severity\` drawn from \`config.enums.finding_severities\`, per \`config.schemas.plan_lint.dimension_contract\`. The orchestrator then appends one \`config.signal_ledger.kinds.lint_issue\` record per issue, with \`plan\` as the origin layer, per \`config.signal_ledger.write_policy\`. Free text in that field is why up to \`\${config.thresholds.plan_review_iterations}\` iterations of lint findings per track could be produced and never counted: two runs naming the same defect in different words are two facts to a reader and no fact at all to a tally, and a defect that cannot be tallied never reaches the recurrence threshold that would have turned it into a rule. The plan is linted at its final path inside the track directory and revised in place; the subagent returns \`revised_path\`, never the text. Revise and re-lint while blockers remain, for at most \`\${config.thresholds.plan_review_iterations}\` iterations. If the blocker count fails to decrease between two consecutive iterations, stop iterating \u2014 the approach itself is wrong; surface the remaining blockers to the user and ask whether to restructure the track or proceed knowingly.",
+    "**Plan self-review loop**: after drafting the plan and before presenting it, dispatch an analysis subagent to lint it against the wave assignment rule, the clause-coverage rule, the visual-evidence rule (\`config.visual_companion.evidence_policy\`, charged to the spec layer per \`config.enums.plan_lint_dimension_origins\`) and the two previous constraints, returning the schema defined in \`config.schemas.plan_lint\`. Every issue returned MUST carry a \`dimension\` drawn from \`config.enums.plan_lint_dimensions\` \u2014 including \`clause_coverage\`, which is how the spec-clause sweep above is checked by machine rather than by memory \u2014 and a \`severity\` drawn from \`config.enums.finding_severities\`, per \`config.schemas.plan_lint.dimension_contract\`. The orchestrator then appends one \`config.signal_ledger.kinds.lint_issue\` record per issue, with \`plan\` as the origin layer, per \`config.signal_ledger.write_policy\`. Free text in that field is why up to \`\${config.thresholds.plan_review_iterations}\` iterations of lint findings per track could be produced and never counted: two runs naming the same defect in different words are two facts to a reader and no fact at all to a tally, and a defect that cannot be tallied never reaches the recurrence threshold that would have turned it into a rule. The plan is linted at its final path inside the track directory and revised in place; the subagent returns \`revised_path\`, never the text. Revise and re-lint while blockers remain, for at most \`\${config.thresholds.plan_review_iterations}\` iterations. If the blocker count fails to decrease between two consecutive iterations, stop iterating \u2014 the approach itself is wrong; surface the remaining blockers to the user and ask whether to restructure the track or proceed knowingly.",
     "**The track directory is reserved before anything is drafted (CRITICAL)**: create it, and write nothing that belongs to a track anywhere else. A draft has no legitimate home until its destination exists, and the framework's own rules then leave no conforming path: the draft is too large to return (Subagent Rule 7), the orchestrator may not retain it (CIL Orchestrator Rule 3), and it may not be read back from disk (SDP Golden Rule). What that produces is a plan written to \`config.directories.conductor_root\` and later rebuilt from memory \u2014 measurably poorer than the one that was linted, and orphaned besides. NEVER write a name from \`config.files.track_artifacts\` to the conductor root: those names resolve against the track directory, and nothing else."
   ],
   "skills": [
     "**Project context verification** \u2013 locate the project index file (resolve via \`config.files.artifacts.index\` from the centralized config (\`[config.json](\${config.directories.conductor_root}/config.json)\`)) and confirm the existence of linked core files (product document via \`config.files.artifacts.product\`, tech\u2011stack document via \`config.files.artifacts.tech_stack\`, decisions document via \`config.files.artifacts.decisions\`, workflow document via \`config.files.artifacts.workflow\`).",
     "**Track classification** \u2013 infer track type from the user's description, resolved from \`config.enums.track_types\` dynamically from the centralized config (\`[config.json](\${config.directories.conductor_root}/config.json)\`).",
     "**Question seed generation** \u2013 dispatch a sub\u2011agent to cross\u2011reference the track description against product/tech\u2011stack; return a small set of plausible, context\u2011aware options for the interactive spec.",
+    "**Visual intent capture (optional)** \u2013 for a question the user must *operate* to answer \u2014 comparing two layouts, judging spacing, feeling whether the keyboard escapes a panel \u2014 offer the visual companion (\`config.visual_companion.offer_policy\`), start it with \`node \${config.visual_companion.script} --dir <track-dir>/\${config.visual_companion.track_subdir}\`, dispatch a subagent to author the screen at its final path under the content directory, and read the user's clicks from the events file next turn. Follow [Visual Companion Guide](\${config.visual_companion.guide}) for the screen rules and the loop.",
     "**Interactive spec drafting** \u2013 present those seeds as one\u2011at\u2011a\u2011time \`question\`, gather answers, then dispatch a sub\u2011agent to synthesise a complete spec document (resolved via \`config.files.track_artifacts.spec\` from the centralized config (\`[config.json](\${config.directories.conductor_root}/config.json)\`)); present for user approval with an Approve/Revise choice.",
     "**Plan generation** \u2013 dispatch a sub\u2011agent that reads the workflow methodology and the approved spec and writes the plan document to its final path in the track directory (resolved via \`config.files.track_artifacts.plan\` from the centralized config (\`[config.json](\${config.directories.conductor_root}/config.json)\`)) with hierarchical tasks, checkboxes, and phase verification steps; lint and revise it in place, then present for user approval.",
     "**Skill recommendation & installation** \u2013 dispatch a sub\u2011agent to match the spec/plan against the skill catalogs \u2014 [Community Skills Catalog](\${config.catalogs.community}) for external/third\u2011party skills and [Core Skills Catalog](\${config.catalogs.core}) for Conductor's own first\u2011party skills; recommend skills with trust levels resolved from \`config.enums.trust_levels\` dynamically from the centralized config (\`[config.json](\${config.directories.conductor_root}/config.json)\`), with trust disclosure, then install using the appropriate package manager or download tool for the environment upon user consent.",
@@ -4123,8 +4173,9 @@ var init_embedded = __esm({
     "**Handshake & context check** \u2013 locate the project index document (resolved via \`config.files.artifacts.index\` from the centralized config (\`[config.json](\${config.directories.conductor_root}/config.json)\`)); if missing, offer setup. Verify core file paths (health check only), including the decisions file (resolved via \`config.files.artifacts.decisions\`). Then acquire the planning prior: dispatch a retrieval subagent against \`config.signal_ledger\` and consume \`config.schemas.signal_digest\` (never the file \u2014 see \`config.signal_ledger.read_policy\`), and request this skill's sections of the lessons document by name per \`config.lessons_document.consumers\` and \`config.lessons_document.read_policy\`. Report the digest in one line \u2014 the recurring dimensions, the \`top_files\`, or the fact that it is empty \u2014 and carry both into every drafting step below. A ledger or a lessons document that does not exist is created empty and noted in one line per \`config.signal_ledger.missing_policy\` and \`config.lessons_document.missing_policy\`; neither absence halts the handshake.",
     "**Acquire track description** \u2013 if not provided, ask openly; infer type (resolved from \`config.enums.track_types\` dynamically) and confirm with a Yes/No \`question\`.",
     "**Reserve the track workspace (BEFORE any drafting)** \u2013 generate the track ID, check for name collisions via a sub\u2011agent, create the directory under the tracks directory (resolved via \`config.directories.tracks_dir\`), and write the track metadata (resolved via \`config.files.track_artifacts.track_metadata\`) with the classification just confirmed. Nothing is drafted before this step exists on disk. Every draft that follows is written to its FINAL path inside this directory and revised in place \u2014 the spec at \`config.files.track_artifacts.spec\`, the plan at \`config.files.track_artifacts.plan\`. This ordering is not cosmetic: a draft is too large to travel in a subagent return (Subagent Rule 7) and the orchestrator may not hold it in context (CIL Orchestrator Rule 3), so without a destination the only remaining move is to write it at the conductor root and later reconstruct it from memory \u2014 which silently loses acceptance criteria and produces an orphan the registry never lists. The directory reserved here is what makes the lint loop below possible at all. The track is not yet registered: the registry entry and the commit come at the end, so an abandoned track leaves an unlisted directory and never a phantom entry.",
+    "**Offer the visual companion when a visual question arrives (optional)** \u2013 do NOT offer it here by default. Continue with the questioning below, and the FIRST time a question would genuinely be clearer shown than described \u2014 comparing layouts, judging spacing, feeling a keyboard behaviour \u2014 offer it then, as its own message, per \`config.visual_companion.offer_policy\`. On acceptance: start it with \`node \${config.visual_companion.script} --dir <track-dir>/\${config.visual_companion.track_subdir} --open\`, launched so it outlives the turn, and give the user the COMPLETE url it prints \u2014 every route is gated by the key it carries. Recover that url in later turns from \`config.visual_companion.server_info\` under the state directory rather than from memory. Read [Visual Companion Guide](\${config.visual_companion.guide}) before authoring the first screen; author each screen via an analysis subagent writing to its final path under the content directory (\`config.visual_companion.read_policy\`), lint it, then end the turn and read the events file next turn. If the user declines, or the companion fails to start, continue in the chat and do not offer again (\`config.visual_companion.missing_policy\`).",
     "**Interactive spec generation** (spec document, written directly to \`config.files.track_artifacts.spec\` inside the reserved directory):\\n   - Dispatch a subagent of type resolved via \`config.subagent_types\` using capability\u2011based lookup (\`resolveSubagentByCapability(\\"read_files\\", config)\` from the [Subagent Dispatch Protocol](\${config.protocols.subagent_dispatch.path})) (SDP) to cross-reference the track description against product/tech-stack. Subagent returns schema as defined in \`config.schemas.question_seeds\` from the centralized config (\`[config.json](\${config.directories.conductor_root}/config.json)\`), validated via \`\${config.protocol.protocol_field}: \${config.protocol.version_string}\` with data under \`\${config.protocol.data_envelope}.*\`.\\n   - \`ask_question\`s one at a time, using the seeds as suggestion bases; loop until user says information is sufficient.\\n   - Dispatch a subagent of type resolved via \`config.subagent_types\` using capability\u2011based lookup (\`resolveSubagentByCapability(\\"analysis\\", config)\` from the [Subagent Dispatch Protocol](\${config.protocols.subagent_dispatch.path})) (SDP) to synthesize the complete spec document from collected answers. Subagent returns schema as defined in \`config.schemas.spec_plan_draft\` from the centralized config (\`[config.json](\${config.directories.conductor_root}/config.json)\`), validated via \`\${config.protocol.protocol_field}: \${config.protocol.version_string}\` with data under \`\${config.protocol.data_envelope}.*\`.\\n   - **Number the scope**: the synthesised spec MUST give every clause of its scope a stable id, and the dispatch prompt says so. These ids are what the plan's \`covers\` field (\`config.plan_task_fields.covers\`) refers to and what the \`clause_coverage\` dimension of \`config.enums.plan_lint_dimensions\` is checked against, so an unnumbered scope makes the coverage check unrunnable rather than merely harder. Ids are assigned once and never renumbered on revision \u2014 a renumbered clause silently repoints every \`covers\` entry that named it.\\n   - Show draft; user chooses Approve or Revise; iterate if needed.",
-    "**Interactive plan generation** (plan document, written directly to \`config.files.track_artifacts.plan\` inside the reserved directory):\\n   - Dispatch a subagent of type resolved via \`config.subagent_types\` using capability\u2011based lookup (\`resolveSubagentByCapability(\\"analysis\\", config)\` from the [Subagent Dispatch Protocol](\${config.protocols.subagent_dispatch.path})) (SDP) to read workflow + approved spec and generate the plan document with checkboxes and phase verification tasks. Returns schema as defined in \`config.schemas.spec_plan_draft\` from the centralized config (\`[config.json](\${config.directories.conductor_root}/config.json)\`), validated via \`\${config.protocol.protocol_field}: \${config.protocol.version_string}\` with data under \`\${config.protocol.data_envelope}.*\`.\\n   - Every task MUST be written in the task block format below, carrying all fields from \`config.plan_task_fields\`:\\n     \`\`\`markdown\\n     - \${config.enums.task_statuses.pending} 1.2 Validate the session token\\n       - wave: 1\\n       - depends_on: []\\n       - files: [src/auth/token.ts, tests/auth/token.test.ts]\\n       - covers: [S3, S4]\\n       - accept:\\n         - \`src/auth/token.ts\` exports \`verifyToken\`\\n         - \`verifyToken\` on an expired token returns \`{ valid: false, reason: \\"expired\\" }\`\\n         - \`npm test -- token\` exits 0\\n     \`\`\`\\n   - **Lint before presenting**: dispatch an analysis subagent, giving it the plan's path inside the track directory, to check it against the wave assignment rule, the scope sanity gate, the empirical acceptance criteria rule and the clause-coverage rule. The subagent revises the file IN PLACE and returns \`config.schemas.plan_lint\`, whose \`revised_path\` is the file it wrote and whose every issue carries a \`dimension\` from \`config.enums.plan_lint_dimensions\` and a \`severity\` from \`config.enums.finding_severities\` per \`config.schemas.plan_lint.dimension_contract\`. Append one \`config.signal_ledger.kinds.lint_issue\` record per issue, origin layer \`plan\`, at the moment the iteration returns rather than at the end of the track. It never returns the plan text, and the orchestrator never holds it: each iteration reads its input from the previous iteration's \`revised_path\`, so the document that reaches the user is the one every revision was applied to. Revise while blockers remain, up to \`\${config.thresholds.plan_review_iterations}\` iterations; stop early if the blocker count stops decreasing and escalate to the user.\\n   - Never reconstruct the plan from memory to \\"copy it into place\\" \u2014 it is already in place. A plan rewritten from recollection loses exactly what the lint loop added, and loses it silently, because the reconstruction always looks like a plan.\\n   - Show draft (including the wave grouping and any splits made to satisfy the scope gate); user chooses Approve or Revise. On Revise, the revision is applied to the same file.",
+    "**Interactive plan generation** (plan document, written directly to \`config.files.track_artifacts.plan\` inside the reserved directory):\\n   - Dispatch a subagent of type resolved via \`config.subagent_types\` using capability\u2011based lookup (\`resolveSubagentByCapability(\\"analysis\\", config)\` from the [Subagent Dispatch Protocol](\${config.protocols.subagent_dispatch.path})) (SDP) to read workflow + approved spec and generate the plan document with checkboxes and phase verification tasks. Returns schema as defined in \`config.schemas.spec_plan_draft\` from the centralized config (\`[config.json](\${config.directories.conductor_root}/config.json)\`), validated via \`\${config.protocol.protocol_field}: \${config.protocol.version_string}\` with data under \`\${config.protocol.data_envelope}.*\`.\\n   - Every task MUST be written in the task block format below, carrying all fields from \`config.plan_task_fields\`:\\n     \`\`\`markdown\\n     - \${config.enums.task_statuses.pending} 1.2 Validate the session token\\n       - wave: 1\\n       - depends_on: []\\n       - files: [src/auth/token.ts, tests/auth/token.test.ts]\\n       - covers: [S3, S4]\\n       - accept:\\n         - \`src/auth/token.ts\` exports \`verifyToken\`\\n         - \`verifyToken\` on an expired token returns \`{ valid: false, reason: \\"expired\\" }\`\\n         - \`npm test -- token\` exits 0\\n     \`\`\`\\n   - **Lint before presenting**: dispatch an analysis subagent, giving it the plan's path inside the track directory, to check it against the wave assignment rule, the scope sanity gate, the empirical acceptance criteria rule, the clause-coverage rule and \u2014 when the track carries a visual companion directory \u2014 the visual-evidence rule of \`config.visual_companion.evidence_policy\`, whose issues are reported against the spec layer and fixed by you in the spec between iterations rather than written into the plan. The subagent revises the file IN PLACE and returns \`config.schemas.plan_lint\`, whose \`revised_path\` is the file it wrote and whose every issue carries a \`dimension\` from \`config.enums.plan_lint_dimensions\` and a \`severity\` from \`config.enums.finding_severities\` per \`config.schemas.plan_lint.dimension_contract\`. Append one \`config.signal_ledger.kinds.lint_issue\` record per issue, origin layer \`plan\`, at the moment the iteration returns rather than at the end of the track. It never returns the plan text, and the orchestrator never holds it: each iteration reads its input from the previous iteration's \`revised_path\`, so the document that reaches the user is the one every revision was applied to. Revise while blockers remain, up to \`\${config.thresholds.plan_review_iterations}\` iterations; stop early if the blocker count stops decreasing and escalate to the user.\\n   - Never reconstruct the plan from memory to \\"copy it into place\\" \u2014 it is already in place. A plan rewritten from recollection loses exactly what the lint loop added, and loses it silently, because the reconstruction always looks like a plan.\\n   - Show draft (including the wave grouping and any splits made to satisfy the scope gate); user chooses Approve or Revise. On Revise, the revision is applied to the same file.",
     "**Persist architectural choices** \u2013 for any \`question\` seed answer that resolved an architectural trade-off (not a routine scoping detail), append a dated entry (option chosen + reason) to the decisions file (resolved via \`config.files.artifacts.decisions\`); before the spec is finalised, cross-check it against existing entries and surface any conflict to the user for explicit confirmation.",
     "**Skill recommendation**:\\n   - Dispatch a subagent of type resolved via \`config.subagent_types\` using capability\u2011based lookup (\`resolveSubagentByCapability(\\"read_files\\", config)\` from the [Subagent Dispatch Protocol](\${config.protocols.subagent_dispatch.path})) (SDP) to scan the skill catalogs \u2014 [Community Skills Catalog](\${config.catalogs.community}) (external/third\u2011party skills) and [Core Skills Catalog](\${config.catalogs.core}) (first\u2011party Conductor skills). Returns schema as defined in \`config.schemas.skill_catalog_match\` from the centralized config (\`[config.json](\${config.directories.conductor_root}/config.json)\`), validated via \`\${config.protocol.protocol_field}: \${config.protocol.version_string}\` with data under \`\${config.protocol.data_envelope}.*\`.\\n   - Present missing skills with trust disclosure \u2014 trust levels resolved from \`config.enums.trust_levels\` dynamically from the centralized config (\`[config.json](\${config.directories.conductor_root}/config.json)\`) \u2014 with frozen commit warning for community skills.\\n   - User selects skills to install; execute installation using the appropriate package manager or download tool for the environment.\\n   - Advise user to refresh their agent environment.",
     "**Finalise the track & update registry**:\\n   - The spec and the plan are already at their final paths in the reserved directory \u2014 this step registers them, it does not rewrite them. Copying either document here would discard the approved version in favour of a remembered one.\\n   - Verify the reserved directory holds the approved spec (resolved via \`config.files.track_artifacts.spec\`) and the approved plan (resolved via \`config.files.track_artifacts.plan\`), and that neither name exists at \`config.directories.conductor_root\` \u2014 per \`config.files.artifacts_policy\`, a track artifact at the project root is an orphan, and its presence means an earlier step wrote to the wrong scope. Report it and resolve it before committing rather than leaving both copies in place.\\n   - Write the track\u2011level index document (resolved via \`config.files.track_artifacts.index\`) listing every artifact in the directory, and complete the track metadata (resolved via \`config.files.track_artifacts.track_metadata\`).\\n   - Append entry to the tracks registry (resolved via \`config.files.artifacts.tracks_registry\`); ensure the project index document (resolved via \`config.files.artifacts.index\`) links to registry and directory.\\n   - Commit all changes with the prefix resolved from \`config.commit_conventions.new_track_prefix\`, and commit the track's documents separately from any source change \u2014 a plan that can only be reverted by reverting code is a plan nobody can revert.",
@@ -4509,6 +4560,20 @@ var init_embedded = __esm({
   "choices": {
     "select_option": "Please choose one of the following options:",
     "reply_with_number": "Reply with the number."
+  },
+  "companion": {
+    "title": "Visual Companion",
+    "track_label": "Track",
+    "status_connecting": "connecting",
+    "status_connected": "connected",
+    "status_reconnecting": "reconnecting",
+    "status_offline": "offline",
+    "hint": "Pick an option, then return to the chat.",
+    "recorded": "recorded. Back to the chat.",
+    "waiting_title": "Waiting for the Planner",
+    "waiting_body": "No screen published for this track yet.",
+    "denied_title": "Session key required",
+    "denied_body": "Open the complete URL Conductor gave you, including the ?key= part at the end."
   }
 }
 `
@@ -4534,6 +4599,20 @@ var init_embedded = __esm({
   "choices": {
     "select_option": "Por favor, escolha uma das seguintes op\xE7\xF5es:",
     "reply_with_number": "Responda com o n\xFAmero."
+  },
+  "companion": {
+    "title": "Companion Visual",
+    "track_label": "Track",
+    "status_connecting": "conectando",
+    "status_connected": "conectado",
+    "status_reconnecting": "reconectando",
+    "status_offline": "sem conexao",
+    "hint": "Selecione uma opcao e volte ao chat.",
+    "recorded": "registrado. Volte ao chat.",
+    "waiting_title": "Aguardando o Planner",
+    "waiting_body": "Nenhuma tela publicada nesta track ainda.",
+    "denied_title": "Chave de sessao necessaria",
+    "denied_body": "Abra a URL completa que o Conductor forneceu, incluindo a parte ?key= no final."
   }
 }
 `
@@ -4781,6 +4860,653 @@ Rules for entries:
 2. Keep \`Detection Signals\` narrow. Broad keywords cause false recommendations.
 3. Recommendations are always presented to the user for approval; a skill in this
    catalog is never installed automatically.`
+      },
+      {
+        sourcePath: "D:/conductor/src/internal/templates/data/skills/conductor-new-track/assets/visual-companion.md",
+        category: "skills",
+        subpath: "conductor-new-track/assets",
+        ext: ".md",
+        content: `# Visual Companion \u2014 Guide
+
+A local, browser-based surface for capturing intent that text cannot capture.
+Read this only after the user has accepted the companion.
+
+## When a screen is justified
+
+A screen is justified when the user must **operate** something to answer:
+click, tab, compare side by side, judge spacing or hierarchy.
+
+If the screen can be read aloud without losing anything, it is terminal
+content. Send it to the chat.
+
+| Question | Where |
+|---|---|
+| "Which of these two layouts?" | screen |
+| "Does the keyboard escape this panel?" | screen |
+| "Is this spacing too tight?" | screen |
+| "Which of A, B, C do you want?" | chat |
+| "Should sessions expire in 24h or 7d?" | chat |
+| "What does *personality* mean here?" | chat |
+
+A question about a UI topic is not automatically a visual question. The most
+common failure is a screen that renders a numbered option list \u2014 it costs a
+round trip and a page of HTML to deliver what three lines of chat deliver.
+
+## Rules for a screen
+
+1. **One question per screen.** No toggles, no configuration panels, no
+   multi-part forms. A screen that needs a legend is two screens.
+2. **No jargon.** Write "the keyboard stays inside the panel", not "focus
+   trap". The user is deciding scope, not reviewing an implementation.
+3. **Instructions live on the screen.** If you must explain in chat how to
+   operate the screen, the screen is wrong.
+4. **Do not make the user perform a procedure.** Give a button that runs the
+   demonstration. A user who has to click, then press Tab six times, then
+   watch the right indicator, will see nothing and report that both options
+   look identical.
+5. **Failure must be loud.** Signal the state on the whole component \u2014 border,
+   banner, colour \u2014 not with a small marker beside it.
+6. **High fidelity when the question is about a product surface.** Real
+   product names, real prices, the complete form. Placeholder boxes hide
+   exactly the decisions the screen exists to surface: a login panel drawn as
+   a grey rectangle never reveals that it holds eight focusable elements.
+   Wireframe fidelity is for questions about structure alone.
+
+## The loop
+
+1. **Start the server** (once per track), from the project root:
+
+   \`\`\`
+   node <script> --dir <track-dir>/visual --open
+   \`\`\`
+
+   It prints one JSON line and writes the same object to
+   \`<track-dir>/visual/state/server-info.json\`. Launch it detached/background
+   so it outlives the turn; recover the URL from that file in later turns.
+   Give the user the **complete** URL, including \`?key=\u2026\` \u2014 every route is
+   gated by that key.
+
+2. **Publish a screen** \u2014 write an HTML file into \`<track-dir>/visual/content/\`.
+   Use ordered, semantic names (\`01-layout.html\`, \`02-teclado.html\`). Never
+   reuse a name for a different question. The newest file by mtime is served,
+   and the browser reloads itself.
+
+   Write it with your file-creation tool, never by echoing it into a terminal.
+
+3. **Lint before you trust it.** A screen with an unbalanced tag or a broken
+   inline script renders as dead text and reports nothing. Confirm every block
+   tag is closed and every \`<script>\` parses before telling the user to look.
+
+4. **End your turn.** Say in one line what is on the screen and ask the user to
+   answer in the chat.
+
+5. **Next turn, read \`<track-dir>/visual/state/events\`** \u2014 JSONL, one record per
+   click, each carrying the \`screen\` it belongs to. Merge it with what the user
+   typed. The chat message is the primary answer; the events file is the
+   structured half. A missing file means the user did not interact \u2014 use the
+   chat alone, and never assume a screen was seen.
+
+6. **Stop the server** when planning ends:
+
+   \`\`\`
+   node <script> --dir <track-dir>/visual --stop
+   \`\`\`
+
+   Screens stay in the track directory as evidence of what the scope decisions
+   were made against.
+
+## Writing a screen
+
+Write a fragment \u2014 the server wraps it in a frame that supplies the theme, the
+connection status, and the click-recording client. Only start a file with
+\`<!DOCTYPE\` or \`<html>\` when you need the whole document, and then you own
+everything.
+
+Record an answer with \`data-choice\` on a clickable element:
+
+\`\`\`html
+<h2>Qual layout?</h2>
+<p class="subtitle">Clique numa op\xE7\xE3o e volte ao chat.</p>
+<div class="options">
+  <div class="option" data-choice="modal"><div class="letter">A</div>
+    <div><h3>Modal</h3><p>Mant\xE9m o contexto da p\xE1gina.</p></div></div>
+  <div class="option" data-choice="pagina"><div class="letter">B</div>
+    <div><h3>P\xE1gina dedicada</h3><p>Deep-link funciona.</p></div></div>
+</div>
+\`\`\`
+
+Add \`data-multi\` to \`.options\` or \`.cards\` for multiple selection.
+
+Classes the frame provides: \`.label\`, \`.subtitle\`, \`.options\`/\`.option\`/\`.letter\`,
+\`.cards\`/\`.card\`, \`.mock\`/\`.mock-bar\`/\`.mock-body\`, \`.ph\`. Everything else you
+style yourself inside the fragment \u2014 inline \`<style>\` and \`<script>\` both run.
+
+The frame carries the Conductor wordmark, the track id and the connection
+state, and it reads its palette and every visible string from the project's
+resolved configuration. Do not restate the brand or the track inside a screen,
+and never hardcode interface text in a full document \u2014 a screen written as a
+whole document opts out of the frame, and with it out of the locale the project
+was generated in.
+
+## Events format
+
+One record per click, matching \`config.schemas.companion_event\`:
+
+\`\`\`
+{"ts":"2026-08-02T01:20:08.886Z","track":"login-drawer_20260802","screen":"01-layout.html","choice":"drawer","label":"Drawer lateral","selected":true}
+\`\`\`
+
+The file is cleared when a **new** screen is published and preserved when the
+same screen is revised, so an answer never outlives its question.
+
+## Turning a screen into scope
+
+A click is not a preference; it is a scope clause. When an answer arrives,
+number the clause it produces and give it an acceptance criterion that names
+the observable behaviour the screen demonstrated. That is the whole reason
+this surface exists: a behaviour nobody saw is a behaviour nobody specified,
+and the plan lint cannot flag a clause that was never written.
+`
+      },
+      {
+        sourcePath: "D:/conductor/src/internal/templates/data/skills/conductor-new-track/scripts/server.cjs",
+        category: "skills",
+        subpath: "conductor-new-track/scripts",
+        ext: ".cjs",
+        content: `#!/usr/bin/env node
+/**
+ * Conductor \u2014 Visual Companion.
+ *
+ * A local surface for the questions a track cannot settle in text: the ones the
+ * user must operate to answer. The planner writes screens into the track's
+ * visual content directory; this serves the newest one, reloads the browser on
+ * change, and records each click into the events file as JSONL so the next turn
+ * reads intent instead of guessing it.
+ *
+ * Usage:
+ *   node server.cjs --dir <track-dir>/visual [--port N] [--open]
+ *   node server.cjs --dir <same> --stop
+ *
+ * Contract with the planner:
+ *   - stdout emits one JSON line on start: {"type":"started","url":...}
+ *   - the same object is written to the state directory, so a later turn
+ *     recovers the url without the stdout a background launch discards
+ *   - the events file is append-only JSONL matching config.schemas.companion_event,
+ *     cleared when a NEW screen is published and preserved when one is revised
+ *
+ * GENERATED FILE \u2014 every visible string and every threshold below is resolved
+ * from the Conductor config and i18n catalogue at generation time. Edit the
+ * template under the skill's scripts directory, never this output, and never
+ * hardcode a user-facing string here: a literal survives \`conductor generate
+ * --locale en-US\` and hands an English project a Portuguese interface.
+ *
+ * Node built-ins only, and no shell wrapper. \`node server.cjs\` is the whole
+ * launch on every platform: a .sh entry point needs Git Bash on Windows,
+ * arrives without its exec bit through template generation, and forces a
+ * foreground fallback that dies with the turn that started it.
+ */
+'use strict';
+
+const http = require('node:http');
+const fs = require('node:fs');
+const path = require('node:path');
+const crypto = require('node:crypto');
+
+/** Strings and thresholds baked from the Conductor catalogue at generation. */
+const T = {
+  brand: \`Conductor\`,
+  companion: \`\${i18n.t("common.companion.title")}\`,
+  track: \`\${i18n.t("common.companion.track_label")}\`,
+  connecting: \`\${i18n.t("common.companion.status_connecting")}\`,
+  connected: \`\${i18n.t("common.companion.status_connected")}\`,
+  reconnecting: \`\${i18n.t("common.companion.status_reconnecting")}\`,
+  offline: \`\${i18n.t("common.companion.status_offline")}\`,
+  hint: \`\${i18n.t("common.companion.hint")}\`,
+  recorded: \`\${i18n.t("common.companion.recorded")}\`,
+  waitingTitle: \`\${i18n.t("common.companion.waiting_title")}\`,
+  waitingBody: \`\${i18n.t("common.companion.waiting_body")}\`,
+  deniedTitle: \`\${i18n.t("common.companion.denied_title")}\`,
+  deniedBody: \`\${i18n.t("common.companion.denied_body")}\`,
+};
+const DEFAULT_IDLE_MINUTES = Number(\`\${config.visual_companion.idle_minutes}\`);
+
+// ---------------------------------------------------------------------------
+// arguments
+// ---------------------------------------------------------------------------
+
+function parseArgs(argv) {
+  const out = { dir: null, port: 0, open: false, stop: false, idleMinutes: DEFAULT_IDLE_MINUTES };
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    if (a === '--dir') out.dir = argv[++i];
+    else if (a === '--port') out.port = Number(argv[++i]);
+    else if (a === '--open') out.open = true;
+    else if (a === '--stop') out.stop = true;
+    else if (a === '--idle-minutes') out.idleMinutes = Number(argv[++i]);
+  }
+  return out;
+}
+
+const args = parseArgs(process.argv.slice(2));
+if (!args.dir) {
+  process.stderr.write('conductor/companion: --dir <visual-dir> is required\\n');
+  process.exit(2);
+}
+
+const VISUAL_DIR = path.resolve(args.dir);
+const CONTENT_DIR = path.join(VISUAL_DIR, \`\${config.visual_companion.content_subdir}\`);
+const STATE_DIR = path.join(VISUAL_DIR, \`\${config.visual_companion.state_subdir}\`);
+const INFO_FILE = path.join(STATE_DIR, \`\${config.visual_companion.server_info}\`);
+const EVENTS_FILE = path.join(STATE_DIR, \`\${config.visual_companion.events}\`);
+const PID_FILE = path.join(STATE_DIR, 'companion.pid');
+
+// The visual directory is a peer of the track's artifacts, so its parent names
+// the track. Shown in the header because a user with two companions open needs
+// to know which track each one is deciding.
+const TRACK_ID = path.basename(path.dirname(VISUAL_DIR));
+
+// ---------------------------------------------------------------------------
+// stop
+// ---------------------------------------------------------------------------
+
+if (args.stop) {
+  let stopped = false;
+  try {
+    const pid = Number(fs.readFileSync(PID_FILE, 'utf8').trim());
+    if (Number.isInteger(pid) && pid > 0) {
+      try { process.kill(pid); stopped = true; }
+      catch (e) { if (e.code !== 'ESRCH') throw e; }
+    }
+  } catch (e) {
+    if (e.code !== 'ENOENT') {
+      process.stdout.write(JSON.stringify({ type: 'stop', ok: false, reason: e.message }) + '\\n');
+      process.exit(1);
+    }
+  }
+  for (const f of [PID_FILE, INFO_FILE]) { try { fs.unlinkSync(f); } catch { /* already gone */ } }
+  process.stdout.write(JSON.stringify({ type: 'stop', ok: true, stopped }) + '\\n');
+  process.exit(0);
+}
+
+// ---------------------------------------------------------------------------
+// single instance per track
+// ---------------------------------------------------------------------------
+
+// Starting twice on one track is not an error to report \u2014 it is the planner
+// asking for this track's companion, which already exists. Answer with the
+// running one and exit.
+//
+// Without this the second start wins the pid file and the first becomes an
+// orphan: a live server holding a valid session key on a port \`--stop\` can no
+// longer name, surviving until the idle timeout hours later. The trigger is
+// ordinary \u2014 a resumed session, or a turn that could not find the server-info
+// and started again \u2014 so this is a state the framework must make unreachable
+// rather than a mistake it can ask the planner not to make.
+try {
+  const priorPid = Number(fs.readFileSync(PID_FILE, 'utf8').trim());
+  if (Number.isInteger(priorPid) && priorPid > 0 && priorPid !== process.pid) {
+    let alive = true;
+    try { process.kill(priorPid, 0); } catch (e) { alive = e.code === 'EPERM'; }
+    if (alive) {
+      // Hand back the running instance: the caller needs its url and its key,
+      // and a second key for the same track would authenticate nothing the
+      // first one serves. Re-serialised to ONE line \u2014 the state file is stored
+      // indented for a human, while the startup contract is a single JSON line
+      // a caller parses, and printing the file verbatim breaks that reader.
+      const prior = JSON.parse(fs.readFileSync(INFO_FILE, 'utf8'));
+      prior.reused = true;
+      process.stdout.write(JSON.stringify(prior) + '\\n');
+      process.exit(0);
+    }
+  }
+} catch { /* no prior instance, or its state is unreadable \u2014 start normally */ }
+
+// ---------------------------------------------------------------------------
+// setup
+// ---------------------------------------------------------------------------
+
+fs.mkdirSync(CONTENT_DIR, { recursive: true });
+fs.mkdirSync(STATE_DIR, { recursive: true });
+
+// The state directory is runtime, not artifact: it holds the session key, a pid
+// and the current screen's answers. The track directory around it IS committed,
+// so without this the key reaches version control on the next \`git add\` of the
+// track \u2014 and a key in history is a key that cannot be rotated by restarting.
+// Written here rather than instructed in the skill because the failure is
+// silent, the value is a secret, and a rule the agent must remember is a rule
+// that eventually is not.
+try {
+  fs.writeFileSync(path.join(STATE_DIR, '.gitignore'), '*\\n');
+} catch { /* a read-only checkout still runs; nothing here is durable */ }
+
+// Every route is gated by this key. The companion binds to loopback, but
+// loopback is shared with every other process and browser tab on the machine,
+// and the events file is read back by the planner as the user's intent \u2014 an
+// unauthenticated write there is instruction injection, not noise.
+const TOKEN = process.env.CONDUCTOR_COMPANION_TOKEN || crypto.randomBytes(24).toString('hex');
+const IDLE_MS = Math.max(1, args.idleMinutes) * 60 * 1000;
+
+let lastActivity = Date.now();
+const streams = new Set();
+const knownScreens = new Set(listScreens().map((s) => s.name));
+
+function touch() { lastActivity = Date.now(); }
+
+function listScreens() {
+  let names;
+  try { names = fs.readdirSync(CONTENT_DIR); } catch { return []; }
+  return names
+    .filter((n) => !n.startsWith('.') && n.toLowerCase().endsWith('.html'))
+    .map((n) => {
+      const full = path.join(CONTENT_DIR, n);
+      let st;
+      try { st = fs.lstatSync(full); } catch { return null; }
+      // Only plain files that really live in the content directory are servable.
+      if (!st.isFile() || st.isSymbolicLink()) return null;
+      return { name: n, full, mtime: st.mtimeMs };
+    })
+    .filter(Boolean)
+    .sort((a, b) => b.mtime - a.mtime);
+}
+
+function newestScreen() {
+  const all = listScreens();
+  return all.length ? all[0] : null;
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+}
+
+// ---------------------------------------------------------------------------
+// frame
+// ---------------------------------------------------------------------------
+
+const FRAME = \`<!DOCTYPE html>
+<html><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>\${escapeHtml(T.brand)} \u2014 \${escapeHtml(T.companion)}</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#f4f5f6; --panel:#fff; --line:#dcdfe2; --fg:#16181a; --dim:#6b7075;
+  --accent:#0e8fa8; --sel:#e6f6f9;
+  --ok:#1a9c5b; --warn:#c98a0a; --err:#d64545;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+}
+@media(prefers-color-scheme:dark){:root{
+  --bg:#141618; --panel:#1c1f22; --line:#2f343a; --fg:#eef0f2; --dim:#98a0a8;
+  --accent:#2ec7e0; --sel:rgba(46,199,224,.12);
+  --ok:#3ecf8e; --warn:#e0b341; --err:#f2726f;
+}}
+html,body{height:100%}
+body{font:15px/1.55 system-ui,-apple-system,Segoe UI,sans-serif;background:var(--bg);color:var(--fg);
+ display:flex;flex-direction:column}
+
+header{display:flex;align-items:center;gap:.8rem;padding:.55rem 1.35rem;
+ background:var(--panel);border-bottom:1px solid var(--line)}
+.wm{font:700 .84rem/1 var(--mono);letter-spacing:-.01em}
+.wm i{color:var(--accent);font-style:normal}
+.tk{font:.7rem/1 var(--mono);color:var(--dim);padding:.22rem .5rem;border:1px solid var(--line);border-radius:5px}
+.tk b{color:var(--fg);font-weight:600}
+#st{margin-left:auto;font:600 .72rem/1 var(--mono);color:var(--dim);display:flex;align-items:center;gap:.4rem}
+#st i{font-style:normal;font-size:.8rem}
+
+main{flex:1;overflow:auto}
+#screen{padding:2.1rem 1.35rem;max-width:1100px;margin:0 auto}
+h2{font-size:1.42rem;font-weight:640;letter-spacing:-.02em;margin-bottom:.35rem}
+h3{font-size:1rem;font-weight:600;margin-bottom:.2rem}
+.subtitle{color:var(--dim);margin-bottom:1.5rem}
+.label{font:600 .68rem/1 var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--dim);margin-bottom:.5rem}
+
+.options{display:flex;flex-direction:column;gap:.7rem}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:1rem}
+.option,.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;
+ padding:1rem 1.15rem;cursor:pointer;transition:border-color .14s,background .14s,box-shadow .14s}
+.option:hover,.card:hover{border-color:var(--accent)}
+.option.sel,.card.sel{border-color:var(--accent);background:var(--sel);box-shadow:inset 3px 0 0 var(--accent)}
+.option{display:flex;gap:1rem;align-items:flex-start}
+.letter{flex:0 0 1.7rem;height:1.7rem;border-radius:6px;background:var(--bg);border:1px solid var(--line);
+ display:flex;align-items:center;justify-content:center;font:600 .8rem var(--mono);color:var(--dim)}
+.option.sel .letter{background:var(--accent);border-color:var(--accent);color:#fff}
+.option p,.card p{color:var(--dim);font-size:.875rem}
+
+.mock{background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow:hidden;margin-bottom:1.25rem}
+.mock-bar{background:var(--bg);border-bottom:1px solid var(--line);padding:.4rem 1rem;
+ font:.7rem var(--mono);color:var(--dim)}
+.mock-body{padding:1.35rem}
+.ph{border:1px dashed var(--line);border-radius:8px;padding:2rem;text-align:center;color:var(--dim)}
+
+footer{padding:.55rem 1.35rem;border-top:1px solid var(--line);background:var(--panel);
+ font-size:.76rem;color:var(--dim);text-align:center}
+footer b{color:var(--accent);font-weight:600}
+</style></head><body>
+<header>
+  <span class="wm"><i>\u25B9</i> \${escapeHtml(T.brand)}</span>
+  <span class="tk">\${escapeHtml(T.track)} <b>\${escapeHtml(TRACK_ID)}</b></span>
+  <span id="st"><i>\u25E6</i><span id="sttx">\${escapeHtml(T.connecting)}</span></span>
+</header>
+<main><div id="screen"><!--CONTENT--></div></main>
+<footer id="hint">\${escapeHtml(T.hint)}</footer>
+<script>
+(function(){
+  var S={connected:\${JSON.stringify(T.connected)},reconnecting:\${JSON.stringify(T.reconnecting)},
+         offline:\${JSON.stringify(T.offline)},recorded:\${JSON.stringify(T.recorded)}};
+  var KEY=new URLSearchParams(location.search).get('key')||'';
+  function q(p){return p+(KEY?(p.indexOf('?')<0?'?':'&')+'key='+encodeURIComponent(KEY):'')}
+  var box=document.getElementById('st'),tx=document.getElementById('sttx');
+  function st(text,glyph,color){tx.textContent=text;box.firstElementChild.textContent=glyph;box.style.color=color}
+
+  document.addEventListener('click',function(e){
+    var el=e.target.closest('[data-choice]'); if(!el) return;
+    var group=el.closest('.options,.cards'), multi=group&&group.hasAttribute('data-multi');
+    if(group&&!multi) group.querySelectorAll('.sel').forEach(function(n){n.classList.remove('sel')});
+    if(multi) el.classList.toggle('sel'); else el.classList.add('sel');
+    var label=(el.querySelector('h3')||el).textContent.trim().slice(0,140);
+    fetch(q('/choice'),{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({choice:el.dataset.choice,label:label,selected:el.classList.contains('sel')})
+    }).catch(function(){});
+    document.getElementById('hint').innerHTML='<b>'+label+'</b> \u2014 '+S.recorded;
+  });
+
+  var es=new EventSource(q('/stream'));
+  es.onopen=function(){st(S.connected,'\\\\u2713','var(--ok)')};
+  es.onerror=function(){st(S.reconnecting,'\\\\u26a0','var(--warn)');
+    setTimeout(function(){if(es.readyState===2)st(S.offline,'\\\\u2717','var(--err)')},8000)};
+  es.addEventListener('reload',function(){location.reload()});
+})();
+</script></body></html>\`;
+
+function isFullDocument(html) {
+  const head = html.trimStart().slice(0, 40).toLowerCase();
+  return head.startsWith('<!doctype') || head.startsWith('<html');
+}
+
+const WAITING = \`<h2>\${escapeHtml(T.waitingTitle)}</h2><p class="subtitle">\${escapeHtml(T.waitingBody)}</p>\`;
+
+function renderScreen() {
+  const screen = newestScreen();
+  const raw = screen ? fs.readFileSync(screen.full, 'utf8') : WAITING;
+  if (screen && isFullDocument(raw)) return raw;
+  // Split/join, not replace(): a replacement string treats $& and friends as
+  // backreferences, so a screen containing one would silently lose characters.
+  return FRAME.split('<!--CONTENT-->').join(raw);
+}
+
+// ---------------------------------------------------------------------------
+// auth
+// ---------------------------------------------------------------------------
+
+function safeEqual(a, b) {
+  const ba = Buffer.from(String(a));
+  const bb = Buffer.from(String(b));
+  if (ba.length !== bb.length) return false;
+  return crypto.timingSafeEqual(ba, bb);
+}
+
+const COOKIE = 'conductor_companion';
+
+function authorized(req) {
+  const url = new URL(req.url, 'http://localhost');
+  const key = url.searchParams.get('key');
+  if (key !== null) return safeEqual(key, TOKEN);
+  const m = new RegExp('(?:^|;\\\\s*)' + COOKIE + '=([^;]+)').exec(req.headers.cookie || '');
+  return m ? safeEqual(m[1], TOKEN) : false;
+}
+
+const HEADERS = {
+  'Referrer-Policy': 'no-referrer',
+  'Cache-Control': 'no-store',
+  'X-Frame-Options': 'DENY',
+  'Content-Security-Policy': "frame-ancestors 'none'",
+};
+
+const DENIED = \`<!DOCTYPE html><html><head><meta charset="utf-8">
+<title>\${escapeHtml(T.brand)}</title><style>
+body{font:15px/1.6 system-ui,sans-serif;max-width:34rem;margin:18vh auto;padding:0 1.5rem;color:#16181a}
+@media(prefers-color-scheme:dark){body{background:#141618;color:#eef0f2}}
+h1{font-size:1.2rem;margin-bottom:.5rem}p{color:#6b7075}
+code{font:.85em ui-monospace,monospace;background:rgba(127,127,127,.16);padding:.1em .35em;border-radius:4px}
+</style></head><body><h1>\${escapeHtml(T.deniedTitle)}</h1>
+<p>\${escapeHtml(T.deniedBody)}</p></body></html>\`;
+
+// ---------------------------------------------------------------------------
+// routes
+// ---------------------------------------------------------------------------
+
+const server = http.createServer((req, res) => {
+  const url = new URL(req.url, 'http://localhost');
+
+  if (!authorized(req)) {
+    res.writeHead(403, { ...HEADERS, 'Content-Type': 'text/html; charset=utf-8' });
+    res.end(DENIED);
+    return;
+  }
+  touch();
+
+  if (req.method === 'GET' && url.pathname === '/') {
+    res.writeHead(200, {
+      ...HEADERS,
+      'Content-Type': 'text/html; charset=utf-8',
+      'Set-Cookie': COOKIE + '=' + TOKEN + '; HttpOnly; SameSite=Strict; Path=/',
+    });
+    res.end(renderScreen());
+    return;
+  }
+
+  if (req.method === 'GET' && url.pathname === '/stream') {
+    res.writeHead(200, { ...HEADERS, 'Content-Type': 'text/event-stream', Connection: 'keep-alive' });
+    res.write('retry: 1000\\n\\n');
+    streams.add(res);
+    req.on('close', () => streams.delete(res));
+    return;
+  }
+
+  if (req.method === 'POST' && url.pathname === '/choice') {
+    let body = '';
+    let tooBig = false;
+    req.on('data', (c) => { body += c; if (body.length > 8192) { tooBig = true; req.destroy(); } });
+    req.on('end', () => {
+      if (tooBig) return;
+      let payload;
+      try { payload = JSON.parse(body); } catch { payload = null; }
+      if (!payload || typeof payload !== 'object' || !payload.choice) {
+        res.writeHead(400, HEADERS); res.end(); return;
+      }
+      // Shape declared by config.schemas.companion_event.
+      const record = {
+        ts: new Date().toISOString(),
+        track: TRACK_ID,
+        screen: (newestScreen() || {}).name || null,
+        choice: String(payload.choice).slice(0, 120),
+        label: String(payload.label || '').slice(0, 200),
+        selected: payload.selected !== false,
+      };
+      fs.appendFileSync(EVENTS_FILE, JSON.stringify(record) + '\\n');
+      res.writeHead(204, HEADERS); res.end();
+    });
+    return;
+  }
+
+  res.writeHead(404, HEADERS);
+  res.end('not found');
+});
+
+// ---------------------------------------------------------------------------
+// watch
+// ---------------------------------------------------------------------------
+
+const debounce = new Map();
+try {
+  const watcher = fs.watch(CONTENT_DIR, (_event, filename) => {
+    if (!filename || filename.startsWith('.') || !filename.toLowerCase().endsWith('.html')) return;
+    clearTimeout(debounce.get(filename));
+    debounce.set(filename, setTimeout(() => {
+      debounce.delete(filename);
+      if (!fs.existsSync(path.join(CONTENT_DIR, filename))) return;
+      touch();
+      // A new screen is a new question: the previous screen's answers no longer
+      // describe what is on the glass, so they are retired rather than left for
+      // the planner to read as an answer to the question now being asked.
+      if (!knownScreens.has(filename)) {
+        knownScreens.add(filename);
+        try { fs.unlinkSync(EVENTS_FILE); } catch { /* nothing to clear */ }
+      }
+      for (const s of streams) s.write('event: reload\\ndata: {}\\n\\n');
+    }, 120));
+  });
+  watcher.on('error', (e) => process.stderr.write('conductor/companion: watch error ' + e.message + '\\n'));
+} catch (e) {
+  process.stderr.write('conductor/companion: cannot watch ' + CONTENT_DIR + ': ' + e.message + '\\n');
+}
+
+// ---------------------------------------------------------------------------
+// lifecycle
+// ---------------------------------------------------------------------------
+
+function shutdown(reason) {
+  for (const f of [INFO_FILE, PID_FILE]) { try { fs.unlinkSync(f); } catch { /* already gone */ } }
+  for (const s of streams) { try { s.end(); } catch { /* client gone */ } }
+  process.stdout.write(JSON.stringify({ type: 'stopped', reason }) + '\\n');
+  server.close(() => process.exit(0));
+  setTimeout(() => process.exit(0), 500).unref();
+}
+
+const idleTimer = setInterval(() => {
+  if (Date.now() - lastActivity > IDLE_MS) shutdown('idle');
+}, 30000);
+idleTimer.unref();
+
+process.on('SIGTERM', () => shutdown('sigterm'));
+process.on('SIGINT', () => shutdown('sigint'));
+
+server.listen(args.port, '127.0.0.1', () => {
+  const port = server.address().port;
+  const info = {
+    type: 'started',
+    url: 'http://localhost:' + port + '/?key=' + TOKEN,
+    port,
+    pid: process.pid,
+    track: TRACK_ID,
+    content_dir: CONTENT_DIR,
+    events_file: EVENTS_FILE,
+    idle_minutes: args.idleMinutes,
+  };
+  fs.writeFileSync(INFO_FILE, JSON.stringify(info, null, 2) + '\\n', { mode: 0o600 });
+  fs.writeFileSync(PID_FILE, String(process.pid) + '\\n');
+  process.stdout.write(JSON.stringify(info) + '\\n');
+
+  if (args.open) {
+    const cp = require('node:child_process');
+    try {
+      if (process.platform === 'win32') cp.execFile('rundll32.exe', ['url.dll,FileProtocolHandler', info.url], () => {});
+      else if (process.platform === 'darwin') cp.execFile('open', [info.url], () => {});
+      else if (process.env.DISPLAY || process.env.WAYLAND_DISPLAY) cp.execFile('xdg-open', [info.url], () => {});
+    } catch { /* best effort */ }
+  }
+});
+`
       },
       {
         sourcePath: "D:/conductor/src/internal/templates/data/skills/conductor-revert/SKILL.md",
@@ -6369,7 +7095,20 @@ var init_config = __esm({
         state_statuses: ["planning", "implementing", "reviewing", "blocked", "paused", "done"],
         banned_completion_phrasings: ["should work", "should pass", "probably", "seems to", "looks like it works", "appears to work", "I think it's fixed", "must be working now"],
         banned_plan_phrasings: ["TBD", "to be defined", "handle edge cases", "similar to the previous task", "and so on", "etc. as needed", "adjust as necessary"],
-        plan_lint_dimensions: ["granularity", "wave_assignment", "scope_sanity", "acceptance_empirical", "acceptance_coverage", "clause_coverage", "placeholders", "interface_consistency", "file_size"],
+        plan_lint_dimensions: ["granularity", "wave_assignment", "scope_sanity", "acceptance_empirical", "acceptance_coverage", "clause_coverage", "placeholders", "interface_consistency", "file_size", "visual_evidence"],
+        plan_lint_dimension_origins_policy: "Which layer a lint issue is charged to, per dimension. Every dimension that existed before this map was a defect in the decomposition, so `plan` was safe to hardcode in `config.schemas.plan_lint.dimension_contract`. `visual_evidence` is the first that is not: a decision the user made on a screen and the spec never recorded was already wrong before any task existed. Charging it to `plan` would credit the decomposition with a defect it did not commit, and since `config.thresholds.lesson_recurrence_threshold` counts by `origin_layer`, the lesson that eventually fires would name the wrong layer \u2014 a miscount that reads as evidence is worse than no count at all.",
+        plan_lint_dimension_origins: {
+          granularity: "plan",
+          wave_assignment: "plan",
+          scope_sanity: "plan",
+          acceptance_empirical: "plan",
+          acceptance_coverage: "plan",
+          clause_coverage: "plan",
+          placeholders: "plan",
+          interface_consistency: "plan",
+          file_size: "plan",
+          visual_evidence: "spec"
+        },
         origin_layers: {
           spec: "The scope was wrong or incomplete before any plan existed \u2014 a behaviour nobody wrote down, or a clause that contradicted another.",
           plan: "The scope was right and its decomposition was wrong \u2014 a task sized past one cycle, a missing dependency, an acceptance criterion that covered part of the clause it claimed.",
@@ -6522,6 +7261,23 @@ var init_config = __esm({
         core: "${config.tool_dir}/skills/conductor-setup/assets/catalog.md",
         community: "${config.tool_dir}/skills/conductor-new-track/assets/catalog.md"
       },
+      visual_companion: {
+        guide: "${config.tool_dir}/skills/conductor-new-track/assets/visual-companion.md",
+        script: "${config.tool_dir}/skills/conductor-new-track/scripts/server.cjs",
+        track_subdir: "visual",
+        content_subdir: "content",
+        state_subdir: "state",
+        server_info: "server-info.json",
+        events: "events",
+        idle_minutes: 240,
+        offer_policy: "Optional, and offered just in time \u2014 never at the start of the track. Wait until a question would genuinely be clearer shown than described, then offer it as its own message and honour a decline for the rest of the track. An offer made before such a question exists asks the user to pay a round trip for a surface they have no use for yet.",
+        screen_policy: "One question per screen, no jargon, instructions on the screen itself, and a button that runs the demonstration rather than a procedure the user must perform. A screen whose content could be read aloud without loss is terminal content and belongs in the chat \u2014 an option list rendered as HTML costs a page of tokens to deliver what three lines of chat deliver. Fidelity matches the question: a screen about a product surface carries real names, real values and the complete form, because placeholder boxes hide the very decisions the screen was published to surface.",
+        state_policy: "Runtime, never artifact. The state directory holds the session key, the pid and the current screen's answers, and the server makes it self-ignoring on startup because the track directory around it is committed \u2014 a key that reaches history cannot be rotated by restarting the companion. Nothing here survives archival, and nothing here is evidence: the durable record of a decision is the spec clause it produced, not the transport that carried it.",
+        evidence_policy: "A screen that settled a question is evidence for the clause it settled, and the clause names it \u2014 the screen's file name recorded beside the clause it produced, exactly as a task names the clauses it covers. This is what makes a screen's fate decidable later: cited screens are the record of what the scope was agreed against, uncited ones are iterations of a question that was superseded or abandoned. Without the citation the two are indistinguishable, and archival can only choose between hoarding every draft and destroying the evidence along with them. The citation is checked by machine, not remembered: the plan lint's `visual_evidence` dimension computes the difference between the screens present in the track and the screens the spec cites. Screens present and NOTHING cited is a blocker \u2014 a track does not publish screens and settle none of them, so that state is a citation the planner never wrote rather than a track that decided nothing visually. Some cited and some not is a warning, because the uncited ones are usually superseded iterations and the framework cannot tell those from an omission without asking. Neither is auto-revised: the linter reports and the orchestrator amends the spec, since a linter that writes citations invents the evidence it was asked to verify.",
+        archive_policy: "On archival the state directory is dropped outright, and screens are kept only where a spec clause cites them per `evidence_policy`. Uncited screens are reported and discarded on confirmation, never silently: a screen nobody cited is usually an iteration, but the framework cannot tell that from a citation the planner forgot to write, and the two failures are not equally recoverable.",
+        read_policy: "The screen is authored by a subagent writing directly to its final path under the track's visual content directory \u2014 it is far too large to travel in a subagent return (Subagent Rule 7) and the orchestrator never holds it. Only the events file comes back inline: a few JSON lines, read directly, cheap enough that dispatching for it would cost more than it saves.",
+        missing_policy: "Absence never halts planning. If the companion cannot start, or the events file does not exist, say so in one line and continue in the chat. A screen the user never saw is not an answer, and a planner that narrates one is describing a surface that is not in front of anybody."
+      },
       commit_conventions: {
         new_track_prefix: "conductor(track):",
         plan_update_prefix: "conductor(plan):",
@@ -6595,6 +7351,18 @@ var init_config = __esm({
             blockers: "string[]"
           }
         },
+        companion_event: {
+          type: "jsonl",
+          note: "One record per click, appended by the visual companion and read inline by the planner. Not a subagent return: it is a handful of lines the orchestrator reads directly, so dispatching for it would cost more than it saves. `screen` binds an answer to the question that was on the glass \u2014 an answer whose screen the planner cannot name is an answer to an unknown question, and belongs in no clause.",
+          fields: {
+            ts: "string",
+            track: "string",
+            screen: "string",
+            choice: "string",
+            label: "string",
+            selected: "boolean"
+          }
+        },
         question_seeds: {
           type: "object",
           fields: {
@@ -6628,7 +7396,7 @@ var init_config = __esm({
           fields: {
             iteration: "number",
             issues: [{ task_id: "string", dimension: "string", severity: "string", fix_hint: "string" }],
-            dimension_contract: "`dimension` MUST be one of config.enums.plan_lint_dimensions and `severity` one of config.enums.finding_severities. Free text here is why three iterations of lint findings per track could be produced and never counted: two runs naming the same defect differently are two facts to a reader and no fact at all to a tally. The orchestrator appends one config.signal_ledger.kinds.lint_issue record per issue, with `plan` as the origin layer.",
+            dimension_contract: "`dimension` MUST be one of config.enums.plan_lint_dimensions and `severity` one of config.enums.finding_severities. Free text here is why three iterations of lint findings per track could be produced and never counted: two runs naming the same defect differently are two facts to a reader and no fact at all to a tally. The orchestrator appends one config.signal_ledger.kinds.lint_issue record per issue, with the origin layer resolved from config.enums.plan_lint_dimension_origins for that dimension \u2014 `plan` for every dimension that describes the decomposition, and never assumed, because a dimension charged to the wrong layer corrupts the recurrence counts that decide which layer a future lesson names. A dimension whose origin is not `plan` is reported and never auto-revised: `revised_path` covers the plan alone, so an issue rooted in the spec is fixed by the orchestrator between iterations and a linter that edits the spec to clear its own finding has destroyed the record it was checking.",
             blocker_count: "number",
             warning_count: "number",
             revised_path: "string"
@@ -8769,7 +9537,7 @@ var init_package = __esm({
   "package.json"() {
     package_default = {
       name: "@luansilvadb/conductor",
-      version: "1.3.28",
+      version: "1.3.29",
       description: "Conductor - Spec Driven Development",
       type: "module",
       bin: {

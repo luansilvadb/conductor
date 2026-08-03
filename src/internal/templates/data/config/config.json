@@ -249,7 +249,21 @@
     "state_statuses": ["planning", "implementing", "reviewing", "blocked", "paused", "done"],
     "banned_completion_phrasings": ["should work", "should pass", "probably", "seems to", "looks like it works", "appears to work", "I think it's fixed", "must be working now"],
     "banned_plan_phrasings": ["TBD", "to be defined", "handle edge cases", "similar to the previous task", "and so on", "etc. as needed", "adjust as necessary"],
-    "plan_lint_dimensions": ["granularity", "wave_assignment", "scope_sanity", "acceptance_empirical", "acceptance_coverage", "clause_coverage", "placeholders", "interface_consistency", "file_size"],
+    "plan_lint_dimensions": ["granularity", "wave_assignment", "scope_sanity", "acceptance_empirical", "acceptance_coverage", "clause_coverage", "placeholders", "interface_consistency", "file_size", "visual_evidence"],
+
+    "plan_lint_dimension_origins_policy": "Which layer a lint issue is charged to, per dimension. Every dimension that existed before this map was a defect in the decomposition, so `plan` was safe to hardcode in `config.schemas.plan_lint.dimension_contract`. `visual_evidence` is the first that is not: a decision the user made on a screen and the spec never recorded was already wrong before any task existed. Charging it to `plan` would credit the decomposition with a defect it did not commit, and since `config.thresholds.lesson_recurrence_threshold` counts by `origin_layer`, the lesson that eventually fires would name the wrong layer — a miscount that reads as evidence is worse than no count at all.",
+    "plan_lint_dimension_origins": {
+      "granularity": "plan",
+      "wave_assignment": "plan",
+      "scope_sanity": "plan",
+      "acceptance_empirical": "plan",
+      "acceptance_coverage": "plan",
+      "clause_coverage": "plan",
+      "placeholders": "plan",
+      "interface_consistency": "plan",
+      "file_size": "plan",
+      "visual_evidence": "spec"
+    },
     "origin_layers": {
       "spec": "The scope was wrong or incomplete before any plan existed — a behaviour nobody wrote down, or a clause that contradicted another.",
       "plan": "The scope was right and its decomposition was wrong — a task sized past one cycle, a missing dependency, an acceptance criterion that covered part of the clause it claimed.",
@@ -409,6 +423,24 @@
     "community": "${config.tool_dir}/skills/conductor-new-track/assets/catalog.md"
   },
 
+  "visual_companion": {
+    "guide": "${config.tool_dir}/skills/conductor-new-track/assets/visual-companion.md",
+    "script": "${config.tool_dir}/skills/conductor-new-track/scripts/server.cjs",
+    "track_subdir": "visual",
+    "content_subdir": "content",
+    "state_subdir": "state",
+    "server_info": "server-info.json",
+    "events": "events",
+    "idle_minutes": 240,
+    "offer_policy": "Optional, and offered just in time — never at the start of the track. Wait until a question would genuinely be clearer shown than described, then offer it as its own message and honour a decline for the rest of the track. An offer made before such a question exists asks the user to pay a round trip for a surface they have no use for yet.",
+    "screen_policy": "One question per screen, no jargon, instructions on the screen itself, and a button that runs the demonstration rather than a procedure the user must perform. A screen whose content could be read aloud without loss is terminal content and belongs in the chat — an option list rendered as HTML costs a page of tokens to deliver what three lines of chat deliver. Fidelity matches the question: a screen about a product surface carries real names, real values and the complete form, because placeholder boxes hide the very decisions the screen was published to surface.",
+    "state_policy": "Runtime, never artifact. The state directory holds the session key, the pid and the current screen's answers, and the server makes it self-ignoring on startup because the track directory around it is committed — a key that reaches history cannot be rotated by restarting the companion. Nothing here survives archival, and nothing here is evidence: the durable record of a decision is the spec clause it produced, not the transport that carried it.",
+    "evidence_policy": "A screen that settled a question is evidence for the clause it settled, and the clause names it — the screen's file name recorded beside the clause it produced, exactly as a task names the clauses it covers. This is what makes a screen's fate decidable later: cited screens are the record of what the scope was agreed against, uncited ones are iterations of a question that was superseded or abandoned. Without the citation the two are indistinguishable, and archival can only choose between hoarding every draft and destroying the evidence along with them. The citation is checked by machine, not remembered: the plan lint's `visual_evidence` dimension computes the difference between the screens present in the track and the screens the spec cites. Screens present and NOTHING cited is a blocker — a track does not publish screens and settle none of them, so that state is a citation the planner never wrote rather than a track that decided nothing visually. Some cited and some not is a warning, because the uncited ones are usually superseded iterations and the framework cannot tell those from an omission without asking. Neither is auto-revised: the linter reports and the orchestrator amends the spec, since a linter that writes citations invents the evidence it was asked to verify.",
+    "archive_policy": "On archival the state directory is dropped outright, and screens are kept only where a spec clause cites them per `evidence_policy`. Uncited screens are reported and discarded on confirmation, never silently: a screen nobody cited is usually an iteration, but the framework cannot tell that from a citation the planner forgot to write, and the two failures are not equally recoverable.",
+    "read_policy": "The screen is authored by a subagent writing directly to its final path under the track's visual content directory — it is far too large to travel in a subagent return (Subagent Rule 7) and the orchestrator never holds it. Only the events file comes back inline: a few JSON lines, read directly, cheap enough that dispatching for it would cost more than it saves.",
+    "missing_policy": "Absence never halts planning. If the companion cannot start, or the events file does not exist, say so in one line and continue in the chat. A screen the user never saw is not an answer, and a planner that narrates one is describing a surface that is not in front of anybody."
+  },
+
   "commit_conventions": {
     "new_track_prefix": "conductor(track):",
     "plan_update_prefix": "conductor(plan):",
@@ -483,6 +515,18 @@
         "blockers": "string[]"
       }
     },
+    "companion_event": {
+      "type": "jsonl",
+      "note": "One record per click, appended by the visual companion and read inline by the planner. Not a subagent return: it is a handful of lines the orchestrator reads directly, so dispatching for it would cost more than it saves. `screen` binds an answer to the question that was on the glass — an answer whose screen the planner cannot name is an answer to an unknown question, and belongs in no clause.",
+      "fields": {
+        "ts": "string",
+        "track": "string",
+        "screen": "string",
+        "choice": "string",
+        "label": "string",
+        "selected": "boolean"
+      }
+    },
     "question_seeds": {
       "type": "object",
       "fields": {
@@ -516,7 +560,7 @@
       "fields": {
         "iteration": "number",
         "issues": [{ "task_id": "string", "dimension": "string", "severity": "string", "fix_hint": "string" }],
-        "dimension_contract": "`dimension` MUST be one of config.enums.plan_lint_dimensions and `severity` one of config.enums.finding_severities. Free text here is why three iterations of lint findings per track could be produced and never counted: two runs naming the same defect differently are two facts to a reader and no fact at all to a tally. The orchestrator appends one config.signal_ledger.kinds.lint_issue record per issue, with `plan` as the origin layer.",
+        "dimension_contract": "`dimension` MUST be one of config.enums.plan_lint_dimensions and `severity` one of config.enums.finding_severities. Free text here is why three iterations of lint findings per track could be produced and never counted: two runs naming the same defect differently are two facts to a reader and no fact at all to a tally. The orchestrator appends one config.signal_ledger.kinds.lint_issue record per issue, with the origin layer resolved from config.enums.plan_lint_dimension_origins for that dimension — `plan` for every dimension that describes the decomposition, and never assumed, because a dimension charged to the wrong layer corrupts the recurrence counts that decide which layer a future lesson names. A dimension whose origin is not `plan` is reported and never auto-revised: `revised_path` covers the plan alone, so an issue rooted in the spec is fixed by the orchestrator between iterations and a linter that edits the spec to clear its own finding has destroyed the record it was checking.",
         "blocker_count": "number",
         "warning_count": "number",
         "revised_path": "string"

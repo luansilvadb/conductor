@@ -14,5 +14,19 @@
   "choices": {
     "select_option": "Por favor, escolha uma das seguintes opções:",
     "reply_with_number": "Responda com o número."
+  },
+  "companion": {
+    "title": "Companion Visual",
+    "track_label": "Track",
+    "status_connecting": "conectando",
+    "status_connected": "conectado",
+    "status_reconnecting": "reconectando",
+    "status_offline": "sem conexao",
+    "hint": "Selecione uma opcao e volte ao chat.",
+    "recorded": "registrado. Volte ao chat.",
+    "waiting_title": "Aguardando o Planner",
+    "waiting_body": "Nenhuma tela publicada nesta track ainda.",
+    "denied_title": "Chave de sessao necessaria",
+    "denied_body": "Abra a URL completa que o Conductor forneceu, incluindo a parte ?key= no final."
   }
 }
